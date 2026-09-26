@@ -1,0 +1,91 @@
+:root {
+  --vern-primary: #6d5ef5;
+  --vern-primary-strong: #5548d9;
+  --vern-ink: #172033;
+  --vern-muted: #667085;
+  --vern-surface: rgba(255, 255, 255, 0.92);
+  --vern-border: rgba(23, 32, 51, 0.12);
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(circle at 10% 10%, rgba(109, 94, 245, 0.16), transparent 34rem),
+    radial-gradient(circle at 90% 90%, rgba(43, 199, 184, 0.12), transparent 32rem),
+    #f8fafc !important;
+  color: var(--vern-ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+
+/* Keep the upstream logo component and API branding intact, but replace its
+   rendered mark with the project-owned asset served by this image. */
+img[alt="logo"],
+img[src*="zitadel-logo"] {
+  content: url("/brand/logo-light.svg") !important;
+  object-fit: contain;
+}
+
+button[class*="bg-primary"],
+button[class*="bg-button"],
+button[type="submit"],
+[role="button"][class*="bg-primary"] {
+  background-color: var(--vern-primary) !important;
+  border-color: var(--vern-primary) !important;
+}
+
+button[class*="bg-primary"]:hover,
+button[class*="bg-button"]:hover,
+button[type="submit"]:hover,
+[role="button"][class*="bg-primary"]:hover {
+  background-color: var(--vern-primary-strong) !important;
+}
+
+a[class*="text-primary"],
+button[class*="text-primary"] {
+  color: var(--vern-primary-strong) !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--vern-primary) !important;
+  box-shadow: 0 0 0 3px rgba(109, 94, 245, 0.18) !important;
+  outline: none !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --vern-ink: #f6f7fb;
+    --vern-muted: #a9b0c1;
+    --vern-surface: rgba(16, 18, 26, 0.94);
+    --vern-border: rgba(246, 247, 251, 0.14);
+  }
+
+  body {
+    background:
+      radial-gradient(circle at 10% 10%, rgba(154, 144, 255, 0.18), transparent 34rem),
+      radial-gradient(circle at 90% 90%, rgba(43, 199, 184, 0.12), transparent 32rem),
+      #10121a !important;
+  }
+
+  img[alt="logo"],
+  img[src*="zitadel-logo"] {
+    content: url("/brand/logo-dark.svg") !important;
+  }
+}
+
+html.dark body {
+  background:
+    radial-gradient(circle at 10% 10%, rgba(154, 144, 255, 0.18), transparent 34rem),
+    radial-gradient(circle at 90% 90%, rgba(43, 199, 184, 0.12), transparent 32rem),
+    #10121a !important;
+}
+
+html.dark img[alt="logo"],
+html.dark img[src*="zitadel-logo"] {
+  content: url("/brand/logo-dark.svg") !important;
+}
