@@ -70,7 +70,7 @@ set `ZITADEL_ISSUER=http://localhost:8081`. TanStack also needs
 `API_BASE_URL`. Axum needs `ZITADEL_PROJECT_ID` and a downloaded API key file.
 
 After configuring each generated app, run its development server from the
-repository root:
+repository root. The TanStack task installs Bun dependencies before starting:
 
 ```sh
 moon run root:dev-axum

@@ -1,0 +1,36 @@
+tasks:
+  generate-tanstack:
+    command: cargo generate --path templates/tanstack
+    description: Generate a TanStack Start app from the local template
+    toolchains: system
+    inputs: []
+    preset: utility
+
+  generate-axum:
+    command: cargo generate --path templates/axum
+    description: Generate an Axum API from the local template
+    toolchains: system
+    inputs: []
+    preset: utility
+
+  install-tanstack:
+    command: bun install --cwd my-dashboard
+    description: Install dependencies for the generated TanStack app
+    toolchains: system
+    inputs: []
+    options:
+      cache: false
+
+  dev-tanstack:
+    script: cd my-dashboard && bun run dev
+    description: Run the generated TanStack app in development mode
+    deps:
+      - '~:install-tanstack'
+    toolchains: system
+    preset: server
+
+  dev-axum:
+    script: cd my-api && cargo run
+    description: Run the generated Axum API in development mode
+    toolchains: system
+    preset: server
