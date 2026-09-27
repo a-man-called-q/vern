@@ -37,6 +37,8 @@ by default; omit them with:
 moon run root:generate-tanstack -- --name my-dashboard --define include_demos=false
 ```
 
+Generated app directories are local and ignored by Git.
+
 Start the local dependencies:
 
 ```sh
