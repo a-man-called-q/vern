@@ -1,0 +1,16 @@
+tasks:
+  install:
+    command: bun install
+    description: Install dashboard dependencies
+    toolchains: system
+    inputs: []
+    options:
+      cache: false
+
+  dev:
+    command: bun run dev
+    description: Run the dashboard in development mode
+    deps:
+      - '~:install'
+    toolchains: system
+    preset: server

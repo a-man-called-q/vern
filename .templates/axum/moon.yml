@@ -1,0 +1,14 @@
+tasks:
+  install:
+    command: cargo fetch
+    description: Fetch API dependencies
+    toolchains: system
+    inputs: []
+    options:
+      cache: false
+
+  dev:
+    command: cargo run
+    description: Run the API in development mode
+    toolchains: system
+    preset: server
