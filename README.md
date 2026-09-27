@@ -26,18 +26,22 @@ session cookie. Axum protects API routes and verifies tokens with ZITADEL.
 From the repository root, generate the applications:
 
 ```sh
-moon run root:generate-tanstack -- --name my-dashboard
-moon run root:generate-axum -- --name my-api
+moon run gen:dashboard -- --name dashboard
+moon run gen:process -- --name process
 ```
 
-The development tasks expect these directory names. TanStack demos are included
-by default; omit them with:
+`dashboard` generates TanStack; `process` generates Axum. The names can be
+changed, and Moon discovers each generated folder through its `moon.yml`.
+TanStack demos are included by default; omit them with:
 
 ```sh
-moon run root:generate-tanstack -- --name my-dashboard --define include_demos=false
+moon run gen:dashboard -- --name dashboard --define include_demos=false
 ```
 
-Generated app directories are local and ignored by Git.
+The contents of the example `dashboard` and `process` directories are ignored
+by Git. For another generated name, use a pattern like `/my-dashboard/**` in
+`.gitignore` if you do not want to track its contents. Keep the directory itself
+visible to Git so Moon can discover its `moon.yml`.
 
 Start the local dependencies:
 
@@ -75,14 +79,21 @@ After configuring each generated app, run its development server from the
 repository root. The TanStack task installs Bun dependencies before starting:
 
 ```sh
-moon run root:dev-axum
+moon run process:dev
 ```
 
 ```sh
-moon run root:dev-tanstack
+moon run dashboard:dev
 ```
 
-Or start both servers together with `moon run root:dev-axum root:dev-tanstack`.
+For a dashboard generated with `--name my-dashboard`, run
+`moon run my-dashboard:install` or `moon run my-dashboard:dev`. The same applies
+to an API generated with `--name my-api`: run `moon run my-api:install` to fetch
+Rust dependencies, or `moon run my-api:dev` to start it. To install dependencies
+for every generated project, run `moon run :install`.
+
+Or start both example servers together with
+`moon run process:dev dashboard:dev`.
 
 ## API routes
 

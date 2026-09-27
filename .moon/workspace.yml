@@ -1,2 +1,5 @@
 projects:
-  root: '.'
+  globs:
+    - '*/moon.yml'
+  sources:
+    gen: '.'
