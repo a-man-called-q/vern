@@ -8,10 +8,13 @@ tasks:
       cache: false
       runFromWorkspaceRoot: true
 
-  dev:
-    command: bun run dev
-    description: Run this TanStack app in development mode
+  check:
+    command: bun run check
+    description: Type-check the shared UI package
     deps:
       - '~:install'
     toolchains: system
-    preset: server
+    inputs:
+      - 'src/**/*'
+      - 'package.json'
+      - 'tsconfig.json'

@@ -1,9 +1,11 @@
 tasks:
   dashboard:
-    command: cargo generate --path .templates/tanstack
-    description: Generate the TanStack Start dashboard app
+    command: bun scripts/generate-tanstack.ts
+    description: Generate a TanStack Start app under apps/<name>
     toolchains: system
-    inputs: []
+    inputs:
+      - '.templates/tanstack/**/*'
+      - 'scripts/generate-tanstack.ts'
     options:
       interactive: true
 

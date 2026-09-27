@@ -15,8 +15,6 @@ ignore = [
 include = [
   "package.json",
   "package.json.liquid",
-  "bun.lock",
-  "bun.lock.liquid",
   "README.md",
   "README.md.liquid",
   "src/components/Header.tsx",

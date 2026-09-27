@@ -1,0 +1,38 @@
+tasks:
+  install:
+    command: bun install
+    description: Install workspace dependencies
+    toolchains: system
+    inputs: []
+    options:
+      cache: false
+      runFromWorkspaceRoot: true
+
+  dev:
+    command: bun run storybook
+    description: Run the Vern UI workbench
+    deps:
+      - '~:install'
+    toolchains: system
+    preset: server
+
+  build:
+    command: bun run build-storybook
+    description: Build the Vern UI workbench
+    deps:
+      - '~:install'
+    toolchains: system
+
+  check:
+    command: bun run check
+    description: Type-check Storybook
+    deps:
+      - '~:install'
+    toolchains: system
+
+  test:
+    command: bun run test
+    description: Run Storybook interaction tests
+    deps:
+      - '~:install'
+    toolchains: system

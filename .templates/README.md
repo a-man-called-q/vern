@@ -1,23 +1,21 @@
 # Project templates
 
-This directory contains the two reusable project templates maintained by this
-repository. Generated application instances are not stored here.
+This directory contains the reusable project templates maintained by this
+repository. TanStack apps are generated into `apps/`; Axum APIs are generated at
+the repository root.
 
 ## TanStack Start BFF
 
 Generate a project with the demo routes and examples enabled (the default):
 
 ```bash
-cargo generate --path templates/tanstack --name my-dashboard
+moon run gen:dashboard -- --name my-dashboard
 ```
 
 To omit the demo routes and their supporting files:
 
 ```bash
-cargo generate \
-  --path templates/tanstack \
-  --name my-dashboard \
-  --define include_demos=false
+moon run gen:dashboard -- --name my-dashboard --define include_demos=false
 ```
 
 TanStack handles browser login and keeps OAuth tokens in Redis. It calls Axum
@@ -30,7 +28,7 @@ Redis setup.
 Generate an API-only project:
 
 ```bash
-cargo generate --path templates/axum --name my-api
+moon run gen:process -- --name my-api
 ```
 
 Axum validates bearer access tokens through ZITADEL introspection using its own

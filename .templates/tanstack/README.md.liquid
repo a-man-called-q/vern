@@ -7,8 +7,8 @@ A TanStack Start BFF generated from the `tanstack` template.
 To run this application:
 
 ```bash
-bun install
-bun run dev
+bun install # run once from the Vern repository root
+moon run {{project-name}}:dev
 ```
 
 ## ZITADEL Authentication
@@ -110,10 +110,18 @@ bun run test
 
 ## Shadcn
 
-Add components using the latest version of [Shadcn](https://ui.shadcn.com/).
+Shared components are provided by `@vern/ui`. Import them from the package:
+
+```tsx
+import { Button } from "@vern/ui/components/button";
+```
+
+From this app's directory, the CLI routes shared primitives into
+`packages/ui` through the workspace configuration:
 
 ```bash
-bunx shadcn@latest add button
+cd apps/{{project-name}}
+bunx --bun shadcn@latest add card
 ```
 
 
