@@ -1,15 +1,16 @@
 tasks:
   dev:
-    command: bun run storybook
-    description: Run the Vern UI workbench
+    command: bun run dev
+    description: Run this TanStack dashboard in development mode
     deps:
       - 'workspace:install'
+      - 'auth-server:dev'
     toolchains: system
     preset: server
 
   build:
-    command: bun run build-storybook
-    description: Build the Vern UI workbench
+    command: bun run build
+    description: Build this TanStack dashboard
     deps:
       - 'workspace:install'
       - 'ui:build'
@@ -17,14 +18,14 @@ tasks:
 
   check:
     command: bun run check
-    description: Type-check Storybook
+    description: Type-check this TanStack dashboard
     deps:
       - 'workspace:install'
     toolchains: system
 
   test:
     command: bun run test
-    description: Run Storybook interaction tests
+    description: Run this TanStack dashboard's tests
     deps:
       - 'workspace:install'
     toolchains: system

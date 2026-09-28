@@ -1,0 +1,23 @@
+tasks:
+  dev:
+    command: cargo run
+    description: Run this Axum service in development mode
+    deps:
+      - 'auth-server:dev'
+    toolchains: system
+    preset: server
+
+  build:
+    command: cargo build --release
+    description: Build this Axum service for release
+    toolchains: system
+
+  check:
+    command: cargo check
+    description: Check this Axum service
+    toolchains: system
+
+  test:
+    command: cargo test
+    description: Run this Axum service's tests
+    toolchains: system

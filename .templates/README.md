@@ -1,44 +1,23 @@
-# Project templates
+# Moon generators
 
-This directory contains the reusable project templates maintained by this
-repository. TanStack apps are generated into `apps/`; Axum APIs are generated at
-the repository root.
+This directory contains the Moon code generation templates. Both templates
+create a project under `apps/<name>` and require an explicit, unique local port.
 
-## TanStack Start BFF
+## Dashboard
 
-Generate a project with the demo routes and examples enabled (the default):
-
-```bash
-moon run gen:dashboard -- --name my-dashboard
+```sh
+moon generate dashboard -- --name dashboard --port 3000
 ```
 
-To omit the demo routes and their supporting files:
+Demo routes and examples are included by default. Omit them with
+`--no-include_demos`.
 
-```bash
-moon run gen:dashboard -- --name my-dashboard --define include_demos=false
+## Service
+
+```sh
+moon generate service -- --name process --port 4000
 ```
 
-TanStack handles browser login and keeps OAuth tokens in Redis. It calls Axum
-APIs server-to-server; the browser never receives a bearer token. See
-[`tanstack/README.md.liquid`](tanstack/README.md.liquid) for local ZITADEL and
-Redis setup.
-
-## Axum API
-
-Generate an API-only project:
-
-```bash
-moon run gen:process -- --name my-api
-```
-
-Axum validates bearer access tokens through ZITADEL introspection using its own
-Private Key JWT application key. See
-[`axum/README.md.liquid`](axum/README.md.liquid) for the ZITADEL API app setup.
-
-## Integration test setup
-
-The four TanStack apps and three Axum APIs described during template
-verification are temporary test instances only. They are not part of this
-repository's permanent application structure. The test setup puts its web and
-API applications in one ZITADEL project so the APIs can use the same project
-audience; each API still has its own key.
+After generation, copy the app's `.env.example` to `.env`, configure ZITADEL,
+and run the workspace with `moon run :dev`. Moon checks that app, ZITADEL,
+Redis, and Storybook ports do not conflict before starting the local stack.

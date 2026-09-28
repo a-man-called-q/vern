@@ -1,7 +1,10 @@
 projects:
   globs:
-    - '*/moon.yml'
     - 'apps/*/moon.yml'
     - 'packages/*/moon.yml'
   sources:
-    gen: '.'
+    workspace: '.'
+
+generator:
+  templates:
+    - './.templates'

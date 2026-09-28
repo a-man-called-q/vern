@@ -1,18 +1,20 @@
 tasks:
-  install:
-    command: bun install
-    description: Install Bun workspace dependencies
+  build:
+    command: bun run check
+    description: Type-check the source-only shared UI package
+    deps:
+      - 'workspace:install'
     toolchains: system
-    inputs: []
-    options:
-      cache: false
-      runFromWorkspaceRoot: true
+    inputs:
+      - 'src/**/*'
+      - 'package.json'
+      - 'tsconfig.json'
 
   check:
     command: bun run check
     description: Type-check the shared UI package
     deps:
-      - '~:install'
+      - 'workspace:install'
     toolchains: system
     inputs:
       - 'src/**/*'

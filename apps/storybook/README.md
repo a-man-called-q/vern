@@ -5,21 +5,14 @@ Its components and theme come from the `@vern/ui` workspace package.
 
 ## Run Storybook
 
-Install Bun workspace dependencies once from the repository root:
-
-```sh
-bun install
-```
-
-Run from the repository root or from this directory:
+Run from the repository root:
 
 ```sh
 moon run storybook:dev
-# or: cd apps/storybook && bun run storybook
 ```
 
-Storybook is available at <http://localhost:6006>. Build a static Storybook
-with `moon run storybook:build` or `bun run build-storybook` from this directory.
+Storybook is available at <http://localhost:6006>. Build it with
+`moon run storybook:build`.
 
 ## Storybook agent skills
 

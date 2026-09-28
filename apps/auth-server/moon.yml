@@ -1,0 +1,27 @@
+tasks:
+  dev:
+    command: docker compose up -d --wait
+    description: Start local ZITADEL, PostgreSQL, and Redis containers
+    deps:
+      - 'workspace:check-ports'
+    toolchains: system
+    options:
+      cache: false
+      envFile: true
+      persistent: false
+
+  build:
+    command: docker compose build
+    description: Build the local auth server image
+    toolchains: system
+    options:
+      cache: false
+      envFile: true
+
+  down:
+    command: docker compose down
+    description: Stop local auth and Redis containers while keeping volumes
+    toolchains: system
+    options:
+      cache: false
+      envFile: true

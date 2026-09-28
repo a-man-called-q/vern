@@ -1,18 +1,22 @@
 tasks:
-  dashboard:
-    command: bun scripts/generate-tanstack.ts
-    description: Generate a TanStack Start app under apps/<name>
-    toolchains: system
-    inputs:
-      - '.templates/tanstack/**/*'
-      - 'scripts/generate-tanstack.ts'
-    options:
-      interactive: true
-
-  process:
-    command: cargo generate --path .templates/axum
-    description: Generate the Axum process API
+  install:
+    command: bun install
+    description: Install all Bun workspace dependencies
     toolchains: system
     inputs: []
     options:
-      interactive: true
+      cache: false
+      runFromWorkspaceRoot: true
+
+  check-ports:
+    command: bun scripts/check-ports.ts
+    description: Check local service ports for conflicts
+    toolchains: system
+    inputs:
+      - 'apps/*/.env'
+      - 'apps/*/.env.example'
+      - '.env'
+      - '.env.example'
+    options:
+      cache: false
+      runFromWorkspaceRoot: true
