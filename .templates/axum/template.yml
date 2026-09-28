@@ -1,0 +1,13 @@
+title: Axum API
+description: Generate a Rust Axum API that validates ZITADEL access tokens.
+destination: '/apps/[name | kebab_case]'
+variables:
+  name:
+    type: string
+    default: axum
+    required: true
+    prompt: Axum project name?
+  port:
+    type: number
+    required: true
+    prompt: Unique local port (1024-65535) for this Axum API?

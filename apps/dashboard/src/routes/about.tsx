@@ -1,0 +1,32 @@
+import { createFileRoute } from "@tanstack/react-router";
+import {
+	Card,
+	CardContent,
+	CardHeader,
+	CardTitle,
+} from "@vern/ui/components/card";
+
+export const Route = createFileRoute("/about")({
+	component: About,
+});
+
+function About() {
+	return (
+		<main className="page-wrap px-4 py-12">
+			<Card>
+				<CardHeader>
+					<CardTitle className="text-4xl font-bold sm:text-5xl">
+						A small starter with room to grow.
+					</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<p className="m-0 max-w-3xl text-base leading-8 text-muted-foreground">
+						TanStack Start gives you type-safe routing, server functions, and
+						modern SSR defaults. Use this as a clean foundation, then layer in
+						your own routes, styling, and add-ons.
+					</p>
+				</CardContent>
+			</Card>
+		</main>
+	);
+}

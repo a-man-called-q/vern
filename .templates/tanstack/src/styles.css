@@ -1,0 +1,18 @@
+@import '@vern/ui/styles.css';
+@plugin '@tailwindcss/typography';
+
+html,
+body,
+#app {
+	min-height: 100%;
+}
+
+body {
+	margin: 0;
+	overflow-x: hidden;
+}
+
+.page-wrap {
+	width: min(1080px, calc(100% - 2rem));
+	margin-inline: auto;
+}

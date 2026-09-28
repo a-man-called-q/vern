@@ -2,5 +2,11 @@
 	"name": "vern",
 	"private": true,
 	"packageManager": "bun@1.4.2",
+	"scripts": {
+		"project:rename": "bun scripts/rename-project.ts",
+		"project:update": "bun scripts/update-project.ts",
+		"project:doctor": "bun scripts/doctor.ts",
+		"test:scripts": "bun test scripts"
+	},
 	"workspaces": ["apps/*", "packages/*"]
 }

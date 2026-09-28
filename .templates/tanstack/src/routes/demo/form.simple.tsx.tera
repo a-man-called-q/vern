@@ -1,0 +1,82 @@
+---
+skip: {{ not include_demos }}
+---
+{% raw %}
+import { createFileRoute } from "@tanstack/react-router";
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "@vern/ui/components/card";
+import { z } from "zod";
+
+import { useAppForm } from "#/hooks/demo.form";
+
+export const Route = createFileRoute("/demo/form/simple")({
+	component: SimpleForm,
+});
+
+const schema = z.object({
+	title: z.string().min(1, "Title is required"),
+	description: z.string().min(1, "Description is required"),
+});
+
+function SimpleForm() {
+	const form = useAppForm({
+		defaultValues: {
+			title: "",
+			description: "",
+		},
+		validators: {
+			onBlur: schema,
+		},
+		onSubmit: ({ value }) => {
+			console.log(value);
+			// Show success message
+			alert("Form submitted successfully!");
+		},
+	});
+
+	return (
+		<main className="mx-auto w-full max-w-2xl px-4 py-12">
+			<Card>
+				<CardHeader>
+					<p className="m-0 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+						TanStack Form
+					</p>
+					<CardTitle className="text-3xl">Simple Form</CardTitle>
+					<CardDescription>
+						A small validated form using the generated field helpers.
+					</CardDescription>
+				</CardHeader>
+				<CardContent>
+					<form
+						onSubmit={(e) => {
+							e.preventDefault();
+							e.stopPropagation();
+							form.handleSubmit();
+						}}
+						className="space-y-6"
+					>
+						<form.AppField name="title">
+							{(field) => <field.TextField label="Title" />}
+						</form.AppField>
+
+						<form.AppField name="description">
+							{(field) => <field.TextArea label="Description" />}
+						</form.AppField>
+
+						<div className="flex justify-end">
+							<form.AppForm>
+								<form.SubscribeButton label="Submit" />
+							</form.AppForm>
+						</div>
+					</form>
+				</CardContent>
+			</Card>
+		</main>
+	);
+}
+{% endraw -%}

@@ -3,19 +3,19 @@
 This directory contains the Moon code generation templates. Both templates
 create a project under `apps/<name>` and require an explicit, unique local port.
 
-## Dashboard
+## TanStack
 
 ```sh
-moon generate dashboard -- --name dashboard --port 3000
+moon generate tanstack -- --name dashboard --port 3000
 ```
 
 Demo routes and examples are included by default. Omit them with
 `--no-include_demos`.
 
-## Service
+## Axum
 
 ```sh
-moon generate service -- --name process --port 4000
+moon generate axum -- --name process --port 4000
 ```
 
 After generation, copy the app's `.env.example` to `.env`, configure ZITADEL,
