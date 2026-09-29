@@ -1,13 +1,14 @@
 # Vern
 
-A Moon-based monorepo template for TanStack dashboards, Rust Axum services,
-shared React UI, and a local ZITADEL + Redis development stack.
+A Moon-based monorepo template for TanStack and Next.js dashboards, Rust Axum
+services, shared React UI, and a local ZITADEL + Redis development stack.
 
 ## Projects
 
 | Path | Purpose |
 | --- | --- |
 | `.templates/tanstack` | TanStack Start BFF with OIDC login, Redis sessions, and server-side API calls |
+| `.templates/next` | Next.js App Router BFF with the same OIDC login, Redis sessions, and API calls |
 | `.templates/axum` | Axum API that verifies access tokens through ZITADEL introspection |
 | `apps/auth-server` | Docker Compose stack for local ZITADEL, PostgreSQL, and Redis |
 | `apps/storybook` | Storybook workbench for shared UI components |
@@ -30,13 +31,14 @@ cp .env.example .env
 cp apps/auth-server/.env.example apps/auth-server/.env
 ```
 
-Generate an Axum API and a TanStack app. Choose a distinct local port for every
-project; the examples reserve 8081 for ZITADEL, 6379 for Redis, and 6006 for
-Storybook.
+Generate an Axum API and a TanStack or Next.js app (or both). Choose a distinct
+local port for every project; the examples reserve 8081 for ZITADEL, 6379 for
+Redis, and 6006 for Storybook.
 
 ```sh
 moon generate axum -- --name process --port 4000
 moon generate tanstack -- --name dashboard --port 3000
+moon generate next -- --name web --port 3001
 ```
 
 Copy the generated app environment files and fill in the ZITADEL client/key
@@ -45,10 +47,11 @@ details and session secret:
 ```sh
 cp apps/process/.env.example apps/process/.env
 cp apps/dashboard/.env.example apps/dashboard/.env
+cp apps/web/.env.example apps/web/.env
 ```
 
-To omit the TanStack demo routes, add `--no-include_demos` to its generate
-command. The default includes the demos.
+To omit the demo routes from a TanStack or Next.js app, add `--no-include_demos`
+to its generate command. The default includes the demos.
 
 The root `.env` holds shared local settings such as `ZITADEL_ISSUER`,
 `ZITADEL_PROJECT_ID`, `AUTH_HTTP_PORT`, `REDIS_PORT`, and `REDIS_URL`. Each app's
@@ -114,7 +117,7 @@ moon run :dev
 ```
 
 Moon validates configured ports and starts ZITADEL, PostgreSQL, and Redis in
-the background before it runs the TanStack app, Axum API, and Storybook. Stop the
+the background before it runs the TanStack and Next.js apps, Axum API, and Storybook. Stop the
 infrastructure containers while keeping their data with:
 
 ```sh
@@ -132,9 +135,9 @@ project, use its Moon target, such as `moon run dashboard:dev` or
 `moon run process:build`. Check ports separately with
 `moon run workspace:check-ports`.
 
-The TanStack app keeps OAuth tokens server-side in Redis; the browser receives
-only an HTTP-only session cookie. Axum validates bearer tokens through
-ZITADEL. Configure the TanStack app's `API_BASE_URL` to the generated Axum API's
+The TanStack and Next.js apps keep OAuth tokens server-side in Redis; the
+browser receives only an HTTP-only session cookie. Axum validates bearer tokens
+through ZITADEL. Configure the app's `API_BASE_URL` to the generated Axum API's
 port to enable the protected server-to-server `/api/me` request.
 
 ## API routes
@@ -145,7 +148,8 @@ port to enable the protected server-to-server `/api/me` request.
 ## Storybook
 
 Storybook is available at <http://localhost:6006>. Add shadcn components from a
-generated TanStack app so the CLI routes shared primitives into `packages/ui`:
+generated TanStack or Next.js app so the CLI routes shared primitives into
+`packages/ui`:
 
 ```sh
 cd apps/dashboard

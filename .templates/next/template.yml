@@ -1,0 +1,17 @@
+title: Next.js app
+description: Generate a Next.js App Router app with OIDC login and server-side API calls.
+destination: '/apps/[name | kebab_case]'
+variables:
+  name:
+    type: string
+    default: next
+    required: true
+    prompt: Next.js project name?
+  port:
+    type: number
+    required: true
+    prompt: Unique local port (1024-65535) for this Next.js app?
+  include_demos:
+    type: boolean
+    default: true
+    prompt: Include demo routes and examples?

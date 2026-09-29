@@ -1,7 +1,7 @@
 # Moon generators
 
-This directory contains the Moon code generation templates. Both templates
-create a project under `apps/<name>` and require an explicit, unique local port.
+This directory contains the Moon code generation templates. Every template
+creates a project under `apps/<name>` and requires an explicit, unique local port.
 
 ## TanStack
 
@@ -11,6 +11,16 @@ moon generate tanstack -- --name dashboard --port 3000
 
 Demo routes and examples are included by default. Omit them with
 `--no-include_demos`.
+
+## Next.js
+
+```sh
+moon generate next -- --name web --port 3001
+```
+
+The same OIDC login, Redis-backed sessions, and server-side API calls as the
+TanStack template, built on the Next.js App Router. Demo routes and examples
+are included by default; omit them with `--no-include_demos`.
 
 ## Axum
 

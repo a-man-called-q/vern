@@ -1,0 +1,5 @@
+/** Kebab-case project name; namespaces cookies and Redis keys per app. */
+export const APP_ID = "{{ name | kebab_case }}";
+
+/** Display name shown in the header, footer, dashboard, and page title. */
+export const SITE_NAME = "{{ name }}";

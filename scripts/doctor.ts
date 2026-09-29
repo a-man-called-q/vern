@@ -171,25 +171,32 @@ function main(): void {
 				);
 			}
 		}
-		const tanstackTemplate = resolve(
-			ROOT,
-			".templates/tanstack/package.json.tera",
-		);
-		if (existsSync(tanstackTemplate)) {
+		for (const [template, label] of [
+			["tanstack", "TanStack"],
+			["next", "Next.js"],
+		] as const) {
+			const templatePackage = resolve(
+				ROOT,
+				".templates",
+				template,
+				"package.json.tera",
+			);
+			if (!existsSync(templatePackage)) continue;
 			try {
-				const rendered = readFileSync(tanstackTemplate, "utf8").replace(
+				const rendered = readFileSync(templatePackage, "utf8").replace(
 					'"name": "{{ name | kebab_case }}"',
 					'"name": "doctor-template"',
 				);
 				JSON.parse(rendered);
 				report(
 					"OK",
-					"TanStack package template is valid JSON after rendering its name.",
+					label + " package template is valid JSON after rendering its name.",
 				);
 			} catch (error) {
 				report(
 					"FAIL",
-					"TanStack package template is invalid: " +
+					label +
+						" package template is invalid: " +
 						(error instanceof Error ? error.message : String(error)),
 				);
 			}

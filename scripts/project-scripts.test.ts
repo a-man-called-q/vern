@@ -213,6 +213,8 @@ describe("update-project", () => {
 			"packages/ui/token.txt": "color: violet\n",
 			".templates/tanstack/package.json.tera":
 				'{\n  "name": "{{ name | kebab_case }}",\n  "dependencies": {\n    "@acme/ui": "workspace:*",\n    "demo": "^1.0.0"\n  }\n}\n',
+			".templates/next/package.json.tera":
+				'{\n  "name": "{{ name | kebab_case }}",\n  "dependencies": {\n    "@acme/ui": "workspace:*",\n    "demo": "^1.0.0"\n  }\n}\n',
 			".templates/axum/Cargo.toml.tera":
 				'[package]\nname = "{{ name | kebab_case }}"\nversion = "0.1.0"\n\n[dependencies]\nasync-trait = "0.1"\n',
 		});
@@ -328,6 +330,15 @@ describe("update-project", () => {
 		expect(tanstackTemplate.name).toBe("{{ name | kebab_case }}");
 		expect(tanstackTemplate.dependencies["@acme/ui"]).toBe("workspace:*");
 		expect(tanstackTemplate.dependencies.demo).toBe("^3.0.0");
+		const nextTemplate = JSON.parse(
+			readFileSync(
+				resolve(consumer, ".templates/next/package.json.tera"),
+				"utf8",
+			),
+		);
+		expect(nextTemplate.name).toBe("{{ name | kebab_case }}");
+		expect(nextTemplate.dependencies["@acme/ui"]).toBe("workspace:*");
+		expect(nextTemplate.dependencies.demo).toBe("^3.0.0");
 		const rustTemplate = readFileSync(
 			resolve(consumer, ".templates/axum/Cargo.toml.tera"),
 			"utf8",

@@ -290,20 +290,24 @@ function assertCargoEdit(root: string): void {
 	verifyCargoEdit(root);
 }
 
-function updateTanstackTemplate(root: string): void {
-	const path = resolve(root, ".templates/tanstack/package.json.tera");
+function updateBunTemplate(
+	root: string,
+	template: string,
+	label: string,
+): void {
+	const path = resolve(root, ".templates", template, "package.json.tera");
 	if (!existsSync(path)) return;
-	const tempRoot = mkTemp("vern-tanstack-template-");
+	const tempRoot = mkTemp("vern-" + template + "-template-");
 	try {
 		const original = readFileSync(path, "utf8");
-		const renderedName = "vern-template-tanstack";
+		const renderedName = "vern-template-" + template;
 		const rendered = original.replace(
 			'"name": "{{ name | kebab_case }}"',
 			'"name": "' + renderedName + '"',
 		);
 		if (rendered === original)
 			throw new Error(
-				"Could not render the TanStack package name placeholder.",
+				"Could not render the " + label + " package name placeholder.",
 			);
 		const manifest = JSON.parse(rendered) as Record<string, unknown>;
 		const workspaceDependencies: Record<string, Record<string, string>> = {};
@@ -388,7 +392,8 @@ function updateRustTemplate(root: string): void {
 function updateDependencies(root: string): void {
 	assertCargoEdit(root);
 	run("bun", ["update", "--latest", "--recursive"], { cwd: root });
-	updateTanstackTemplate(root);
+	updateBunTemplate(root, "tanstack", "TanStack");
+	updateBunTemplate(root, "next", "Next.js");
 
 	const apps = resolve(root, "apps");
 	if (existsSync(apps)) {

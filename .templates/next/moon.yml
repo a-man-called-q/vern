@@ -1,0 +1,31 @@
+tasks:
+  dev:
+    command: bun run dev
+    description: Run this Next.js app in development mode
+    deps:
+      - 'workspace:install'
+      - 'auth-server:dev'
+    toolchains: system
+    preset: server
+
+  build:
+    command: bun run build
+    description: Build this Next.js app
+    deps:
+      - 'workspace:install'
+      - 'ui:build'
+    toolchains: system
+
+  check:
+    command: bun run check
+    description: Type-check and lint this Next.js app
+    deps:
+      - 'workspace:install'
+    toolchains: system
+
+  test:
+    command: bun run test
+    description: Run this Next.js app's tests
+    deps:
+      - 'workspace:install'
+    toolchains: system

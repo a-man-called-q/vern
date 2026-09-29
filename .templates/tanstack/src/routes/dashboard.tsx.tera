@@ -33,7 +33,7 @@ function Dashboard() {
 			<AppSidebar
 				variant="inset"
 				brandName="{{ name }}"
-				user={{
+				user={% raw %}{{{% endraw %}
 					name: user.name || user.email || "{{ name }} user",
 					email: user.email || "",
 					subject: user.sub,
