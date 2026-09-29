@@ -1,0 +1,162 @@
+:root {
+	color-scheme: light;
+	--vern-primary: #6d5ef5;
+	--vern-primary-strong: #5548d9;
+	--vern-accent: #2bc7b8;
+	--vern-ink: #172033;
+	--vern-muted: #667085;
+	--vern-surface: rgba(255, 255, 255, 0.94);
+	--vern-border: rgba(23, 32, 51, 0.12);
+	--vern-focus: rgba(109, 94, 245, 0.2);
+}
+
+html,
+body {
+	min-height: 100%;
+}
+
+body {
+	margin: 0;
+	background:
+		radial-gradient(ellipse at 8% 8%, rgba(109, 94, 245, 0.17), transparent 34rem),
+		radial-gradient(ellipse at 94% 88%, rgba(43, 199, 184, 0.13), transparent 32rem),
+		#f7f8fc !important;
+	background-attachment: fixed;
+	color: var(--vern-ink);
+	font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+
+::selection {
+	background: rgba(109, 94, 245, 0.22);
+}
+
+/* Keep the upstream logo and authentication flow; serve Vern's own marks. */
+img[alt="logo"],
+img[src*="zitadel-logo"] {
+	content: url("/brand/logo-light.svg") !important;
+	max-width: min(11rem, 100%);
+	max-height: 3rem;
+	object-fit: contain;
+}
+
+button,
+[role="button"] {
+	font-family: inherit;
+}
+
+button[class*="bg-primary"],
+button[class*="bg-button"],
+button[type="submit"],
+[role="button"][class*="bg-primary"] {
+	border-color: var(--vern-primary) !important;
+	border-radius: 0.7rem !important;
+	background-color: var(--vern-primary) !important;
+	box-shadow: 0 5px 14px rgba(85, 72, 217, 0.16);
+	transition: background-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+button[class*="bg-primary"]:hover,
+button[class*="bg-button"]:hover,
+button[type="submit"]:hover,
+[role="button"][class*="bg-primary"]:hover {
+	border-color: var(--vern-primary-strong) !important;
+	background-color: var(--vern-primary-strong) !important;
+	box-shadow: 0 7px 18px rgba(85, 72, 217, 0.22);
+}
+
+button[class*="bg-primary"]:active,
+button[class*="bg-button"]:active,
+button[type="submit"]:active,
+[role="button"][class*="bg-primary"]:active {
+	transform: translateY(1px);
+}
+
+a[class*="text-primary"],
+button[class*="text-primary"] {
+	color: var(--vern-primary-strong) !important;
+}
+
+input,
+select,
+textarea {
+	border-color: var(--vern-border) !important;
+	border-radius: 0.65rem !important;
+	background-color: var(--vern-surface) !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+	border-color: var(--vern-primary) !important;
+	box-shadow: 0 0 0 3px var(--vern-focus) !important;
+	outline: none !important;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		color-scheme: dark;
+		--vern-primary: #9a90ff;
+		--vern-primary-strong: #b0a9ff;
+		--vern-ink: #f6f7fb;
+		--vern-muted: #a9b0c1;
+		--vern-surface: rgba(22, 25, 36, 0.94);
+		--vern-border: rgba(246, 247, 251, 0.14);
+		--vern-focus: rgba(154, 144, 255, 0.25);
+	}
+
+	body {
+		background:
+			radial-gradient(ellipse at 8% 8%, rgba(154, 144, 255, 0.19), transparent 34rem),
+			radial-gradient(ellipse at 94% 88%, rgba(43, 199, 184, 0.11), transparent 32rem),
+			#10121a !important;
+		color: var(--vern-ink);
+	}
+
+	img[alt="logo"],
+	img[src*="zitadel-logo"] {
+		content: url("/brand/logo-dark.svg") !important;
+	}
+
+	a[class*="text-primary"],
+	button[class*="text-primary"] {
+		color: var(--vern-primary) !important;
+	}
+}
+
+html.dark {
+	color-scheme: dark;
+	--vern-primary: #9a90ff;
+	--vern-primary-strong: #b0a9ff;
+	--vern-ink: #f6f7fb;
+	--vern-muted: #a9b0c1;
+	--vern-surface: rgba(22, 25, 36, 0.94);
+	--vern-border: rgba(246, 247, 251, 0.14);
+	--vern-focus: rgba(154, 144, 255, 0.25);
+}
+
+html.dark body {
+	background:
+		radial-gradient(ellipse at 8% 8%, rgba(154, 144, 255, 0.19), transparent 34rem),
+		radial-gradient(ellipse at 94% 88%, rgba(43, 199, 184, 0.11), transparent 32rem),
+		#10121a !important;
+	color: var(--vern-ink);
+}
+
+html.dark img[alt="logo"],
+html.dark img[src*="zitadel-logo"] {
+	content: url("/brand/logo-dark.svg") !important;
+}
+
+html.dark a[class*="text-primary"],
+html.dark button[class*="text-primary"] {
+	color: var(--vern-primary) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		transition-duration: 0.01ms !important;
+		animation-duration: 0.01ms !important;
+	}
+}

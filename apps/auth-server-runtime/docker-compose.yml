@@ -47,7 +47,7 @@ services:
       - traefik.enable=true
       - traefik.docker.network=vern-auth
       - traefik.http.services.auth-server.loadbalancer.server.port=80
-      - "traefik.http.middlewares.auth-root-rewrite.replacepath.path=/ui/v2/login/"
+      - "traefik.http.middlewares.auth-root-rewrite.replacepath.path=/ui/v2/login"
       - "traefik.http.routers.auth-root.rule=Host(`${ZITADEL_DOMAIN:-localhost}`) && Path(`/`)"
       - traefik.http.routers.auth-root.entrypoints=web
       - traefik.http.routers.auth-root.middlewares=auth-root-rewrite
@@ -138,7 +138,7 @@ services:
       - traefik.http.routers.zitadel-api.priority=100
 
   zitadel-login:
-    image: ghcr.io/zitadel/zitadel-login:${ZITADEL_VERSION:-v4.17.1}
+    image: ${ZITADEL_LOGIN_IMAGE:-ghcr.io/zitadel/zitadel-login:${ZITADEL_VERSION:-v4.17.1}}
     restart: unless-stopped
     environment:
       ZITADEL_API_URL: http://zitadel-api:8080
