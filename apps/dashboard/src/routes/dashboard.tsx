@@ -1,10 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import {
-	Card,
-	CardContent,
-	CardHeader,
-	CardTitle,
-} from "@vern/ui/components/card";
+import type { CSSProperties } from "react";
+import dashboardData from "../app/dashboard/data.json";
+import { AppSidebar } from "../components/app-sidebar";
+import { ChartAreaInteractive } from "../components/chart-area-interactive";
+import { DataTable } from "../components/data-table";
+import { SectionCards } from "../components/section-cards";
+import { SiteHeader } from "../components/site-header";
+import { SidebarInset, SidebarProvider } from "@vern/ui/components/sidebar";
 import { getDashboardDataFn } from "../server/auth";
 
 export const Route = createFileRoute("/dashboard")({
@@ -13,49 +15,42 @@ export const Route = createFileRoute("/dashboard")({
 });
 
 function Dashboard() {
-	const { user, apiStatus, apiSubject } = Route.useLoaderData();
+	const { user, apiStatus } = Route.useLoaderData();
 
 	return (
-		<main className="page-wrap px-4 py-12">
-			<Card>
-				<CardHeader>
-					<p className="m-0 text-sm text-muted-foreground">
-						Authenticated area
-					</p>
-					<CardTitle className="text-4xl font-bold sm:text-5xl">
-						Dashboard
-					</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<dl className="grid gap-4 text-sm sm:grid-cols-[8rem_1fr]">
-						<dt className="font-semibold text-muted-foreground">Name</dt>
-						<dd className="m-0">{user.name ?? "—"}</dd>
-						<dt className="font-semibold text-muted-foreground">Email</dt>
-						<dd className="m-0">{user.email ?? "—"}</dd>
-						<dt className="font-semibold text-muted-foreground">Subject</dt>
-						<dd className="m-0 break-all font-mono">{user.sub}</dd>
-					</dl>
-					<div className="mt-8 border-t pt-5">
-						<h2 className="mb-2 text-lg font-semibold">Configured API</h2>
-						{apiStatus === "connected" ? (
-							<p className="m-0 text-sm text-muted-foreground">
-								Axum verified this request through ZITADEL introspection for
-								subject <code>{apiSubject}</code>.
-							</p>
-						) : apiStatus === "not-configured" ? (
-							<p className="m-0 text-sm text-muted-foreground">
-								Set <code>API_BASE_URL</code> to call an Axum API from this
-								server.
-							</p>
-						) : (
-							<p className="m-0 text-sm text-muted-foreground">
-								The configured API could not verify this session. Check that the
-								Axum API and ZITADEL are available.
-							</p>
-						)}
+		<SidebarProvider
+			className="dashboard-theme"
+			style={
+				{
+					"--sidebar-width": "calc(var(--spacing) * 72)",
+					"--header-height": "calc(var(--spacing) * 12)",
+				} as CSSProperties
+			}
+		>
+			<AppSidebar
+				variant="inset"
+				brandName="Vern"
+				user={{
+					name: user.name || user.email || "Vern user",
+					email: user.email || "",
+					subject: user.sub,
+				}}
+				apiStatus={apiStatus}
+			/>
+			<SidebarInset>
+				<SiteHeader />
+				<div className="flex flex-1 flex-col">
+					<div className="@container/main flex flex-1 flex-col gap-2">
+						<div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+							<SectionCards />
+							<div className="px-4 lg:px-6">
+								<ChartAreaInteractive />
+							</div>
+							<DataTable data={dashboardData} />
+						</div>
 					</div>
-				</CardContent>
-			</Card>
-		</main>
+				</div>
+			</SidebarInset>
+		</SidebarProvider>
 	);
 }

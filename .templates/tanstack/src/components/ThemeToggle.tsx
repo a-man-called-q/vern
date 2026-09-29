@@ -3,9 +3,9 @@ import { useEffect, useState } from "react";
 
 type ThemeMode = "light" | "dark" | "auto";
 
-function getInitialMode(): ThemeMode {
+function getInitialMode(defaultMode: ThemeMode): ThemeMode {
 	if (typeof window === "undefined") {
-		return "auto";
+		return defaultMode;
 	}
 
 	const stored = window.localStorage.getItem("theme");
@@ -13,7 +13,7 @@ function getInitialMode(): ThemeMode {
 		return stored;
 	}
 
-	return "auto";
+	return defaultMode;
 }
 
 function applyThemeMode(mode: ThemeMode) {
@@ -32,14 +32,18 @@ function applyThemeMode(mode: ThemeMode) {
 	document.documentElement.style.colorScheme = resolved;
 }
 
-export default function ThemeToggle() {
-	const [mode, setMode] = useState<ThemeMode>("auto");
+export default function ThemeToggle({
+	defaultMode = "auto",
+}: {
+	defaultMode?: ThemeMode;
+}) {
+	const [mode, setMode] = useState<ThemeMode>(defaultMode);
 
 	useEffect(() => {
-		const initialMode = getInitialMode();
+		const initialMode = getInitialMode(defaultMode);
 		setMode(initialMode);
 		applyThemeMode(initialMode);
-	}, []);
+	}, [defaultMode]);
 
 	useEffect(() => {
 		if (mode !== "auto") {

@@ -1,7 +1,8 @@
 (function () {
 	try {
 		var stored = window.localStorage.getItem("theme");
-		var mode = stored === "light" || stored === "dark" || stored === "auto" ? stored : "auto";
+		var dashboardDefault = window.location.pathname.indexOf("/dashboard") === 0 ? "dark" : "auto";
+		var mode = stored === "light" || stored === "dark" || stored === "auto" ? stored : dashboardDefault;
 		var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
 		var resolved = mode === "auto" ? (prefersDark ? "dark" : "light") : mode;
 		var root = document.documentElement;
