@@ -64,7 +64,7 @@ services:
       - traefik.http.routers.auth-login.priority=250
 
   zitadel-api:
-    image: ghcr.io/zitadel/zitadel:${ZITADEL_VERSION:-v4.17.1}
+    image: ghcr.io/zitadel/zitadel:${ZITADEL_VERSION:-v4.19.2}
     restart: unless-stopped
     user: "0"
     command: start-from-init --masterkey "${ZITADEL_MASTERKEY:-MasterkeyNeedsToHave32Characters}"
@@ -139,7 +139,7 @@ services:
       - traefik.http.routers.zitadel-api.priority=100
 
   zitadel-login:
-    image: ${ZITADEL_LOGIN_IMAGE:-ghcr.io/zitadel/zitadel-login:${ZITADEL_VERSION:-v4.17.1}}
+    image: ${ZITADEL_LOGIN_IMAGE:-ghcr.io/zitadel/zitadel-login:${ZITADEL_VERSION:-v4.19.2}}
     restart: unless-stopped
     environment:
       ZITADEL_API_URL: http://zitadel-api:8080

@@ -1,6 +1,6 @@
 # Vern auth server runtime
 
-Source lengkap ZITADEL `v4.17.1` berada langsung di `apps/auth-server/`. UI Vern hanya mengubah Login App di `apps/login`; API, Console, issuer, dan protokol autentikasi tetap mengikuti ZITADEL upstream.
+Source lengkap ZITADEL `v4.19.2` berada langsung di `apps/auth-server/`. UI Vern hanya mengubah Login App di `apps/login`; API, Console, issuer, dan protokol autentikasi tetap mengikuti ZITADEL upstream.
 
 Konfigurasi runtime milik Vern disimpan di `apps/auth-server/deploy/vern/`. Berkas Compose tetap menjalankan API, PostgreSQL, Redis, proxy, dan Login App terpisah. Hanya image Login yang dapat diganti melalui `ZITADEL_LOGIN_IMAGE`.
 
