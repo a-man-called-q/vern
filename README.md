@@ -53,6 +53,36 @@ cp apps/web/.env.example apps/web/.env
 To omit the demo routes from a TanStack or Next.js app, add `--no-include_demos`
 to its generate command. The default includes the demos.
 
+### Provision the ZITADEL application
+
+Each TanStack or Next.js app needs an OIDC application in ZITADEL. Instead of
+creating it by hand in the Console, run:
+
+```sh
+bun run zitadel:app -- --app web --write-env
+```
+
+The command creates the application in `ZITADEL_PROJECT_ID`, or brings an
+existing one of the same name back to the right settings, so it is safe to run
+again. It configures Authorization Code with PKCE (no client secret), the
+refresh-token grant, and the callback URLs derived from the app's `APP_URL`, then
+stores the client ID in `apps/web/.env`. Development Mode is enabled only for
+`http://localhost` URLs; an HTTPS `APP_URL` gets it off. Use `--dry-run` to print
+the configuration without calling ZITADEL. The command owns the application's
+OIDC settings, so changes made in the Console are reset on the next run.
+
+It authenticates with a service user's personal access token:
+
+1. In the Console, create a service user and add a personal access token to it.
+2. Make the service user a manager of the project with the **Project Owner** role.
+3. Pass the token as `ZITADEL_PAT` in your shell, or save it to a file outside the
+   repository and use `--pat-file`. Do not put it in a `.env` file: Moon hands
+   `.env` values to every task.
+
+For another environment, run the same command with that environment's
+`ZITADEL_ISSUER`, `ZITADEL_PROJECT_ID`, and `APP_URL` (set as variables or flags),
+for example from CI.
+
 The root `.env` holds shared local settings such as `ZITADEL_ISSUER`,
 `ZITADEL_PROJECT_ID`, `AUTH_HTTP_PORT`, `REDIS_PORT`, and `REDIS_URL`. Each app's
 `.env` holds its own port and credentials. Project values override shared ones.

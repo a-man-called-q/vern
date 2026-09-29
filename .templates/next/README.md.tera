@@ -13,6 +13,8 @@ Redis session and attempts to revoke its refresh token before redirecting
 through ZITADEL's end-session endpoint. Server code can call the configured
 Axum API with a bearer token using `fetchAuthenticatedApi` from
 `src/server/api.server.ts`. Tokens are never returned to browser components.
+The user's name and email come from the ID token when ZITADEL includes them,
+and otherwise from the userinfo endpoint.
 The flow follows ZITADEL's
 [Authorization Code + PKCE guide](https://zitadel.com/docs/guides/integrate/login/oidc/login-users).
 
@@ -37,6 +39,11 @@ several apps can run on `localhost` side by side.
    Enable Development Mode to allow these local HTTP URLs. Copy the
    application's client ID and the containing ZITADEL project ID. The PKCE
    flow does not use a client secret.
+
+   To skip the Console, run `bun run zitadel:app -- --app {{ name | kebab_case }} --write-env`
+   from the repository root; it creates the application with these settings and
+   stores the client ID in this app's `.env` (see the repository README for the
+   service-user token it needs).
 3. Copy this app's `.env.example` to `.env`, set `ZITADEL_CLIENT_ID`, and
    generate a session secret of at least 32 characters:
 
@@ -60,10 +67,42 @@ service needs its own ZITADEL API application and downloaded Private Key JWT
 key file; services in the same ZITADEL project can share this app's audience
 scope.
 
-For production, use HTTPS for the app, issuer, and API, use a secured Redis
-deployment, set the variables in the hosting environment, and register the
-production callback and post-logout URLs in ZITADEL. This template requires a
-server runtime; a static export cannot handle OIDC callbacks or sessions.
+This template requires a server runtime; a static export cannot handle OIDC
+callbacks or sessions.
+
+### Production checklist
+
+- Register a separate ZITADEL Web application for each environment: Authorization
+  Code with PKCE (no client secret), the **Refresh Token** grant, and HTTPS
+  redirect and post-logout URLs. Leave **Development Mode** off; it exists only
+  to allow `http://localhost` URLs.
+- Set `APP_URL` and `ZITADEL_ISSUER` (and `API_BASE_URL`) to HTTPS origins. The
+  app refuses plain HTTP outside local development. Behind a proxy, forward the
+  original `Host` and `Origin` headers: logout compares the request `Origin` to
+  `APP_URL`.
+- Point `REDIS_URL` at a Redis that requires authentication and TLS
+  (`rediss://user:password@host:6379`). Session keys are namespaced per app.
+- Generate a different `SESSION_SECRET` for each environment
+  (`openssl rand -base64 32`) and keep it in your secret manager. It only seals
+  the short-lived sign-in cookie, so rotating it interrupts in-flight sign-ins
+  but not signed-in users.
+- Signed-in sessions live in Redis for at most eight hours. They carry a schema
+  version (`SESSION_VERSION` in `src/server/session.server.ts`); after a release
+  changes the stored shape, bump it and users simply sign in again.
+- Name and email are read from the ID token, or from the userinfo endpoint when
+  the ID token omits them. Enabling **Include user's profile info in the ID
+  Token** on the ZITADEL application skips that extra request but is optional.
+- Failed sign-in, sign-out, token-refresh, and API steps are written to the
+  server log as `[auth] ...` lines with the error name and code, never tokens or
+  cookies. Send server logs somewhere you can search.
+- The OIDC discovery document is cached for an hour. If refreshing it fails, the
+  last good copy keeps being used, so a brief ZITADEL outage does not fail every
+  sign-in.
+- `next.config.ts` sends baseline security headers: `nosniff`, no framing, a
+  strict referrer policy, a restrictive permissions policy, a limited
+  Content-Security-Policy (`base-uri`, `object-src`, `frame-ancestors`), and HSTS
+  in production. It deliberately has no `script-src` policy, which needs a
+  per-request nonce; add one with a proxy when you need it.
 
 Login always ships with generated projects, whether or not demo routes are
 included.

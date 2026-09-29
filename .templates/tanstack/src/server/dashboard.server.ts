@@ -2,6 +2,7 @@ import { env } from "node:process";
 import { fetchAuthenticatedApi } from "./api.server";
 import type { DashboardData } from "./auth";
 import { requireUser } from "./auth.server";
+import { logAuthWarning } from "./log.server";
 
 export async function getDashboardData(): Promise<DashboardData> {
 	const user = await requireUser();
@@ -9,7 +10,10 @@ export async function getDashboardData(): Promise<DashboardData> {
 
 	try {
 		const response = await fetchAuthenticatedApi("/api/me");
-		if (!response.ok) return { user, apiStatus: "unavailable" };
+		if (!response.ok) {
+			logAuthWarning("api /api/me", `HTTP ${response.status}`);
+			return { user, apiStatus: "unavailable" };
+		}
 
 		const payload: unknown = await response.json();
 		if (
@@ -18,6 +22,10 @@ export async function getDashboardData(): Promise<DashboardData> {
 			typeof (payload as Record<string, unknown>).sub !== "string" ||
 			(payload as Record<string, unknown>).sub !== user.sub
 		) {
+			logAuthWarning(
+				"api /api/me",
+				"response does not match the signed-in user",
+			);
 			return { user, apiStatus: "unavailable" };
 		}
 
@@ -26,7 +34,8 @@ export async function getDashboardData(): Promise<DashboardData> {
 			apiStatus: "connected",
 			apiSubject: (payload as { sub: string }).sub,
 		};
-	} catch {
+	} catch (error) {
+		logAuthWarning("api /api/me", error);
 		return { user, apiStatus: "unavailable" };
 	}
 }

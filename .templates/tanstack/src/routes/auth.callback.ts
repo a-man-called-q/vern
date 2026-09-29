@@ -1,6 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import * as oidc from "openid-client";
 import { redirectResponse } from "../server/http.server";
+import {
+	logAuthFailure,
+	logAuthWarning,
+	sanitizeForLog,
+} from "../server/log.server";
 import { getAppUrl, getOidcConfiguration } from "../server/oidc.server";
 import {
 	createAppSession,
@@ -29,6 +34,10 @@ export const Route = createFileRoute("/auth/callback")({
 					}
 
 					if (requestUrl.searchParams.has("error")) {
+						logAuthWarning(
+							"callback",
+							`identity provider returned error=${sanitizeForLog(requestUrl.searchParams.get("error"))} description=${sanitizeForLog(requestUrl.searchParams.get("error_description"))}`,
+						);
 						await transaction.clear();
 						return redirectResponse(getAppUrl("/"));
 					}
@@ -62,12 +71,29 @@ export const Route = createFileRoute("/auth/callback")({
 						throw new Error("OIDC response did not contain required tokens");
 					}
 
+					// ZITADEL only puts name and email in the ID token when the application
+					// opts in, so ask the userinfo endpoint when the ID token has neither.
+					let name = claims.name;
+					let email = claims.email;
+					if (typeof name !== "string" && typeof email !== "string") {
+						try {
+							const info = await oidc.fetchUserInfo(
+								configuration,
+								tokens.access_token,
+								claims.sub,
+							);
+							name = info.name;
+							email = info.email;
+						} catch (error) {
+							logAuthWarning("callback userinfo", error);
+							// Signing in with the ID token identity alone is still valid.
+						}
+					}
+
 					const user = {
 						sub: claims.sub,
-						...(typeof claims.name === "string" ? { name: claims.name } : {}),
-						...(typeof claims.email === "string"
-							? { email: claims.email }
-							: {}),
+						...(typeof name === "string" ? { name } : {}),
+						...(typeof email === "string" ? { email } : {}),
 					};
 
 					await createAppSession({
@@ -81,7 +107,8 @@ export const Route = createFileRoute("/auth/callback")({
 					await transaction.clear();
 
 					return redirectResponse(getAppUrl("/dashboard"));
-				} catch {
+				} catch (error) {
+					logAuthFailure("callback", error);
 					await transaction.clear();
 					return redirectResponse(getAppUrl("/"));
 				}

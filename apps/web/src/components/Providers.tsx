@@ -1,0 +1,29 @@
+"use client";
+
+import {
+	isServer,
+	QueryClient,
+	QueryClientProvider,
+} from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import type { ReactNode } from "react";
+
+let browserQueryClient: QueryClient | undefined;
+
+// A new client per server request; one shared client in the browser.
+function getQueryClient() {
+	if (isServer) return new QueryClient();
+	browserQueryClient ??= new QueryClient();
+	return browserQueryClient;
+}
+
+export default function Providers({ children }: { children: ReactNode }) {
+	const queryClient = getQueryClient();
+
+	return (
+		<QueryClientProvider client={queryClient}>
+			{children}
+			<ReactQueryDevtools initialIsOpen={false} />
+		</QueryClientProvider>
+	);
+}

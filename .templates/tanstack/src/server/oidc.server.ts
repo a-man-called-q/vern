@@ -1,7 +1,14 @@
 import { env } from "node:process";
 import * as oidc from "openid-client";
+import { createTtlCache } from "./ttl-cache";
 
 const LOCAL_ISSUER_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+const DISCOVERY_TTL_MS = 60 * 60 * 1000;
+
+const discoveryCache: {
+	current?: { key: string; get: () => Promise<oidc.Configuration> };
+} = {};
 
 function getAppBaseUrl() {
 	const value = env.APP_URL;
@@ -93,15 +100,29 @@ export async function getOidcConfiguration() {
 	const redirectUri = getAppUrl("/auth/callback").href;
 	const issuer = getIssuerUrl();
 
-	return oidc.discovery(
-		issuer,
-		clientId,
-		{ redirect_uris: [redirectUri] },
-		oidc.None(),
-		{
-			...(issuer.protocol === "http:"
-				? { execute: [oidc.allowInsecureRequests] }
-				: {}),
-		},
-	);
+	// Discovery is a network round trip, so reuse it. Keying on the settings it
+	// was built from keeps a dev-server `.env` edit from serving a stale client.
+	const key = [issuer.href, clientId, redirectUri].join(" ");
+	if (discoveryCache.current?.key !== key) {
+		discoveryCache.current = {
+			key,
+			get: createTtlCache(
+				() =>
+					oidc.discovery(
+						issuer,
+						clientId,
+						{ redirect_uris: [redirectUri] },
+						oidc.None(),
+						{
+							...(issuer.protocol === "http:"
+								? { execute: [oidc.allowInsecureRequests] }
+								: {}),
+						},
+					),
+				DISCOVERY_TTL_MS,
+			),
+		};
+	}
+
+	return discoveryCache.current.get();
 }

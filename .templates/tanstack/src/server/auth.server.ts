@@ -1,5 +1,6 @@
 import * as oidc from "openid-client";
 import type { AuthUser } from "../types/auth";
+import { logAuthWarning } from "./log.server";
 import { getOidcConfiguration } from "./oidc.server";
 import {
 	deleteAppSession,
@@ -63,7 +64,8 @@ export async function getApiAccessToken(): Promise<string> {
 		};
 		await updateAppSession(session.id, refreshedSession);
 		return refreshedSession.accessToken;
-	} catch {
+	} catch (error) {
+		logAuthWarning("token refresh", error);
 		await deleteAppSession().catch(() => undefined);
 		throw new AuthenticationRequiredError();
 	}

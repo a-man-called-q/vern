@@ -1,46 +1,11 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
+import { readEffectiveEnv } from "./env-files";
 
 const root = resolve(import.meta.dir, "..");
 
-function parseEnv(path: string): Map<string, string> {
-	const values = new Map<string, string>();
-	if (!existsSync(path)) return values;
-
-	for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
-		const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
-		if (!match) continue;
-
-		let value = match[2];
-		if (
-			(value.startsWith('"') && value.endsWith('"')) ||
-			(value.startsWith("'") && value.endsWith("'"))
-		) {
-			value = value.slice(1, -1);
-		} else {
-			value = value.replace(/\s+#.*$/, "").trim();
-		}
-		values.set(match[1], value);
-	}
-
-	return values;
-}
-
-function mergeEnv(...sources: Map<string, string>[]): Map<string, string> {
-	return new Map(sources.flatMap((source) => [...source.entries()]));
-}
-
-function readEffectiveEnv(projectPath: string): Map<string, string> {
-	const rootSources = [
-		parseEnv(resolve(root, ".env.example")),
-		parseEnv(resolve(root, ".env")),
-	];
-	if (!projectPath) return mergeEnv(...rootSources);
-	return mergeEnv(
-		...rootSources,
-		parseEnv(resolve(root, projectPath, ".env.example")),
-		parseEnv(resolve(root, projectPath, ".env")),
-	);
+function readProjectEnv(projectPath: string): Map<string, string> {
+	return readEffectiveEnv(root, projectPath);
 }
 
 function addPort(label: string, raw: string | undefined): void {
@@ -62,9 +27,9 @@ function addPort(label: string, raw: string | undefined): void {
 
 const ports = new Map<number, string[]>();
 const errors: string[] = [];
-const rootEnv = readEffectiveEnv("");
+const rootEnv = readProjectEnv("");
 
-const authEnv = readEffectiveEnv("apps/auth-server");
+const authEnv = readProjectEnv("apps/auth-server");
 const authPort = authEnv.get("AUTH_HTTP_PORT") ?? "8081";
 const redisPort = authEnv.get("REDIS_PORT") ?? "6379";
 addPort("auth-server (ZITADEL)", authPort);
@@ -101,7 +66,7 @@ for (const entry of readdirSync(resolve(root, "apps"), { withFileTypes: true }))
 	const projectPath = resolve(root, "apps", entry.name);
 	if (!existsSync(resolve(projectPath, "moon.yml"))) continue;
 
-	const appEnv = readEffectiveEnv(`apps/${entry.name}`);
+	const appEnv = readProjectEnv(`apps/${entry.name}`);
 	const appPort = appEnv.get("PORT");
 	addPort(`${entry.name} (${appPort ?? "missing PORT"})`, appPort);
 

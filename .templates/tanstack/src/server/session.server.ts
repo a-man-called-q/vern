@@ -10,6 +10,7 @@ import { createClient } from "redis";
 import type { AuthUser } from "../types/auth";
 
 export type StoredAuthSession = {
+	version: number;
 	user: AuthUser;
 	accessToken: string;
 	refreshToken: string;
@@ -32,6 +33,9 @@ export type AuthTransaction = {
 
 const APP_SESSION_COOKIE = "app-session";
 const REDIS_KEY_PREFIX = "tanstack:session:";
+// Redis records outlive deploys. Bump this whenever the stored shape changes:
+// older records are then rejected and removed, and users simply sign in again.
+const SESSION_VERSION = 1;
 const APP_SESSION_MAX_AGE = 8 * 60 * 60;
 const TRANSACTION_MAX_AGE = 10 * 60;
 const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{43}$/;
@@ -97,6 +101,7 @@ function parseStoredSession(value: string | null): StoredAuthSession | null {
 
 		const record = session as Record<string, unknown>;
 		if (
+			record.version !== SESSION_VERSION ||
 			!isAuthUser(record.user) ||
 			typeof record.accessToken !== "string" ||
 			typeof record.refreshToken !== "string" ||
@@ -108,6 +113,7 @@ function parseStoredSession(value: string | null): StoredAuthSession | null {
 		}
 
 		return {
+			version: SESSION_VERSION,
 			user: record.user,
 			accessToken: record.accessToken,
 			refreshToken: record.refreshToken,
@@ -144,11 +150,12 @@ async function writeAppSession(id: string, data: StoredAuthSession) {
 }
 
 export async function createAppSession(
-	data: Omit<StoredAuthSession, "sessionExpiresAt">,
+	data: Omit<StoredAuthSession, "sessionExpiresAt" | "version">,
 ) {
 	const id = randomBytes(32).toString("base64url");
 	const session: StoredAuthSession = {
 		...data,
+		version: SESSION_VERSION,
 		sessionExpiresAt: Date.now() + APP_SESSION_MAX_AGE * 1000,
 	};
 	const client = await getRedisClient();

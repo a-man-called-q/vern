@@ -1,0 +1,97 @@
+import { Button } from "@vern/ui/components/button";
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "@vern/ui/components/card";
+import Link from "next/link";
+
+const features = [
+	[
+		"File-based Routing",
+		"Pages, layouts, and route handlers live together in the app directory.",
+	],
+	[
+		"Server Components",
+		"Render on the server by default and ship less JavaScript to the browser.",
+	],
+	[
+		"Route Handlers",
+		"Build API endpoints and OIDC callbacks with plain Request and Response.",
+	],
+	[
+		"Tailwind Native",
+		"Design quickly with utility-first styling and reusable tokens.",
+	],
+];
+
+export default function Home() {
+	return (
+		<main className="page-wrap space-y-8 px-4 py-12 sm:py-16">
+			<Card className="overflow-hidden">
+				<CardHeader className="gap-4 p-6 sm:p-10">
+					<p className="m-0 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+						Next.js base template
+					</p>
+					<CardTitle className="max-w-3xl text-4xl leading-tight font-bold tracking-tight sm:text-6xl">
+						Start simple, ship quickly.
+					</CardTitle>
+					<CardDescription className="max-w-2xl text-base sm:text-lg">
+						This base starter intentionally keeps things light: two routes,
+						clean structure, and the essentials you need to build from scratch.
+					</CardDescription>
+					<div className="flex flex-wrap gap-3">
+						<Button asChild>
+							<Link href="/about">About this starter</Link>
+						</Button>
+						<Button variant="outline" asChild>
+							<a
+								href="https://nextjs.org/docs/app"
+								target="_blank"
+								rel="noopener noreferrer"
+							>
+								App Router guide
+							</a>
+						</Button>
+					</div>
+				</CardHeader>
+			</Card>
+
+			<section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+				{features.map(([title, description]) => (
+					<Card key={title}>
+						<CardHeader className="gap-2 p-5">
+							<CardTitle className="text-base">{title}</CardTitle>
+							<CardDescription>{description}</CardDescription>
+						</CardHeader>
+					</Card>
+				))}
+			</section>
+
+			<Card>
+				<CardHeader>
+					<CardTitle>Quick start</CardTitle>
+					<CardDescription>Make this starter your own.</CardDescription>
+				</CardHeader>
+				<CardContent>
+					<ul className="m-0 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
+						<li>
+							Edit <code>src/app/(site)/page.tsx</code> to customize the home
+							page.
+						</li>
+						<li>
+							Update <code>src/components/Header.tsx</code> and{" "}
+							<code>src/components/Footer.tsx</code> for brand links.
+						</li>
+						<li>
+							Add routes in <code>src/app</code> and reuse components from{" "}
+							<code>@vern/ui</code>.
+						</li>
+					</ul>
+				</CardContent>
+			</Card>
+		</main>
+	);
+}

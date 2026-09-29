@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import * as oidc from "openid-client";
 import { redirectResponse } from "../server/http.server";
+import { logAuthFailure, logAuthWarning } from "../server/log.server";
 import {
 	getAppOrigin,
 	getAppUrl,
@@ -26,7 +27,8 @@ export const Route = createFileRoute("/auth/logout")({
 				let appSession: StoredAuthSession | null = null;
 				try {
 					appSession = await deleteAppSession();
-				} catch {
+				} catch (error) {
+					logAuthWarning("logout session cleanup", error);
 					// The browser cookie is cleared before Redis is contacted.
 				}
 
@@ -42,7 +44,8 @@ export const Route = createFileRoute("/auth/logout")({
 								configuration,
 								appSession.refreshToken,
 							);
-						} catch {
+						} catch (error) {
+							logAuthWarning("logout token revocation", error);
 							// Continue browser logout even if remote token revocation is unavailable.
 						}
 					}
@@ -56,7 +59,8 @@ export const Route = createFileRoute("/auth/logout")({
 					});
 
 					return redirectResponse(logoutUrl);
-				} catch {
+				} catch (error) {
+					logAuthFailure("logout", error);
 					await transaction.clear();
 					return new Response("Unable to complete logout.", {
 						status: 503,
