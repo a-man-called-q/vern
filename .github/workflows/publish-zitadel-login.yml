@@ -1,0 +1,119 @@
+name: Publish Vern ZITADEL Login image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/auth-server/apps/login/**"
+      - "apps/auth-server/packages/**"
+      - "apps/auth-server/proto/**"
+      - "apps/auth-server/pnpm-lock.yaml"
+      - "apps/auth-server/pnpm-workspace.yaml"
+      - "apps/auth-server/deploy/vern/UPSTREAM_VERSION"
+      - ".github/workflows/publish-zitadel-login.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-publish:
+    if: github.repository == 'a-man-called-q/vern'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: apps/auth-server/.nvmrc
+          cache: pnpm
+          cache-dependency-path: apps/auth-server/pnpm-lock.yaml
+
+      - name: Install workspace dependencies
+        working-directory: apps/auth-server
+        run: pnpm install --frozen-lockfile --filter @zitadel/login...
+
+      - name: Build Login App
+        working-directory: apps/auth-server
+        env:
+          NEXT_PUBLIC_BASE_PATH: /ui/v2/login
+        run: pnpm exec nx run @zitadel/login:build
+
+      - name: Set image metadata
+        id: image
+        run: |
+          version="$(cat apps/auth-server/deploy/vern/UPSTREAM_VERSION)"
+          image="ghcr.io/a-man-called-q/vern-zitadel-login"
+          tag="${version}-${GITHUB_SHA}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Refuse to overwrite an immutable image tag
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+          TAG: ${{ steps.image.outputs.tag }}
+        run: |
+          if docker buildx imagetools inspect "${IMAGE}:${TAG}" >/dev/null 2>&1; then
+            echo "Refusing to overwrite ${IMAGE}:${TAG}; each source commit gets one immutable image tag."
+            exit 1
+          fi
+
+      - name: Build and publish immutable Login image
+        id: publish
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/auth-server/apps/login
+          file: apps/auth-server/apps/login/Dockerfile
+          push: true
+          tags: ${{ steps.image.outputs.image }}:${{ steps.image.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/a-man-called-q/vern
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.image.outputs.version }}
+          cache-from: type=gha,scope=vern-zitadel-login
+          cache-to: type=gha,mode=max,scope=vern-zitadel-login
+
+      - name: Record image digest
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+          TAG: ${{ steps.image.outputs.tag }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          record="$RUNNER_TEMP/zitadel-login-image.txt"
+          cat > "$record" <<EOF
+          image=${IMAGE}
+          tag=${TAG}
+          digest=${DIGEST}
+          source_commit=${SOURCE_COMMIT}
+          upstream_version=${{ steps.image.outputs.version }}
+          EOF
+          cat "$record" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep digest record with the workflow run
+        uses: actions/upload-artifact@v4
+        with:
+          name: zitadel-login-image-${{ github.sha }}
+          path: ${{ runner.temp }}/zitadel-login-image.txt
+          if-no-files-found: error
+          retention-days: 365

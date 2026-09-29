@@ -168,7 +168,7 @@ describe("rename-project", () => {
 		const root = tempRoot("vern-compose-rename-test-");
 		const base = initRepo(root, {
 			"README.md": "# Vern\n",
-			"apps/auth-server/docker-compose.yml":
+			"apps/auth-server/deploy/vern/docker-compose.yml":
 				"name: vern-auth\nvolumes:\n  postgres-data:\n",
 		});
 		git(root, "update-ref", "refs/vern/upstream-main", base);

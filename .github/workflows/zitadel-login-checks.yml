@@ -1,0 +1,67 @@
+name: ZITADEL Login App checks
+
+on:
+  pull_request:
+    paths:
+      - "apps/auth-server/apps/login/**"
+      - "apps/auth-server/packages/**"
+      - "apps/auth-server/proto/**"
+      - "apps/auth-server/package.json"
+      - "apps/auth-server/pnpm-lock.yaml"
+      - "apps/auth-server/pnpm-workspace.yaml"
+      - ".github/workflows/zitadel-login-checks.yml"
+      - ".github/workflows/publish-zitadel-login.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-login-app:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: apps/auth-server
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: apps/auth-server/.nvmrc
+          cache: pnpm
+          cache-dependency-path: apps/auth-server/pnpm-lock.yaml
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile --filter @zitadel/login...
+
+      - name: Lint proto definitions
+        run: pnpm exec buf lint proto
+
+      - name: Regenerate TypeScript proto package
+        run: pnpm exec nx run @zitadel/proto:generate
+
+      - name: Confirm TypeScript proto output is current
+        run: git -C "$GITHUB_WORKSPACE" diff --exit-code HEAD -- apps/auth-server/packages/zitadel-proto
+
+      - name: Build the Login App workspace packages
+        env:
+          NEXT_PUBLIC_BASE_PATH: /ui/v2/login
+        run: pnpm exec nx run @zitadel/login:build
+
+      - name: Lint the Login App
+        run: pnpm exec nx run @zitadel/login:lint
+
+      - name: Test the Login App and client package
+        run: |
+          pnpm exec nx run @zitadel/login:test-unit
+          pnpm exec nx run @zitadel/client:test-unit
+
+      - name: Verify generated workspace files and patch formatting
+        run: git -C "$GITHUB_WORKSPACE" diff --check

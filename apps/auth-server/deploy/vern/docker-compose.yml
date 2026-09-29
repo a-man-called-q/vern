@@ -7,7 +7,8 @@ services:
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
-      - --providers.docker.network=vern-auth
+      - --providers.docker.network=${AUTH_NETWORK_NAME:-vern-auth}
+      - '--providers.docker.constraints=Label(`com.docker.compose.project`,`${COMPOSE_PROJECT_NAME:-vern-auth}`)'
       - --entrypoints.web.address=:80
       - --ping=true
       - --ping.entrypoint=web
@@ -45,7 +46,7 @@ services:
       start_period: 10s
     labels:
       - traefik.enable=true
-      - traefik.docker.network=vern-auth
+      - traefik.docker.network=${AUTH_NETWORK_NAME:-vern-auth}
       - traefik.http.services.auth-server.loadbalancer.server.port=80
       - "traefik.http.middlewares.auth-root-rewrite.replacepath.path=/ui/v2/login"
       - "traefik.http.routers.auth-root.rule=Host(`${ZITADEL_DOMAIN:-localhost}`) && Path(`/`)"
@@ -122,7 +123,7 @@ services:
         condition: service_healthy
     labels:
       - traefik.enable=true
-      - traefik.docker.network=vern-auth
+      - traefik.docker.network=${AUTH_NETWORK_NAME:-vern-auth}
       - traefik.http.services.zitadel-api.loadbalancer.server.port=8080
       - traefik.http.services.zitadel-api.loadbalancer.server.scheme=h2c
       - traefik.http.middlewares.zitadel-strip-api.stripprefix.prefixes=/api
@@ -146,7 +147,7 @@ services:
       ZITADEL_SERVICE_USER_TOKEN_FILE: /zitadel/bootstrap/login-client.pat
       CUSTOM_REQUEST_HEADERS: "Host:${ZITADEL_DOMAIN:-localhost},X-Forwarded-Proto:http"
     healthcheck:
-      test: ["CMD-SHELL", "node /app/healthcheck.mjs http://127.0.0.1:3000/ui/v2/login/healthy"]
+      test: ["CMD-SHELL", "node /app/healthcheck.mjs http://127.0.0.1:3000/ui/v2/login/ready"]
       interval: 10s
       timeout: 30s
       retries: 12
@@ -192,7 +193,7 @@ services:
 
 networks:
   vern-auth:
-    name: vern-auth
+    name: ${AUTH_NETWORK_NAME:-vern-auth}
 
 volumes:
   postgres-data:

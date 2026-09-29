@@ -1,0 +1,120 @@
+name: ZITADEL upstream sync
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  open-upstream-update:
+    if: github.repository == 'a-man-called-q/vern'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out Vern history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+          token: ${{ secrets.ZITADEL_UPSTREAM_SYNC_TOKEN || github.token }}
+
+      - name: Require a token that triggers pull request checks
+        env:
+          SYNC_TOKEN: ${{ secrets.ZITADEL_UPSTREAM_SYNC_TOKEN }}
+        run: |
+          if [ -z "$SYNC_TOKEN" ]; then
+            echo "Configure the ZITADEL_UPSTREAM_SYNC_TOKEN repository secret so branches and PRs created by this workflow trigger CI."
+            exit 1
+          fi
+
+      - name: Configure Git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Find latest stable ZITADEL release
+        id: release
+        run: |
+          version="$(curl --fail --silent --show-error https://api.github.com/repos/zitadel/zitadel/releases/latest | jq -r .tag_name)"
+          if [ -z "$version" ] || [ "$version" = "null" ]; then
+            echo "Could not resolve the latest stable ZITADEL release."
+            exit 1
+          fi
+          current="$(cat apps/auth-server/deploy/vern/UPSTREAM_VERSION)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          if [ "$version" = "$current" ]; then
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip if this release is already up to date or has an open PR
+        id: duplicate
+        if: steps.release.outputs.needs_update == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.ZITADEL_UPSTREAM_SYNC_TOKEN }}
+          VERSION: ${{ steps.release.outputs.version }}
+          DEFAULT_BRANCH: main
+        run: |
+          title="chore(auth-server): sync ZITADEL ${VERSION}"
+          if gh pr list --base "$DEFAULT_BRANCH" --state open --json title --jq '.[].title' | grep -Fxq "$title"; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Merge upstream tag into the subtree
+        id: merge
+        if: steps.release.outputs.needs_update == 'true' && steps.duplicate.outputs.skip != 'true'
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          if ! command -v git-subtree >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install --yes git-subtree
+          fi
+          git remote add zitadel https://github.com/zitadel/zitadel.git
+          git fetch --no-tags zitadel "refs/tags/${VERSION}:refs/tags/${VERSION}"
+          if git merge-base --is-ancestor "refs/tags/${VERSION}" HEAD; then
+            echo "The release is already part of this branch."
+            echo "already_integrated=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "already_integrated=false" >> "$GITHUB_OUTPUT"
+          branch="codex/zitadel-upstream-${VERSION}-${RUN_ID}"
+          git switch --create "$branch"
+          git subtree pull --prefix=apps/auth-server --no-squash zitadel "$VERSION"
+          printf '%s\n' "$VERSION" > apps/auth-server/deploy/vern/UPSTREAM_VERSION
+          git add apps/auth-server/deploy/vern/UPSTREAM_VERSION
+          git commit -m "chore(auth-server): record ZITADEL ${VERSION} baseline"
+          git push origin "$branch"
+
+      - name: Open review PR
+        if: steps.release.outputs.needs_update == 'true' && steps.duplicate.outputs.skip != 'true' && steps.merge.outputs.already_integrated != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.ZITADEL_UPSTREAM_SYNC_TOKEN }}
+          VERSION: ${{ steps.release.outputs.version }}
+          DEFAULT_BRANCH: main
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          branch="codex/zitadel-upstream-${VERSION}-${RUN_ID}"
+          body_file="$RUNNER_TEMP/zitadel-upstream-pr.md"
+          cat > "$body_file" <<EOF
+          ## Upstream update
+
+          This PR merges the stable ZITADEL release [${VERSION}](https://github.com/zitadel/zitadel/releases/tag/${VERSION}) into the subtree at `apps/auth-server/` without squashing history.
+
+          The backend and Login App must be tested as the same release. Review the Login App changes, run the Login App CI, and validate the image in staging before changing `ZITADEL_LOGIN_IMAGE` in deployment configuration.
+
+          If the subtree merge reports conflicts, this workflow stops before pushing a branch. Resolve those conflicts manually and open a review PR.
+          EOF
+          gh pr create \
+            --base "$DEFAULT_BRANCH" \
+            --head "$branch" \
+            --title "chore(auth-server): sync ZITADEL ${VERSION}" \
+            --body-file "$body_file"

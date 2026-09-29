@@ -123,7 +123,7 @@ function main(): void {
 	for (const path of [
 		".env.example",
 		"apps/auth-server/.env.example",
-		"apps/auth-server/docker-compose.yml",
+		"apps/auth-server/deploy/vern/docker-compose.yml",
 	]) {
 		if (existsSync(resolve(ROOT, path))) report("OK", path + " exists.");
 		else report("FAIL", path + " is missing.");
