@@ -67,6 +67,9 @@ jobs:
       - name: Check, test, and build the app
         run: moon run web:check web:test web:build
 
+      - name: Build the production image
+        run: moon run web:docker
+
   axum:
     runs-on: ubuntu-24.04
     steps:
@@ -83,3 +86,51 @@ jobs:
 
       - name: Check and test the API
         run: moon run api:check api:test
+
+      - name: Build the production image
+        run: moon run api:docker
+
+  # Runs deploy/ on the runner with certificates from a local authority, the
+  # way deploy/README.md describes, and signs in through it.
+  deploy:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install the pinned toolchain
+        uses: moonrepo/setup-toolchain@v0
+        with:
+          auto-install: true
+
+      - name: Generate the apps to deploy
+        run: |
+          moon generate tanstack -- --name dashboard --port 3000
+          moon generate axum -- --name api --port 4000
+          bun install
+
+      - name: Configure a local deployment
+        run: |
+          cp deploy/.env.example deploy/.env
+          sed -i \
+            -e 's/^AUTH_DOMAIN=.*/AUTH_DOMAIN=auth.localtest.me/' \
+            -e 's/^APP_DOMAIN=.*/APP_DOMAIN=app.localtest.me/' \
+            -e 's/^API_DOMAIN=.*/API_DOMAIN=api.localtest.me/' \
+            -e 's/^ACME_EMAIL=.*/ACME_EMAIL=ops@localtest.me/' \
+            deploy/.env
+          deploy/local-certs.sh
+
+      - name: Deploy with setup
+        env:
+          COMPOSE_FILE: deploy/docker-compose.yml:deploy/docker-compose.local.yml
+          NODE_EXTRA_CA_CERTS: deploy/.local/ca.pem
+        run: bun run setup -- --deploy
+
+      - name: Sign in through the deployed stack
+        run: deploy/smoke-test.sh
+
+      - name: Show the stack's logs
+        if: failure()
+        env:
+          COMPOSE_FILE: deploy/docker-compose.yml:deploy/docker-compose.local.yml
+        run: docker compose --env-file deploy/.env logs --tail 100

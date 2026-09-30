@@ -34,8 +34,9 @@ The admin account comes from `ZITADEL_ADMIN_USERNAME` and
 (`zitadel-admin@vern.localhost` by default).
 
 The `FIRSTINSTANCE` and `DEFAULTINSTANCE` settings in `docker-compose.yml`
-(admin account, organization name, initial branding colors, Login V2 URLs) are
-applied only when ZITADEL creates its database. To change them later, use the
+(admin account, organization name, initial branding colors, Login V2 URLs, and
+the `vern-setup` service account that `bun run setup` signs in as) are applied
+only when ZITADEL creates its database. To change them later, use the
 Console, or reset the data. If you change the domain or port after the first
 start, update **Default settings → Features → Login V2 → Base URI** in the
 Console.
@@ -65,5 +66,5 @@ This deletes the database and the Login App's bootstrap token:
 docker compose --env-file apps/auth-server/.env -f apps/auth-server/docker-compose.yml down -v
 ```
 
-Apps provisioned before a reset need `bun run zitadel:app` again, with a new
-project ID and service user token.
+Run `bun run setup` again afterwards: it creates a new project, applications,
+and keys, and replaces the IDs and keys that the reset made stale.

@@ -63,7 +63,7 @@ export function buildOidcConfig(options: {
 	};
 }
 
-class ZitadelApiError extends Error {
+export class ZitadelApiError extends Error {
 	constructor(
 		method: string,
 		path: string,
@@ -83,16 +83,18 @@ function errorDetail(payload: unknown): string {
 	return "";
 }
 
-async function callApi(
-	options: {
-		issuer: string;
-		token: string;
-		orgId?: string;
-		fetcher?: Fetcher;
-	},
-	method: "POST" | "PUT",
+export type ApiOptions = {
+	issuer: string;
+	token: string;
+	orgId?: string;
+	fetcher?: Fetcher;
+};
+
+export async function callApi(
+	options: ApiOptions,
+	method: "GET" | "POST" | "PUT",
 	path: string,
-	body: unknown,
+	body?: unknown,
 ): Promise<Record<string, unknown>> {
 	const fetcher = options.fetcher ?? fetch;
 	const response = await fetcher(new URL(path, new URL(options.issuer).origin), {
@@ -104,7 +106,7 @@ async function callApi(
 			Accept: "application/json",
 			...(options.orgId ? { "x-zitadel-orgid": options.orgId } : {}),
 		},
-		body: JSON.stringify(body),
+		body: body === undefined ? undefined : JSON.stringify(body),
 	});
 
 	const text = await response.text();
@@ -200,22 +202,33 @@ export async function provisionApplication(options: {
 	};
 }
 
-/** Sets ZITADEL_CLIENT_ID in an app's `.env`, starting from `.env.example`. */
-export function writeClientId(
+/** Sets one variable in a `.env` file, starting from `.env.example` if it is missing. */
+export function setEnvValue(
 	envPath: string,
 	examplePath: string,
-	clientId: string,
+	key: string,
+	value: string,
 ): void {
 	const source = existsSync(envPath)
 		? readFileSync(envPath, "utf8")
 		: existsSync(examplePath)
 			? readFileSync(examplePath, "utf8")
 			: "";
-	const line = `ZITADEL_CLIENT_ID=${clientId}`;
-	const next = /^ZITADEL_CLIENT_ID=.*$/m.test(source)
-		? source.replace(/^ZITADEL_CLIENT_ID=.*$/m, line)
+	const line = `${key}=${value}`;
+	const pattern = new RegExp(`^${key}=.*$`, "m");
+	const next = pattern.test(source)
+		? source.replace(pattern, () => line)
 		: `${source}${source === "" || source.endsWith("\n") ? "" : "\n"}${line}\n`;
 	writeFileSync(envPath, next);
+}
+
+/** Sets ZITADEL_CLIENT_ID in an app's `.env`, starting from `.env.example`. */
+export function writeClientId(
+	envPath: string,
+	examplePath: string,
+	clientId: string,
+): void {
+	setEnvValue(envPath, examplePath, "ZITADEL_CLIENT_ID", clientId);
 }
 
 const USAGE = `Create or update the ZITADEL application for a generated app.

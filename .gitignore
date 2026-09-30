@@ -9,3 +9,5 @@
 !**/.env.example
 **/*.local
 .DS_Store
+deploy/secrets/
+deploy/.local/

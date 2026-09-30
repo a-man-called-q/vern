@@ -1,0 +1,36 @@
+# Runs the production stack on this machine, with certificates from a local
+# certificate authority instead of Let's Encrypt. Use hostnames under
+# localtest.me, which resolve to 127.0.0.1, and create the certificates first:
+#   deploy/local-certs.sh
+#   COMPOSE_FILE=deploy/docker-compose.yml:deploy/docker-compose.local.yml \
+#     NODE_EXTRA_CA_CERTS=deploy/.local/ca.pem bun run setup -- --deploy
+# Browsers do not trust the local authority; import deploy/.local/ca.pem to
+# avoid the warning.
+services:
+  traefik:
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=vern-edge
+      - '--providers.docker.constraints=Label(`com.docker.compose.project`,`vern`)'
+      - --providers.file.filename=/local/traefik-tls.yml
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.http.tls=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./.local:/local:ro
+
+  web:
+    environment:
+      NODE_EXTRA_CA_CERTS: /local/ca.pem
+    volumes:
+      - ./.local:/local:ro
+
+  api:
+    environment:
+      SSL_CERT_FILE: /local/ca.pem
+    volumes:
+      - ./.local:/local:ro

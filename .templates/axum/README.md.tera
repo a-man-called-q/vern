@@ -19,24 +19,25 @@ cannot verify it.
 
 ## Local ZITADEL setup
 
-1. From the repository root, copy `.env.example` to `.env` and
-   `apps/auth-server/.env.example` to `apps/auth-server/.env` if needed. Start
-   ZITADEL and Redis with `moon run auth-server:dev`.
-2. In the same ZITADEL project as the web application, create an API
-   application and select JWT as its authentication method.
-3. Create and download a JSON key. The downloaded file contains `clientId`,
-   `keyId`, and an RSA private key. Store it at the path configured by
-   `ZITADEL_API_KEY_FILE`; keep the `secrets/` directory out of version control.
-   Each API service should have its own API application and key.
-4. Copy this app's `.env.example` to `.env`, set the shared
-   `ZITADEL_PROJECT_ID` in the repository root `.env`, and make sure the
-   web application requests the audience scope
-   `urn:zitadel:iam:org:project:id:<PROJECT_ID>:aud`.
-5. Run the API from the repository root:
+From the repository root, run:
 
-   ```bash
-   moon run {{ name | kebab_case }}:dev
-   ```
+```bash
+bun run setup
+moon run {{ name | kebab_case }}:dev
+```
+
+`bun run setup` starts ZITADEL, creates this service's API application (Private
+Key JWT) in the workspace's ZITADEL project, downloads its JSON key to the path
+in `ZITADEL_API_KEY_FILE` (`secrets/` is ignored by Git), and sets
+`ZITADEL_ISSUER` and `ZITADEL_PROJECT_ID` in this app's `.env`. Every API gets
+its own application and key.
+
+To set it up by hand instead, create an API application with JWT
+authentication in the same ZITADEL project as the web apps, add a JSON key,
+store the downloaded file at `ZITADEL_API_KEY_FILE`, and set
+`ZITADEL_PROJECT_ID` in this app's `.env`. The web apps request the audience
+scope `urn:zitadel:iam:org:project:id:<PROJECT_ID>:aud`, so their access tokens
+carry this project.
 
 The generated `.env.example` sets the listener port selected during generation.
 The template fetches OIDC discovery metadata from the shared `ZITADEL_ISSUER`
@@ -51,7 +52,13 @@ does not parse it locally.
 moon run {{ name | kebab_case }}:check
 moon run {{ name | kebab_case }}:test
 moon run {{ name | kebab_case }}:build
+moon run {{ name | kebab_case }}:docker   # production image
 ```
+
+The image listens on `0.0.0.0:4000` as an unprivileged user. Give it
+`ZITADEL_ISSUER` and `ZITADEL_PROJECT_ID`, and mount the key file at
+`/run/secrets/zitadel-api-key.json`, readable by that user. The repository's
+`deploy/` folder runs it behind HTTPS.
 
 The auth middleware tests use a mock introspection service. They cover all 12
 temporary test pairings (four web-app token sources by three API instances),

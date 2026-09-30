@@ -12,14 +12,16 @@ against.
 | `.templates/tanstack` | TanStack Start app with OIDC sign-in, Redis sessions, and server-side API calls |
 | `.templates/next` | Next.js App Router app with the same sign-in, sessions, and API calls |
 | `.templates/axum` | Axum API that verifies access tokens through ZITADEL introspection |
-| `apps/auth-server` | Docker Compose stack: ZITADEL, its Login App, PostgreSQL, and Redis |
+| `apps/auth-server` | Local Docker Compose stack: ZITADEL, its Login App, PostgreSQL, and Redis |
+| `deploy` | Production Docker Compose stack for one server, with HTTPS |
 | `apps/storybook` | Storybook workbench for the shared UI components |
 | `packages/ui` | Shared shadcn components and design tokens (`@vern/ui`) |
-| `scripts/` | Project tools: provisioning, rename, update, and doctor |
+| `scripts/` | Project tools: setup, provisioning, rename, update, and doctor |
 
-Apps are generated from the templates into `apps/<name>`. The web apps keep
-OAuth tokens on the server in Redis; the browser only gets an HTTP-only session
-cookie. Each generated app's README covers its code and a production checklist.
+Apps are generated from the templates into `apps/<name>`, each with a
+production Dockerfile. The web apps keep OAuth tokens on the server in Redis;
+the browser only gets an HTTP-only session cookie. Each generated app's README
+covers its code and a production checklist.
 
 ## Requirements
 
@@ -38,89 +40,46 @@ Axum API behind it. Replace the names and ports as you like; every app needs its
 own port. The defaults reserve 8081 for ZITADEL, 6379 for Redis, and 6006 for
 Storybook.
 
-### 1. Install the tools and dependencies
-
 ```sh
 proto install
 bun install
-cp .env.example .env
-cp apps/auth-server/.env.example apps/auth-server/.env
-```
-
-If you started from this template for your own product, rename it now (see
-[Rename and update](#rename-and-update)).
-
-### 2. Start ZITADEL
-
-```sh
-moon run auth-server:dev
-```
-
-This starts ZITADEL, its Login App, PostgreSQL, and Redis in the background.
-Open the Console at <http://localhost:8081/ui/console/> and sign in with the
-admin account from `apps/auth-server/.env` (by default
-`zitadel-admin@vern.localhost` / `Password1!`).
-
-### 3. Create a project
-
-In the Console, create a project for your apps and copy its ID into
-`ZITADEL_PROJECT_ID` in the root `.env`. All apps in this workspace share it.
-
-### 4. Create a service user for provisioning
-
-The `zitadel:app` command creates each app's OIDC application for you. It needs
-a token:
-
-1. Create a service user and add a personal access token to it.
-2. Make the service user a manager of the project with the **Project Owner** role.
-3. Keep the token in your shell (`export ZITADEL_PAT=...`) or in a file outside
-   the repository (`--pat-file`). Do not put it in a `.env` file: Moon passes
-   `.env` values to every task.
-
-### 5. Generate apps
-
-```sh
 moon generate tanstack -- --name dashboard --port 3000
 moon generate axum -- --name api --port 4000
-```
-
-Use `moon generate next -- --name web --port 3001` for a Next.js app instead of
-(or next to) the TanStack one. Add `--no-include_demos` to a web app to leave out
-the demo routes.
-
-### 6. Configure the apps
-
-```sh
-cp apps/dashboard/.env.example apps/dashboard/.env
-cp apps/api/.env.example apps/api/.env
-```
-
-In `apps/dashboard/.env`, set `SESSION_SECRET` to the output of
-`openssl rand -base64 32` and `API_BASE_URL` to `http://localhost:4000`.
-
-Then create the dashboard's OIDC application and store its client ID:
-
-```sh
-bun run zitadel:app -- --app dashboard --write-env
-```
-
-The command configures Authorization Code with PKCE (no client secret), refresh
-tokens, and the callback URLs derived from the app's `APP_URL`. It is safe to
-run again: it brings an existing application back to these settings, so changes
-made in the Console are reset. Add `--dry-run` to only print the configuration.
-
-The Axum API authenticates to ZITADEL with its own key: create an API
-application with a JSON key as described in `apps/api/README.md`.
-
-### 7. Run everything
-
-```sh
+bun run setup
 moon run :dev
 ```
 
-Moon checks the ports, starts the auth stack, and runs every app plus
-Storybook. Open <http://localhost:3000> and sign in. Stop the auth containers
+If you started from this template for your own product, rename it first (see
+[Rename and update](#rename-and-update)).
+
+- `moon generate` creates each app under `apps/`. Use
+  `moon generate next -- --name web --port 3001` for a Next.js app instead of (or
+  next to) the TanStack one, and add `--no-include_demos` to leave out the demo
+  routes.
+- `bun run setup` creates the `.env` files from their examples, starts ZITADEL
+  with its Login App, PostgreSQL, and Redis, and creates in ZITADEL the project,
+  an OIDC application for each web app (Authorization Code with PKCE, no client
+  secret), and an API application with a key for each Axum API. It fills in the
+  project ID, client IDs, session secrets, key files, and `API_BASE_URL` when
+  there is one API. Run it again after generating another app; it keeps what
+  already exists.
+- `moon run :dev` checks the ports, starts the auth stack, and runs every app
+  plus Storybook.
+
+Open <http://localhost:3000> and sign in as `zitadel-admin@vern.localhost` with
+the password from `apps/auth-server/.env` (`Password1!` by default). The ZITADEL
+Console is at <http://localhost:8081/ui/console/>. Stop the auth containers
 (keeping their data) with `moon run auth-server:down`.
+
+`bun run setup` signs in to ZITADEL as the `vern-setup` service account, whose
+token ZITADEL creates when it first sets up its database. A database created
+before that account existed needs a reset
+(`docker compose --env-file apps/auth-server/.env -f apps/auth-server/docker-compose.yml down -v`)
+or a token of a service user with the IAM Owner role in `ZITADEL_PAT`.
+
+To manage one app's OIDC application by hand, use
+`bun run zitadel:app -- --app <name> --write-env` (`--help` lists the options).
+It resets changes made to that application in the Console.
 
 ## Customize the login page
 
@@ -145,9 +104,11 @@ them. Change them at the level you need:
 
 | Command | What it does |
 | --- | --- |
+| `bun run setup` | Create the `.env` files and the ZITADEL project, applications, and keys |
 | `moon run :dev` | Run every project that has a `dev` task |
 | `moon run :build` | Build every project that has a `build` task |
 | `moon run <project>:<task>` | Run one task, such as `dashboard:check` or `api:test` |
+| `moon run <app>:docker` | Build an app's production image |
 | `moon run auth-server:down` | Stop the auth containers and keep their data |
 | `moon run workspace:check-ports` | Check that no two services share a port |
 | `bun run zitadel:app -- --app <name>` | Create or update an app's ZITADEL application |
@@ -208,17 +169,23 @@ are upgraded. If a conflict or a failed check stops the update, fix it on the
 review branch and run `bun run project:update -- --continue`. Review the diff
 and merge it yourself.
 
-## Production
+## Deploy
 
-Vern does not include deployment recipes yet. Before deploying a generated app,
-work through the production checklist in its README: HTTPS origins, a
-separate ZITADEL application per environment, an authenticated TLS Redis, and a
-secret manager for `SESSION_SECRET`. For ZITADEL itself, follow ZITADEL's
-[self-hosting guide](https://zitadel.com/docs/self-hosting/deploy/overview) or
-use ZITADEL Cloud, and run the Login image from `apps/auth-server/.env.example`
-at the same version as the backend. To provision an app in another
-environment, run `zitadel:app` with that environment's `ZITADEL_ISSUER`,
-`ZITADEL_PROJECT_ID`, and `APP_URL`.
+[`deploy/`](deploy/README.md) runs ZITADEL, one web app, and one API on a single
+server with Docker, behind Traefik with Let's Encrypt certificates. After you
+set three hostnames in `deploy/.env`, one command generates the secrets,
+creates the production ZITADEL project and applications, and starts
+everything:
+
+```sh
+bun run setup -- --deploy
+```
+
+The same stack runs on your machine with local certificates, which CI uses to
+sign in through it on every change. For other platforms, build the images with
+`moon run <app>:docker` and run them with the settings from the app's README
+and its production checklist. For more on running ZITADEL itself, see ZITADEL's
+[self-hosting guide](https://zitadel.com/docs/self-hosting/deploy/overview).
 
 ## License
 

@@ -85,7 +85,14 @@ services:
       ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: "${ZITADEL_ADMIN_PASSWORD:-Password1!}"
       ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORDCHANGEREQUIRED: "false"
 
-      # Login V2 is served by the official Login image below.
+      # Service account for `bun run setup`, which creates the project, apps, and
+      # keys. Its token is written next to the Login App's in the bootstrap volume.
+      ZITADEL_FIRSTINSTANCE_PATPATH: /zitadel/bootstrap/admin.pat
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_USERNAME: vern-setup
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_NAME: Vern setup
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_EXPIRATIONDATE: "${LOGIN_CLIENT_PAT_EXPIRATION:-2099-01-01T00:00:00Z}"
+
+      # Login V2 is served by the Login image below.
       ZITADEL_FIRSTINSTANCE_LOGINCLIENTPATPATH: /zitadel/bootstrap/login-client.pat
       ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_MACHINE_USERNAME: login-client
       ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_MACHINE_NAME: Vern Login UI
