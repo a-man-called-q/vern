@@ -133,4 +133,4 @@ jobs:
         if: failure()
         env:
           COMPOSE_FILE: deploy/docker-compose.yml:deploy/docker-compose.local.yml
-        run: docker compose --env-file deploy/.env logs --tail 100
+        run: docker compose --env-file deploy/.env logs --tail 100 || true

@@ -7,6 +7,7 @@
 **/.env
 **/.env.*
 !**/.env.example
+!**/.env.example.tera
 **/*.local
 .DS_Store
 deploy/secrets/
