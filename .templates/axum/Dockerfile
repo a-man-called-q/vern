@@ -5,22 +5,25 @@
 # Configure it with ZITADEL_ISSUER and ZITADEL_PROJECT_ID, and mount the API
 # application's key file at /run/secrets/zitadel-api-key.json.
 
-FROM rust:1.98.1-slim AS build
+# Alpine's Rust targets musl, which links a fully static binary.
+FROM rust:1.98.1-alpine AS build
+RUN apk add --no-cache musl-dev
 WORKDIR /src
 COPY . .
+# A smaller binary for the image only; `cargo build --release` elsewhere is unchanged.
+ENV CARGO_PROFILE_RELEASE_STRIP=true \
+    CARGO_PROFILE_RELEASE_LTO=true \
+    CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     cargo build --release && \
     cp target/release/{{ name | kebab_case }} /usr/local/bin/{{ name | kebab_case }}
 
-FROM debian:trixie-slim
-RUN apt-get update && \
-    apt-get install --yes --no-install-recommends ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+# CA certificates, time zones, and a non-root user; no shell or package manager.
+FROM gcr.io/distroless/static-debian13:nonroot
 COPY --from=build /usr/local/bin/{{ name | kebab_case }} /usr/local/bin/{{ name | kebab_case }}
 ENV HOST=0.0.0.0 \
     PORT=4000 \
     ZITADEL_API_KEY_FILE=/run/secrets/zitadel-api-key.json
-USER nobody
 EXPOSE 4000
-CMD ["{{ name | kebab_case }}"]
+ENTRYPOINT ["/usr/local/bin/{{ name | kebab_case }}"]

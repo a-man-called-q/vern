@@ -433,7 +433,7 @@ async function setupDeploy(
 		const key = await createApiKey(api, project.id, apiApp.name);
 		mkdirSync(dirname(keyFile), { recursive: true, mode: 0o700 });
 		chmodSync(dirname(keyFile), 0o700);
-		// The directory keeps other users out; the API container reads the file as nobody.
+		// The directory keeps other users out; the API container reads the file as a non-root user.
 		writeFileSync(keyFile, key, { mode: 0o644 });
 		chmodSync(keyFile, 0o644);
 		log(`${apiApp.path}: created a key for API application "${apiApp.name}" in ${relative(root, keyFile)}`);
