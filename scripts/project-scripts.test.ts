@@ -81,6 +81,29 @@ function installFakeCommands(): void {
 	process.env.PATH = bin + ":" + (originalPath ?? "");
 }
 
+/**
+ * Puts a fake `docker` first on PATH. `docker volume ls` prints `volume`, and
+ * `docker ps -aq` prints `container`; every call is appended to the returned log.
+ */
+function installFakeDocker(volume: string, container = ""): string {
+	const bin = tempRoot("vern-docker-test-");
+	const log = resolve(bin, "docker.log");
+	write(
+		bin,
+		"docker",
+		'#!/bin/sh\necho "$@" >> "' +
+			log +
+			'"\nif [ "$1" = "volume" ]; then echo "' +
+			volume +
+			'"; fi\nif [ "$1" = "ps" ]; then echo "' +
+			container +
+			'"; fi\nexit 0\n',
+	);
+	chmodSync(resolve(bin, "docker"), 0o755);
+	process.env.PATH = bin + ":" + (originalPath ?? "");
+	return log;
+}
+
 afterEach(() => {
 	process.env.PATH = originalPath;
 	process.exitCode = 0;
@@ -167,24 +190,54 @@ describe("rename-project", () => {
 	test("refuses to rename a Compose project while its existing volumes are present", () => {
 		const root = tempRoot("vern-compose-rename-test-");
 		const base = initRepo(root, {
+			".gitignore": ".env\n",
 			"README.md": "# Vern\n",
 			"apps/auth-server/docker-compose.yml":
 				"name: vern-auth\nvolumes:\n  postgres-data:\n",
 		});
 		git(root, "update-ref", "refs/vern/upstream-main", base);
-		const bin = tempRoot("vern-docker-test-");
-		write(
-			bin,
-			"docker",
-			'#!/bin/sh\nif [ "$1" = "volume" ]; then echo vern-auth_postgres-data; fi\nexit 0\n',
-		);
-		chmodSync(resolve(bin, "docker"), 0o755);
-		process.env.PATH = bin + ":" + (originalPath ?? "");
+		// The checkout has started its stack: it has an .env, so the volumes are its own.
+		write(root, "apps/auth-server/.env", "ZITADEL_VERSION=v1\n");
+		installFakeDocker("vern-auth_postgres-data");
 		expect(() =>
 			renameProject(root, { name: "Acme", slug: "acme", apply: true, base }),
 		).toThrow("volumes still use the vern-auth prefix");
 		expect(readFileSync(resolve(root, "README.md"), "utf8")).toBe("# Vern\n");
 		expect(readConfig(root)).toBeUndefined();
+	});
+
+	test("renames a fresh copy even when another checkout's volumes and containers exist", () => {
+		const root = tempRoot("vern-fresh-copy-rename-test-");
+		const base = initRepo(root, {
+			"README.md": "# Vern\n",
+			"apps/auth-server/docker-compose.yml":
+				"name: vern-auth\nvolumes:\n  postgres-data:\n",
+		});
+		git(root, "update-ref", "refs/vern/upstream-main", base);
+		// No apps/auth-server/.env: this copy never started anything. The fake Docker
+		// reports another checkout's volume and a running container, and logs any call.
+		const log = installFakeDocker("vern-auth_postgres-data", "abc123");
+		renameProject(root, { name: "Acme", slug: "acme", apply: true, base });
+		expect(readFileSync(resolve(root, "README.md"), "utf8")).toBe(
+			"# Acme\n",
+		);
+		expect(readConfig(root)?.project).toEqual({ name: "Acme", slug: "acme" });
+		expect(existsSync(log)).toBe(false);
+	});
+
+	test("still refuses a running Compose project in a checkout that has an .env", () => {
+		const root = tempRoot("vern-running-rename-test-");
+		const base = initRepo(root, {
+			".gitignore": ".env\n",
+			"README.md": "# Vern\n",
+			"apps/auth-server/docker-compose.yml": "name: vern-auth\n",
+		});
+		git(root, "update-ref", "refs/vern/upstream-main", base);
+		write(root, "apps/auth-server/.env", "ZITADEL_VERSION=v1\n");
+		installFakeDocker("", "abc123");
+		expect(() =>
+			renameProject(root, { name: "Acme", slug: "acme", apply: true, base }),
+		).toThrow("Docker Compose project vern-auth is running");
 	});
 
 	test("rebrands case-aware tokens without changing URLs", () => {

@@ -95,6 +95,10 @@ function checkComposeData(root: string, oldName: string, newName: string): void 
 	if (oldName === newName) return;
 	const compose = resolve(root, "apps/auth-server/docker-compose.yml");
 	if (!existsSync(compose)) return;
+	// The stack cannot start without apps/auth-server/.env (the compose file requires
+	// ZITADEL_VERSION from it), so a tree without one owns no containers or volumes.
+	// Any `<oldName>` project Docker knows about then belongs to another checkout.
+	if (!existsSync(resolve(root, "apps/auth-server/.env"))) return;
 	const volumeList = run("docker", ["volume", "ls", "--format", "{{.Name}}"], {
 		cwd: root,
 		allowFailure: true,

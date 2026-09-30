@@ -168,8 +168,11 @@ be lowercase kebab-case and becomes the UI package scope (`@acme-platform/ui`).
 The rename updates text references to Vern (URLs and container images keep
 their names) and records the project identity and the Vern commit it started
 from in `.vern/config.json`. If Git history cannot identify that commit, pass
-it with `--base <sha>`. Renaming the auth Compose project needs Docker running;
-existing auth volumes must be migrated by hand first.
+it with `--base <sha>`. A checkout that has already started its auth stack
+(it has `apps/auth-server/.env`) needs Docker running for the rename, and its
+existing auth volumes must be migrated by hand first. A fresh copy without that
+file owns no Docker data, so it is renamed without looking at Docker, whatever
+other Vern checkouts have on the machine.
 
 To preview the changes available from Vern's `main` branch:
 
