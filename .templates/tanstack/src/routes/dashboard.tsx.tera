@@ -7,6 +7,7 @@ import { ChartAreaInteractive } from "../components/chart-area-interactive";
 import { DataTable } from "../components/data-table";
 import { SectionCards } from "../components/section-cards";
 import { SiteHeader } from "../components/site-header";
+import { SITE_NAME } from "../lib/site";
 import { getDashboardDataFn } from "../server/auth";
 
 export const Route = createFileRoute("/dashboard")({
@@ -29,9 +30,9 @@ function Dashboard() {
 		>
 			<AppSidebar
 				variant="inset"
-				brandName="{{ name }}"
+				brandName={SITE_NAME}
 				user={% raw %}{{{% endraw %}
-					name: user.name || user.email || "{{ name }} user",
+					name: user.name || user.email || `${SITE_NAME} user`,
 					email: user.email || "",
 					subject: user.sub,
 				}}

@@ -8,6 +8,7 @@ import {
 	DropdownMenuTrigger,
 } from "@vern/ui/components/dropdown-menu";
 {%- endif %}
+import { SITE_NAME } from "../lib/site";
 import AuthControls from "./AuthControls";
 import ThemeToggle from "./ThemeToggle";
 
@@ -19,7 +20,7 @@ export default function Header() {
 					className="rounded-md px-2 py-1 text-base font-bold tracking-tight text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 					to="/"
 				>
-					{{ name }}
+					{SITE_NAME}
 				</Link>
 				<div className="flex items-center gap-1">
 					<Button variant="ghost" size="sm" asChild>
