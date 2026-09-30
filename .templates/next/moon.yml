@@ -15,6 +15,9 @@ tasks:
       - 'workspace:install'
       - 'ui:build'
     toolchains: system
+    options:
+      # `next build` recreates .next while `check` type-checks .next/types.
+      mutex: '{{ name | kebab_case }}-next-dir'
 
   check:
     command: bun run check
@@ -22,6 +25,8 @@ tasks:
     deps:
       - 'workspace:install'
     toolchains: system
+    options:
+      mutex: '{{ name | kebab_case }}-next-dir'
 
   test:
     command: bun run test
