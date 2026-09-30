@@ -111,7 +111,8 @@ moon run {{ name | kebab_case }}:docker   # build the production image
 ```
 
 The image builds with `NEXT_OUTPUT=standalone` and runs the standalone server on
-port 3000. It reads the settings from `.env.example` plus the shared
+port 3000. It keeps only the Alpine build of `sharp`, which `next/image` uses
+to optimize images. It reads the settings from `.env.example` plus the shared
 `ZITADEL_ISSUER`, `ZITADEL_PROJECT_ID`, and `REDIS_URL`. The repository's
 `deploy/` folder runs it behind HTTPS.
 

@@ -93,7 +93,12 @@ jobs:
   # Runs deploy/ on the runner with certificates from a local authority, the
   # way deploy/README.md describes, and signs in through it.
   deploy:
+    name: deploy (${{ matrix.template }})
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        template: [tanstack, next]
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -105,7 +110,7 @@ jobs:
 
       - name: Generate the apps to deploy
         run: |
-          moon generate tanstack -- --name dashboard --port 3000
+          moon generate ${{ matrix.template }} -- --name web --port 3000
           moon generate axum -- --name api --port 4000
           bun install
 
@@ -117,6 +122,7 @@ jobs:
             -e 's/^APP_DOMAIN=.*/APP_DOMAIN=app.localtest.me/' \
             -e 's/^API_DOMAIN=.*/API_DOMAIN=api.localtest.me/' \
             -e 's/^ACME_EMAIL=.*/ACME_EMAIL=ops@localtest.me/' \
+            -e 's/^WEB_APP=.*/WEB_APP=web/' \
             deploy/.env
           deploy/local-certs.sh
 
