@@ -25,9 +25,10 @@ covers its code and a production checklist.
 
 ## Requirements
 
+- Git
 - [proto](https://moonrepo.dev/proto), which installs the Moon, Bun, and Rust
   versions pinned in `.prototools`
-- Docker with Compose v2
+- Docker with Compose v2, running
 
 ```sh
 curl -fsSL https://moonrepo.dev/install/proto.sh | bash
@@ -40,7 +41,26 @@ Axum API behind it. Replace the names and ports as you like; every app needs its
 own port. The defaults reserve 8081 for ZITADEL, 6379 for Redis, and 6006 for
 Storybook.
 
+[create-vern](https://github.com/a-man-called-q/create-vern) copies the latest
+release, renames it to your project, starts a new Git history, and installs the
+toolchain and dependencies:
+
 ```sh
+bunx create-vern my-app    # or: npx create-vern my-app, pnpm dlx create-vern my-app
+cd my-app
+moon generate tanstack -- --name dashboard --port 3000
+moon generate axum -- --name api --port 4000
+bun run setup
+moon run :dev
+```
+
+To work from a clone instead, for example to contribute to Vern, install the
+toolchain and dependencies yourself. If the clone is the start of your own
+product, rename it first (see [Rename and update](#rename-and-update)).
+
+```sh
+git clone https://github.com/a-man-called-q/vern.git
+cd vern
 proto install
 bun install
 moon generate tanstack -- --name dashboard --port 3000
@@ -48,9 +68,6 @@ moon generate axum -- --name api --port 4000
 bun run setup
 moon run :dev
 ```
-
-If you started from this template for your own product, rename it first (see
-[Rename and update](#rename-and-update)).
 
 - `moon generate` creates each app under `apps/`. Use
   `moon generate next -- --name web --port 3001` for a Next.js app instead of (or
@@ -95,10 +112,13 @@ them. Change them at the level you need:
    `brand.json` holds the headline, description, highlights, and image paths;
    the SVGs next to it are served under `/brand/`. Changes show on the next page
    load. See the [brand file reference](https://github.com/a-man-called-q/vern-zitadel-login#brand-file).
-3. **Layout and components**: fork
-   [vern-zitadel-login](https://github.com/a-man-called-q/vern-zitadel-login),
-   publish your own image, and set `ZITADEL_LOGIN_IMAGE` in
-   `apps/auth-server/.env`.
+3. **Layout and components**: edit the Login App source in
+   [vern-zitadel-login](https://github.com/a-man-called-q/vern-zitadel-login).
+   `npx create-vern login`, run inside your project, clones it next to the
+   project as `<slug>-login/`, forks it on GitHub, builds an image, and points
+   `apps/auth-server/.env` at it (`create-vern` offers the same when it creates
+   the project). To deploy your login, publish an image from your fork (see its
+   README) and set `ZITADEL_LOGIN_IMAGE` to that tag.
 
 ## Commands
 
@@ -135,8 +155,9 @@ Import them as `@vern/ui/components/card`. Storybook runs at
 
 ## Rename and update
 
-Set your product's display name and package slug. A preview is shown by
-default; add `--apply` to write the changes:
+A project created with `create-vern` is already renamed. To rename a clone, set
+your product's display name and package slug. A preview is shown by default; add
+`--apply` to write the changes:
 
 ```sh
 bun run project:rename -- --name "Acme Platform" --slug acme-platform --apply
@@ -162,6 +183,9 @@ package versions (Rust upgrades need `cargo install cargo-edit`):
 ```sh
 bun run project:update -- --apply
 ```
+
+`npx create-vern update` runs the same script from any folder of the project and
+takes the same `--apply` and `--continue` flags.
 
 The updater needs a clean working tree, so commit the rename and your changes
 first. Generated app source is not synchronized, but its dependency manifests
