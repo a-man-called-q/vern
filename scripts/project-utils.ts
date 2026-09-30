@@ -177,16 +177,29 @@ export function replaceIdentity(
 			configPaths.push(".vern");
 			return marker;
 		});
-	let output = protectedText
-		.replaceAll(`@${from.slug}/`, `@${to.slug}/`)
-		.replaceAll(`${from.slug}-auth`, `${to.slug}-auth`)
-		.replaceAll(`--${from.slug}-`, `--${to.slug}-`)
-		.replace(new RegExp(`\\b${escapeRegExp(from.name)}\\b`, "g"), to.name)
-		.replace(
-			new RegExp(`\\b${escapeRegExp(from.slug.toUpperCase())}\\b`, "g"),
-			to.slug.toUpperCase(),
-		)
-		.replace(new RegExp(`\\b${escapeRegExp(from.slug)}\\b`, "g"), to.slug);
+	// One pass over the original text: a replacement is never scanned again, so a
+	// new identity that contains the old one (a project called "testing-vern-aja")
+	// is not substituted a second time. Alternatives are tried in this order.
+	const upperSlug = from.slug.toUpperCase();
+	const tokens = new RegExp(
+		[
+			escapeRegExp(`@${from.slug}/`),
+			escapeRegExp(`${from.slug}-auth`),
+			escapeRegExp(`--${from.slug}-`),
+			`\\b${escapeRegExp(from.name)}\\b`,
+			`\\b${escapeRegExp(upperSlug)}\\b`,
+			`\\b${escapeRegExp(from.slug)}\\b`,
+		].join("|"),
+		"g",
+	);
+	let output = protectedText.replace(tokens, (match) => {
+		if (match === `@${from.slug}/`) return `@${to.slug}/`;
+		if (match === `${from.slug}-auth`) return `${to.slug}-auth`;
+		if (match === `--${from.slug}-`) return `--${to.slug}-`;
+		if (match === from.name) return to.name;
+		if (match === upperSlug) return to.slug.toUpperCase();
+		return to.slug;
+	});
 	output = output.replace(
 		/__VERN_PRESERVED_URL_(\d+)__/g,
 		(_match, index: string) => urls[Number(index)],

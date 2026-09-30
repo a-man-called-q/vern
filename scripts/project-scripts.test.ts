@@ -252,6 +252,61 @@ describe("rename-project", () => {
 		);
 	});
 
+	test("does not substitute twice when the new identity contains the old one", () => {
+		expect(
+			replaceIdentity(
+				"Vern VERN vern @vern/ui vern-auth --vern-primary https://example.com/vern .vern/config.json",
+				{ name: "Vern", slug: "vern" },
+				{ name: "Testing Vern Aja", slug: "testing-vern-aja" },
+			),
+		).toBe(
+			"Testing Vern Aja TESTING-VERN-AJA testing-vern-aja @testing-vern-aja/ui testing-vern-aja-auth --testing-vern-aja-primary https://example.com/vern .vern/config.json",
+		);
+	});
+
+	test("renames to a name that contains vern without corrupting the project", () => {
+		const root = tempRoot("vern-contains-vern-rename-test-");
+		const base = initRepo(root, {
+			"README.md": "# Vern\n\nUse @vern/ui in vern-auth.\n",
+			"package.json": '{"name":"vern","private":true}\n',
+			"packages/ui/package.json": '{"name":"@vern/ui"}\n',
+			"apps/auth-server/docker-compose.yml":
+				"name: vern-auth\nnetworks:\n  auth:\n    name: ${AUTH_NETWORK_NAME:-vern-auth}\n",
+		});
+		git(root, "update-ref", "refs/vern/upstream-main", base);
+		renameProject(root, {
+			name: "Testing Vern Aja",
+			slug: "testing-vern-aja",
+			apply: true,
+			base,
+		});
+		expect(readFileSync(resolve(root, "README.md"), "utf8")).toBe(
+			"# Testing Vern Aja\n\nUse @testing-vern-aja/ui in testing-vern-aja-auth.\n",
+		);
+		expect(
+			JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")).name,
+		).toBe("testing-vern-aja");
+		expect(
+			JSON.parse(readFileSync(resolve(root, "packages/ui/package.json"), "utf8"))
+				.name,
+		).toBe("@testing-vern-aja/ui");
+		const compose = readFileSync(
+			resolve(root, "apps/auth-server/docker-compose.yml"),
+			"utf8",
+		);
+		expect(compose).toContain("name: testing-vern-aja-auth\n");
+		expect(compose).toContain("${AUTH_NETWORK_NAME:-testing-vern-aja-auth}");
+		expect(compose).not.toContain("testing-testing");
+		// Renaming again to the same identity changes nothing.
+		expect(
+			renameProject(root, {
+				name: "Testing Vern Aja",
+				slug: "testing-vern-aja",
+				apply: true,
+			}),
+		).toEqual([]);
+	});
+
 	test("keeps container image references", () => {
 		expect(
 			replaceIdentity(
