@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import type { NextConfig } from "next";
 
 const isProduction = process.env.NODE_ENV === "production";
@@ -22,7 +23,19 @@ const securityHeaders = [
 		: []),
 ];
 
+// The Docker image builds with NEXT_OUTPUT=standalone and runs the standalone
+// server. Tracing from the monorepo root (two levels up from this app, where
+// `next build` runs) includes workspace packages such as @vern/ui.
+const standalone =
+	process.env.NEXT_OUTPUT === "standalone"
+		? {
+				output: "standalone" as const,
+				outputFileTracingRoot: resolve(process.cwd(), "../.."),
+			}
+		: {};
+
 const nextConfig: NextConfig = {
+	...standalone,
 	reactCompiler: true,
 	poweredByHeader: false,
 	async headers() {

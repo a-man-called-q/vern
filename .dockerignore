@@ -1,0 +1,19 @@
+# Build context for the app images (apps/*/Dockerfile), which build from the
+# repository root. Dependencies and build output are recreated in the image;
+# environment files and secrets never enter it.
+.git
+.moon/cache
+**/node_modules
+**/.next
+**/dist
+**/dist-ssr
+**/.tanstack
+**/.output
+**/target
+**/storybook-static
+**/*.tsbuildinfo
+**/secrets
+**/.env
+**/.env.*
+!**/.env.example
+apps/auth-server

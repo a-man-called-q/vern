@@ -21,3 +21,10 @@ tasks:
     command: cargo test
     description: Run this Axum service's tests
     toolchains: system
+
+  docker:
+    command: docker build -t {{ name | kebab_case }} .
+    description: Build this API's production Docker image
+    toolchains: system
+    options:
+      cache: false

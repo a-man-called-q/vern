@@ -34,3 +34,11 @@ tasks:
     deps:
       - 'workspace:install'
     toolchains: system
+
+  docker:
+    command: docker build -f apps/{{ name | kebab_case }}/Dockerfile -t {{ name | kebab_case }} .
+    description: Build this app's production Docker image
+    toolchains: system
+    options:
+      cache: false
+      runFromWorkspaceRoot: true
