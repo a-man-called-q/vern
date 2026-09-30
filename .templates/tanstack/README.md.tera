@@ -93,8 +93,9 @@ moon run {{ name | kebab_case }}:docker   # build the production image
 ```
 
 `bun run start` runs `scripts/serve.ts`, which serves the client assets and
-hands every other request to the server build. The image runs the same server
-on port 3000 and reads the settings from `.env.example` plus the shared
+hands every other request to the server build. `vite build` bundles the
+server's npm dependencies into `dist/`, so the image carries no `node_modules`.
+It runs the same server on port 3000 and reads the settings from `.env.example` plus the shared
 `ZITADEL_ISSUER`, `ZITADEL_PROJECT_ID`, and `REDIS_URL`. The repository's
 `deploy/` folder runs it behind HTTPS.
 

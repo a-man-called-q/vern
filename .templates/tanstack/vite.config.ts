@@ -23,6 +23,9 @@ const config = defineConfig(({ command, mode }) => {
 		resolve: { tsconfigPaths: true },
 		plugins: [devtools(), tailwindcss(), tanstackStart(), viteReact()],
 		server: command === "serve" ? { port, strictPort: true } : undefined,
+		// Bundle the server's npm dependencies so the production image needs no
+		// node_modules (see Dockerfile).
+		ssr: command === "build" ? { noExternal: true } : undefined,
 	};
 });
 
