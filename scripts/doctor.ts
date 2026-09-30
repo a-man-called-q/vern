@@ -101,10 +101,12 @@ function main(): void {
 					"-e",
 					config.upstream.lastSyncedSha + "^{commit}",
 				);
+				// A new project starts with one commit and Vern's history arrives with
+				// the first update, which fetches it before it needs the base.
 				if (commit.status !== 0)
 					report(
-						"FAIL",
-						"Saved upstream SHA is missing from the local Git object database.",
+						"WARN",
+						"The saved upstream SHA is not in the local Git history yet (a new project starts with one commit); `bun run project:update` fetches it.",
 					);
 				else report("OK", "Project identity and upstream SHA are configured.");
 			}
