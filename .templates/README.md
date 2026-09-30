@@ -28,6 +28,10 @@ are included by default; omit them with `--no-include_demos`.
 moon generate axum -- --name process --port 4000
 ```
 
-After generation, copy the app's `.env.example` to `.env`, configure ZITADEL,
-and run the workspace with `moon run :dev`. Moon checks that app, ZITADEL,
-Redis, and Storybook ports do not conflict before starting the local stack.
+An API that the TanStack and Next.js apps call with the signed-in user's access
+token. It verifies the token through ZITADEL introspection.
+
+After generation, create the app's `.env` and its ZITADEL application as the
+[quick start](../README.md#quick-start) describes, then run the workspace with
+`moon run :dev`. Moon checks that app, ZITADEL, Redis, and Storybook ports do
+not conflict before starting the local stack.

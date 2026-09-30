@@ -1,6 +1,6 @@
 tasks:
   dev:
-    command: docker compose --env-file .env -f deploy/vern/docker-compose.yml up -d --wait
+    command: docker compose --env-file .env -f docker-compose.yml up -d --wait
     description: Start local ZITADEL, PostgreSQL, and Redis containers
     deps:
       - 'workspace:check-ports'
@@ -10,25 +10,9 @@ tasks:
       envFile: true
       persistent: false
 
-  build:
-    command: docker compose --env-file .env -f deploy/vern/docker-compose.yml build
-    description: Build the local auth server image
-    toolchains: system
-    options:
-      cache: false
-      envFile: true
-
   down:
-    command: docker compose --env-file .env -f deploy/vern/docker-compose.yml down
+    command: docker compose --env-file .env -f docker-compose.yml down
     description: Stop local auth and Redis containers while keeping volumes
-    toolchains: system
-    options:
-      cache: false
-      envFile: true
-
-  test-login:
-    command: bash deploy/vern/test-login.sh
-    description: Run the ZITADEL Login App acceptance suite against the local Vern Compose stack
     toolchains: system
     options:
       cache: false

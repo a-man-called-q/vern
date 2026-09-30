@@ -1,4 +1,3 @@
-import * as React from "react";
 import {
 	IconCamera,
 	IconChartBar,
@@ -16,11 +15,6 @@ import {
 	IconSettings,
 	IconUsers,
 } from "@tabler/icons-react";
-
-import { NavDocuments } from "#/components/nav-documents.tsx";
-import { NavMain } from "#/components/nav-main.tsx";
-import { NavSecondary } from "#/components/nav-secondary.tsx";
-import { NavUser } from "#/components/nav-user.tsx";
 import {
 	Sidebar,
 	SidebarContent,
@@ -30,6 +24,11 @@ import {
 	SidebarMenuButton,
 	SidebarMenuItem,
 } from "@vern/ui/components/sidebar";
+import type * as React from "react";
+import { NavDocuments } from "#/components/nav-documents.tsx";
+import { NavMain } from "#/components/nav-main.tsx";
+import { NavSecondary } from "#/components/nav-secondary.tsx";
+import { NavUser } from "#/components/nav-user.tsx";
 
 const data = {
 	navMain: [

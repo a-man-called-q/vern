@@ -1,9 +1,5 @@
 "use client";
 
-import * as React from "react";
-import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
-
-import { useIsMobile } from "#/hooks/use-mobile.ts";
 import {
 	Card,
 	CardAction,
@@ -13,10 +9,10 @@ import {
 	CardTitle,
 } from "@vern/ui/components/card";
 import {
+	type ChartConfig,
 	ChartContainer,
 	ChartTooltip,
 	ChartTooltipContent,
-	type ChartConfig,
 } from "@vern/ui/components/chart";
 import {
 	Select,
@@ -26,6 +22,9 @@ import {
 	SelectValue,
 } from "@vern/ui/components/select";
 import { ToggleGroup, ToggleGroupItem } from "@vern/ui/components/toggle-group";
+import * as React from "react";
+import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
+import { useIsMobile } from "#/hooks/use-mobile.ts";
 
 export const description = "An interactive area chart";
 

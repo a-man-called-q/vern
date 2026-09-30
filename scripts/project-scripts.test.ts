@@ -168,7 +168,7 @@ describe("rename-project", () => {
 		const root = tempRoot("vern-compose-rename-test-");
 		const base = initRepo(root, {
 			"README.md": "# Vern\n",
-			"apps/auth-server/deploy/vern/docker-compose.yml":
+			"apps/auth-server/docker-compose.yml":
 				"name: vern-auth\nvolumes:\n  postgres-data:\n",
 		});
 		git(root, "update-ref", "refs/vern/upstream-main", base);
@@ -196,6 +196,18 @@ describe("rename-project", () => {
 			),
 		).toBe(
 			"Acme ACME acme @acme/ui acme-auth --acme-primary https://example.com/vern",
+		);
+	});
+
+	test("keeps container image references", () => {
+		expect(
+			replaceIdentity(
+				"ZITADEL_LOGIN_IMAGE=ghcr.io/a-man-called-q/vern-zitadel-login:v4.19.3-abc\nVern login",
+				{ name: "Vern", slug: "vern" },
+				{ name: "Acme", slug: "acme" },
+			),
+		).toBe(
+			"ZITADEL_LOGIN_IMAGE=ghcr.io/a-man-called-q/vern-zitadel-login:v4.19.3-abc\nAcme login",
 		);
 	});
 });

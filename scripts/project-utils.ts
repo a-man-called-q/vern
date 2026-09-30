@@ -164,8 +164,10 @@ export function replaceIdentity(
 	if (from.name === to.name && from.slug === to.slug) return text;
 	const urls: string[] = [];
 	const configPaths: string[] = [];
+	// URLs and container images name published upstream resources, such as the
+	// Vern Login image, that keep their names after a rename.
 	const protectedText = text
-		.replace(/https?:\/\/[^\s"'`<>]+/g, (url) => {
+		.replace(/(?:https?:\/\/|\bghcr\.io\/)[^\s"'`<>]+/g, (url) => {
 			const marker = `__VERN_PRESERVED_URL_${urls.length}__`;
 			urls.push(url);
 			return marker;

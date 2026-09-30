@@ -123,7 +123,7 @@ function main(): void {
 	for (const path of [
 		".env.example",
 		"apps/auth-server/.env.example",
-		"apps/auth-server/deploy/vern/docker-compose.yml",
+		"apps/auth-server/docker-compose.yml",
 	]) {
 		if (existsSync(resolve(ROOT, path))) report("OK", path + " exists.");
 		else report("FAIL", path + " is missing.");
@@ -145,18 +145,20 @@ function main(): void {
 		} else {
 			report("OK", "Root package workspaces are configured.");
 		}
-		const packagePaths = new Set([
+		const jsonPaths = new Set([
 			"package.json",
 			"packages/ui/package.json",
 			"apps/storybook/package.json",
+			// The Login App falls back to its default brand when this is invalid.
+			"apps/auth-server/brand/brand.json",
 		]);
 		for (const entry of readdirSync(resolve(ROOT, "apps"), {
 			withFileTypes: true,
 		})) {
 			if (entry.isDirectory())
-				packagePaths.add("apps/" + entry.name + "/package.json");
+				jsonPaths.add("apps/" + entry.name + "/package.json");
 		}
-		for (const path of packagePaths) {
+		for (const path of jsonPaths) {
 			const absolute = resolve(ROOT, path);
 			if (!existsSync(absolute)) continue;
 			try {

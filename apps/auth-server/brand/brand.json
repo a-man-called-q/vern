@@ -1,0 +1,12 @@
+{
+  "headline": "One secure sign-in. All your work.",
+  "description": "Sign in to your Vern workspace with the account and security options set up for you.",
+  "highlights": [
+    { "icon": "shield-check", "text": "Single sign-on across every Vern workspace" },
+    { "icon": "key-round", "text": "Passkeys, authenticator apps and security keys" },
+    { "icon": "languages", "text": "Light and dark themes, in your language" }
+  ],
+  "logo": { "light": "/brand/logo-light.svg", "dark": "/brand/logo-dark.svg" },
+  "backdrop": { "light": "/brand/backdrop-light.svg", "dark": "/brand/backdrop-dark.svg" },
+  "favicon": "/brand/favicon.svg"
+}

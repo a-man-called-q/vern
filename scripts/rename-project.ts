@@ -93,7 +93,7 @@ function resolveBase(root: string, url: string, branch: string, explicit?: strin
 
 function checkComposeData(root: string, oldName: string, newName: string): void {
 	if (oldName === newName) return;
-	const compose = resolve(root, "apps/auth-server/deploy/vern/docker-compose.yml");
+	const compose = resolve(root, "apps/auth-server/docker-compose.yml");
 	if (!existsSync(compose)) return;
 	const volumeList = run("docker", ["volume", "ls", "--format", "{{.Name}}"], {
 		cwd: root,
@@ -121,7 +121,7 @@ function checkComposeData(root: string, oldName: string, newName: string): void 
 }
 
 function composeProjectName(root: string): string | undefined {
-	const path = resolve(root, "apps/auth-server/deploy/vern/docker-compose.yml");
+	const path = resolve(root, "apps/auth-server/docker-compose.yml");
 	if (!existsSync(path)) return undefined;
 	const match = readFileSync(path, "utf8").match(/^name:\s*([^\s#]+)/m);
 	return match?.[1];

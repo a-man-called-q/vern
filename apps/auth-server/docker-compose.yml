@@ -26,11 +26,13 @@ services:
       auth-server:
         condition: service_healthy
 
+  # Serves the brand assets under /brand and sends / to the Login App.
   auth-server:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: nginx:1.29-alpine
     restart: unless-stopped
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./brand:/usr/share/nginx/html/brand:ro
     networks:
       - vern-auth
     depends_on:
@@ -64,7 +66,7 @@ services:
       - traefik.http.routers.auth-login.priority=250
 
   zitadel-api:
-    image: ghcr.io/zitadel/zitadel:${ZITADEL_VERSION:-v4.19.2}
+    image: ghcr.io/zitadel/zitadel:${ZITADEL_VERSION:?Set ZITADEL_VERSION in apps/auth-server/.env (see .env.example)}
     restart: unless-stopped
     user: "0"
     command: start-from-init --masterkey "${ZITADEL_MASTERKEY:-MasterkeyNeedsToHave32Characters}"
@@ -139,13 +141,16 @@ services:
       - traefik.http.routers.zitadel-api.priority=100
 
   zitadel-login:
-    image: ${ZITADEL_LOGIN_IMAGE:-ghcr.io/zitadel/zitadel-login:${ZITADEL_VERSION:-v4.19.2}}
+    # Built from https://github.com/a-man-called-q/vern-zitadel-login; must match ZITADEL_VERSION.
+    image: ${ZITADEL_LOGIN_IMAGE:?Set ZITADEL_LOGIN_IMAGE in apps/auth-server/.env (see .env.example)}
     restart: unless-stopped
     environment:
       ZITADEL_API_URL: http://zitadel-api:8080
       NEXT_PUBLIC_BASE_PATH: /ui/v2/login
       ZITADEL_SERVICE_USER_TOKEN_FILE: /zitadel/bootstrap/login-client.pat
       CUSTOM_REQUEST_HEADERS: "Host:${ZITADEL_DOMAIN:-localhost},X-Forwarded-Proto:http"
+      # Text and images of the sign-in shell; edits apply on the next page load.
+      VERN_BRAND_FILE: /brand/brand.json
     healthcheck:
       test: ["CMD-SHELL", "node /app/healthcheck.mjs http://127.0.0.1:3000/ui/v2/login/ready"]
       interval: 10s
@@ -154,6 +159,7 @@ services:
       start_period: 20s
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
+      - ./brand:/brand:ro
     networks:
       - vern-auth
     depends_on:

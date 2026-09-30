@@ -253,9 +253,11 @@ describe("command line", () => {
 });
 
 // The request bodies must use field names and enum values that the ZITADEL
-// version vendored in this repo really defines.
-const protoDir = resolve(import.meta.dir, "../apps/auth-server/proto/zitadel");
-describe.skipIf(!existsSync(resolve(protoDir, "management.proto")))("matches the vendored ZITADEL API", () => {
+// release in apps/auth-server/.env.example really defines. CI downloads that
+// release's proto/zitadel files into ZITADEL_PROTO_DIR; without it this suite
+// is skipped.
+const protoDir = process.env.ZITADEL_PROTO_DIR ?? "";
+describe.skipIf(!protoDir || !existsSync(resolve(protoDir, "management.proto")))("matches the ZITADEL API", () => {
 	const management = existsSync(resolve(protoDir, "management.proto")) ? readFileSync(resolve(protoDir, "management.proto"), "utf8") : "";
 	const app = existsSync(resolve(protoDir, "app.proto")) ? readFileSync(resolve(protoDir, "app.proto"), "utf8") : "";
 	const camel = (name: string) => name.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
