@@ -17,9 +17,9 @@ calling an API, read
 - **A page that needs a user** calls `requireUser()` in its server function.
 - **Routes** are files in `src/routes`. `src/routeTree.gen.ts` is generated; do
   not edit it.
-- **UI** comes from `@vern/ui/components/<name>`. Add a shadcn component with
-  `bunx --bun shadcn@latest add <name>` from this folder.
-{% if include_demos %}- **Demo files** (`src/routes/demo`, files named `demo.*`) are samples and can
+- **UI** comes from `@vern/ui/components/<name>`. Every shadcn component is
+  already there; for a form, use `form-tanstack` (TanStack Form).
+{% if include_demos %}- **Demo files** (`src/routes/demo`, files named `demo-*`) are samples and can
   be deleted.
 {% endif %}
 Check your work from the repository root:

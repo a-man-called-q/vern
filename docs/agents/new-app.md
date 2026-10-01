@@ -44,9 +44,10 @@ example). A new screen for the same people is a route in an app that exists.
 
 - Pages that need a signed-in user, and calls to an API:
   [web-to-api.md](web-to-api.md).
-- UI: import shared components from `@vern/ui/components/<name>`. Add a shadcn
-  component from the app's folder (`cd apps/<name> && bunx --bun shadcn@latest add card`);
-  the CLI puts shared primitives in `packages/ui`. Product-specific components
+- UI: import shared components from `@vern/ui/components/<name>`. Every shadcn
+  component is already in `packages/ui`, so look there before writing one. For
+  a form, use `form-tanstack` (TanStack Form) in a TanStack Start app and
+  `form-rhf` (React Hook Form) in a Next.js app. Product-specific components
   stay in the app's `src/components`.
 - The files under `src/server` named `auth`, `session`, `oidc`, `api`, `http`,
   `log`, and `ttl-cache`, and the routes under `/auth`, are the sign-in

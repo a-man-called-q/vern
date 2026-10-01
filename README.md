@@ -247,15 +247,20 @@ the `.env.example` files are committed.
 
 ### Shared UI and Storybook
 
-Add shadcn components from a generated app so the CLI puts shared primitives in
-`packages/ui`:
+`packages/ui` already holds every shadcn component; import one as
+`@vern/ui/components/card`. The form component comes in two versions with the
+same parts: `form-tanstack` for TanStack Form, which TanStack Start apps use,
+and `form-rhf` for React Hook Form, which Next.js apps use.
+
+When shadcn releases a component that is not there yet, add it from a generated
+app so the CLI puts it in `packages/ui`:
 
 ```sh
 cd apps/dashboard
-bunx --bun shadcn@latest add card
+bunx --bun shadcn@latest add <name>
 ```
 
-Import them as `@vern/ui/components/card`. Storybook runs at
+Storybook runs at
 <http://localhost:6006>; see [its README](apps/storybook/README.md).
 
 ## Rename and update

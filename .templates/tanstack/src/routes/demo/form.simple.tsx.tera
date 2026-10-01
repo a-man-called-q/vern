@@ -3,6 +3,7 @@ skip: {{ not include_demos }}
 ---
 {% raw %}
 import { createFileRoute } from "@tanstack/react-router";
+import { Button } from "@vern/ui/components/button";
 import {
 	Card,
 	CardContent,
@@ -10,9 +11,10 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@vern/ui/components/card";
+import { useAppForm } from "@vern/ui/components/form-tanstack";
+import { Input } from "@vern/ui/components/input";
+import { Textarea } from "@vern/ui/components/textarea";
 import { z } from "zod";
-
-import { useAppForm } from "#/hooks/demo.form";
 
 export const Route = createFileRoute("/demo/form/simple")({
 	component: SimpleForm,
@@ -48,32 +50,58 @@ function SimpleForm() {
 					</p>
 					<CardTitle className="text-3xl">Simple Form</CardTitle>
 					<CardDescription>
-						A small validated form using the generated field helpers.
+						A small validated form using the shared form components.
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<form
-						onSubmit={(e) => {
-							e.preventDefault();
-							e.stopPropagation();
-							form.handleSubmit();
-						}}
-						className="space-y-6"
-					>
-						<form.AppField name="title">
-							{(field) => <field.TextField label="Title" />}
-						</form.AppField>
+					<form.AppForm>
+						<form.Form className="space-y-6">
+							<form.AppField name="title">
+								{(field) => (
+									<field.FormItem>
+										<field.FormLabel>Title</field.FormLabel>
+										<field.FormControl>
+											<Input
+												name={field.name}
+												value={field.state.value}
+												onBlur={field.handleBlur}
+												onChange={(e) => field.handleChange(e.target.value)}
+											/>
+										</field.FormControl>
+										<field.FormMessage />
+									</field.FormItem>
+								)}
+							</form.AppField>
 
-						<form.AppField name="description">
-							{(field) => <field.TextArea label="Description" />}
-						</form.AppField>
+							<form.AppField name="description">
+								{(field) => (
+									<field.FormItem>
+										<field.FormLabel>Description</field.FormLabel>
+										<field.FormControl>
+											<Textarea
+												name={field.name}
+												value={field.state.value}
+												rows={3}
+												onBlur={field.handleBlur}
+												onChange={(e) => field.handleChange(e.target.value)}
+											/>
+										</field.FormControl>
+										<field.FormMessage />
+									</field.FormItem>
+								)}
+							</form.AppField>
 
-						<div className="flex justify-end">
-							<form.AppForm>
-								<form.SubscribeButton label="Submit" />
-							</form.AppForm>
-						</div>
-					</form>
+							<div className="flex justify-end">
+								<form.Subscribe selector={(state) => state.isSubmitting}>
+									{(isSubmitting) => (
+										<Button type="submit" disabled={isSubmitting}>
+											Submit
+										</Button>
+									)}
+								</form.Subscribe>
+							</div>
+						</form.Form>
+					</form.AppForm>
 				</CardContent>
 			</Card>
 		</main>
