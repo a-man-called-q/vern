@@ -1,0 +1,13 @@
+title: PostgreSQL data tier
+description: Generate a local PostgreSQL for the APIs' own data, with one database per Axum API.
+destination: '/apps/[name | kebab_case]'
+variables:
+  name:
+    type: string
+    default: data
+    required: true
+    prompt: Data project name?
+  port:
+    type: number
+    required: true
+    prompt: Unique local port (1024-65535) for PostgreSQL? (5433 avoids ZITADEL's own database)

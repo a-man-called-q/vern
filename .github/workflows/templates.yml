@@ -90,6 +90,31 @@ jobs:
       - name: Build the production image
         run: moon run api:docker
 
+  # An API generated with --database, tested against the data project's
+  # PostgreSQL: api:test starts it through data:up.
+  axum-database:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install the pinned toolchain
+        uses: moonrepo/setup-toolchain@v0
+        with:
+          auto-install: true
+
+      - name: Generate the data project and the API
+        run: |
+          moon generate postgres -- --name data --port 5433
+          moon generate axum -- --name api --port 4000 --database
+          cp apps/api/.env.example apps/api/.env
+
+      - name: Check and test the API
+        run: moon run api:check api:test
+
+      - name: Build the production image
+        run: moon run api:docker
+
   # Runs deploy/ on the runner with certificates from a local authority, the
   # way deploy/README.md describes, and signs in through it.
   deploy:

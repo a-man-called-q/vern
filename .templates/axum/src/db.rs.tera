@@ -1,0 +1,48 @@
+---
+skip: {{ not database }}
+---
+use std::{env, time::Duration};
+
+use sqlx::{PgPool, postgres::PgPoolOptions};
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum DbError {
+    #[error("required environment variable DATABASE_URL is missing")]
+    MissingUrl,
+    #[error("could not connect to the database")]
+    Connect(#[source] sqlx::Error),
+    #[error("could not apply the database migrations")]
+    Migrate(#[source] sqlx::migrate::MigrateError),
+}
+
+/// Connects to `DATABASE_URL` and applies the migrations in `migrations/`.
+pub async fn connect() -> Result<PgPool, DbError> {
+    let url = env::var("DATABASE_URL").map_err(|_| DbError::MissingUrl)?;
+    let pool = PgPoolOptions::new()
+        .max_connections(10)
+        .acquire_timeout(Duration::from_secs(5))
+        .connect(&url)
+        .await
+        .map_err(DbError::Connect)?;
+    sqlx::migrate!()
+        .run(&pool)
+        .await
+        .map_err(DbError::Migrate)?;
+    Ok(pool)
+}
+
+#[cfg(test)]
+mod tests {
+    // Runs against the development database, as starting the API does.
+    #[tokio::test]
+    async fn connect_applies_the_migrations() {
+        dotenvy::dotenv().ok();
+        let pool = super::connect().await.expect("connects and migrates");
+        let (notes,): (i64,) = sqlx::query_as("SELECT count(*) FROM notes")
+            .fetch_one(&pool)
+            .await
+            .expect("the notes table exists");
+        assert!(notes >= 0);
+    }
+}

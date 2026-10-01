@@ -1,0 +1,17 @@
+---
+skip: {{ not database }}
+---
+-- The table the example /api/notes endpoints use. Replace it with your own
+-- model. Users live in ZITADEL, so owner_sub is a ZITADEL user ID.
+--
+-- Migrations are embedded in the binary and applied when the API starts. Add
+-- the next one as migrations/0002_<what>.sql; never edit one that has shipped.
+
+CREATE TABLE notes (
+    id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    owner_sub  text        NOT NULL,
+    body       text        NOT NULL CHECK (char_length(body) BETWEEN 1 AND 2000),
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX notes_owner_idx ON notes (owner_sub, created_at DESC);

@@ -408,18 +408,26 @@ function mkTemp(prefix: string): string {
 	return mkdtempSync(join(tmpdir(), prefix));
 }
 
+// The Axum template wraps the dependencies only a database API needs in
+// `{% if database %}` lines. Cargo cannot read those, so they come off for the
+// upgrade and go back around the same dependencies afterwards.
+const DATABASE_DEPENDENCIES = ["chrono", "sqlx"];
+
 function updateRustTemplate(root: string): void {
 	const path = resolve(root, ".templates/axum/Cargo.toml.tera");
 	if (!existsSync(path)) return;
 	const tempRoot = mkTemp("vern-rust-template-");
 	try {
 		const original = readFileSync(path, "utf8");
-		const rendered = original.replace(
+		const named = original.replace(
 			'"{{ name | kebab_case }}"',
 			'"vern-template-axum"',
 		);
-		if (rendered === original)
+		if (named === original)
 			throw new Error("Could not render the Axum Cargo name placeholder.");
+		const rendered = named
+			.replaceAll("{% if database %}", "")
+			.replaceAll("{% endif %}", "");
 		writeFileSync(resolve(tempRoot, "Cargo.toml"), rendered);
 		mkdirSync(resolve(tempRoot, "src"), { recursive: true });
 		writeFileSync(resolve(tempRoot, "src/main.rs"), "fn main() {}\n");
@@ -436,10 +444,18 @@ function updateRustTemplate(root: string): void {
 			],
 			{ cwd: tempRoot },
 		);
-		const updated = readFileSync(
+		let updated = readFileSync(
 			resolve(tempRoot, "Cargo.toml"),
 			"utf8",
 		).replace('"vern-template-axum"', '"{{ name | kebab_case }}"');
+		if (original.includes("{% if database %}")) {
+			for (const dependency of DATABASE_DEPENDENCIES) {
+				updated = updated.replace(
+					new RegExp("^" + dependency + " = .*\\n", "m"),
+					(line) => "{% if database %}" + line + "{% endif %}",
+				);
+			}
+		}
 		writeFileSync(path, updated);
 	} finally {
 		rmSync(tempRoot, { recursive: true, force: true });

@@ -12,6 +12,7 @@ against.
 | `.templates/tanstack` | TanStack Start app with OIDC sign-in, Redis sessions, and server-side API calls |
 | `.templates/next` | Next.js App Router app with the same sign-in, sessions, and API calls |
 | `.templates/axum` | Axum API that verifies access tokens through ZITADEL introspection |
+| `.templates/postgres` | Optional PostgreSQL for the APIs' own data, one database per API |
 | `apps/auth-server` | Local Docker Compose stack: ZITADEL, its Login App, PostgreSQL, and Redis |
 | `deploy` | Production Docker Compose stack for one server, with HTTPS |
 | `apps/storybook` | Storybook workbench for the shared UI components |
@@ -99,6 +100,24 @@ or a token of a service user with the IAM Owner role in `ZITADEL_PAT`.
 To manage one app's OIDC application by hand, use
 `bun run zitadel:app -- --app <name> --write-env` (`--help` lists the options).
 It resets changes made to that application in the Console.
+
+## Data for your APIs
+
+An Axum API that needs a database is generated with `--database`, next to a
+PostgreSQL generated from the `postgres` template (it is separate from the one
+ZITADEL uses):
+
+```sh
+moon generate postgres -- --name data --port 5433
+moon generate axum -- --name ads --port 4001 --database
+bun run setup
+moon run ads:dev    # starts the database first, creating the API's own
+```
+
+The API gets sqlx, migrations in `migrations/` that run when it starts, and
+`#[sqlx::test]` tests that each use a throwaway database. The
+[template README](.templates/README.md#postgresql) and the API's own README
+cover the rest, including TLS to a production database.
 
 ## Roles and users
 

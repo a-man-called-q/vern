@@ -6,13 +6,17 @@ use tracing_subscriber::EnvFilter;
 mod app;
 mod auth;
 mod config;
-mod error;
-
+{% if database %}mod db;
+{% endif %}mod error;
+{% if database %}mod notes;
+{% endif %}
 #[derive(Debug, Error)]
 enum StartupError {
     #[error(transparent)]
     Config(#[from] config::ConfigError),
-    #[error("invalid bind address: {0}")]
+{% if database %}    #[error(transparent)]
+    Database(#[from] db::DbError),
+{% endif %}    #[error("invalid bind address: {0}")]
     BindAddress(#[from] std::net::AddrParseError),
     #[error("failed to bind API listener: {0}")]
     Bind(#[from] std::io::Error),
@@ -34,7 +38,8 @@ async fn main() -> Result<(), StartupError> {
         .init();
 
     let config = config::Config::from_env()?;
-    let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_owned());
+{% if database %}    let pool = db::connect().await?;
+{% endif %}    let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_owned());
     let port = std::env::var("PORT").map_err(|_| StartupError::MissingPort)?;
     let port = port
         .parse::<u16>()
@@ -43,7 +48,7 @@ async fn main() -> Result<(), StartupError> {
         return Err(StartupError::PortOutOfRange);
     }
     let bind_address: SocketAddr = format!("{host}:{port}").parse()?;
-    let app = app::router(auth::AppState::from_config(config));
+    let app = app::router(auth::AppState::from_config(config)){% if database %}.layer(axum::Extension(pool)){% endif %};
     let listener = tokio::net::TcpListener::bind(bind_address).await?;
     tracing::info!(address = %listener.local_addr()?, "API server listening");
     axum::serve(listener, app).await.map_err(StartupError::Bind)

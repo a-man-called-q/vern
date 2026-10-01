@@ -1,0 +1,16 @@
+---
+skip: {{ not database }}
+---
+{%- set database_name = name | snake_case %}
+-- A login role and a database for this API, so it can reach only its own data.
+-- `moon run data:up` applies this file every time it runs, so each statement
+-- creates only what is missing. The password is a local-only default: replace
+-- it (and DATABASE_URL in .env) before running anywhere else.
+--
+-- CREATEDB lets `cargo test` create a throwaway database per test (sqlx::test).
+
+SELECT 'CREATE ROLE "{{ database_name }}" LOGIN CREATEDB PASSWORD ''{{ database_name }}'''
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{{ database_name }}')\gexec
+
+SELECT 'CREATE DATABASE "{{ database_name }}" OWNER "{{ database_name }}"'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '{{ database_name }}')\gexec

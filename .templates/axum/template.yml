@@ -11,3 +11,7 @@ variables:
     type: number
     required: true
     prompt: Unique local port (1024-65535) for this Axum API?
+  database:
+    type: boolean
+    default: false
+    prompt: Add a PostgreSQL database? It needs the data project (moon generate postgres).

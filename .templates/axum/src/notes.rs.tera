@@ -1,0 +1,155 @@
+---
+skip: {{ not database }}
+---
+//! The example endpoints: each signed-in user keeps their own notes. Replace
+//! them with your own handlers; the pattern is the point. A handler takes the
+//! verified user from the auth middleware and the pool from the router.
+
+use axum::{Extension, Json, http::StatusCode};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
+
+use crate::{auth::AuthenticatedUser, error::ApiError};
+
+const MAX_BODY_CHARS: usize = 2000;
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct Note {
+    pub id: i64,
+    pub body: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Deserialize)]
+pub struct NewNote {
+    body: String,
+}
+
+/// Logs the cause and answers with a generic 500, so SQL details stay server-side.
+fn database_error(error: sqlx::Error) -> ApiError {
+    tracing::error!(%error, "database query failed");
+    ApiError::Internal
+}
+
+pub async fn list(
+    Extension(user): Extension<AuthenticatedUser>,
+    Extension(pool): Extension<PgPool>,
+) -> Result<Json<Vec<Note>>, ApiError> {
+    let notes = sqlx::query_as::<_, Note>(
+        "SELECT id, body, created_at FROM notes \
+         WHERE owner_sub = $1 ORDER BY created_at DESC, id DESC LIMIT 100",
+    )
+    .bind(&user.sub)
+    .fetch_all(&pool)
+    .await
+    .map_err(database_error)?;
+    Ok(Json(notes))
+}
+
+pub async fn create(
+    Extension(user): Extension<AuthenticatedUser>,
+    Extension(pool): Extension<PgPool>,
+    Json(new): Json<NewNote>,
+) -> Result<(StatusCode, Json<Note>), ApiError> {
+    let body = new.body.trim();
+    if body.is_empty() || body.chars().count() > MAX_BODY_CHARS {
+        return Err(ApiError::BadRequest(format!(
+            "body must be 1-{MAX_BODY_CHARS} characters"
+        )));
+    }
+    let note = sqlx::query_as::<_, Note>(
+        "INSERT INTO notes (owner_sub, body) VALUES ($1, $2) \
+         RETURNING id, body, created_at",
+    )
+    .bind(&user.sub)
+    .bind(body)
+    .fetch_one(&pool)
+    .await
+    .map_err(database_error)?;
+    Ok((StatusCode::CREATED, Json(note)))
+}
+
+// `#[sqlx::test]` creates a throwaway database from DATABASE_URL for each test,
+// applies `migrations/`, and drops it afterwards. `moon run {{ name | kebab_case }}:test`
+// starts the data project first; DATABASE_URL comes from this app's .env.
+#[cfg(test)]
+mod tests {
+    use axum::{
+        Extension, Router,
+        body::{Body, to_bytes},
+        http::{Request, StatusCode, header},
+        response::Response,
+        routing::get,
+    };
+    use serde_json::{Value, json};
+    use sqlx::PgPool;
+    use tower::ServiceExt;
+
+    use super::{create, list};
+    use crate::auth::AuthenticatedUser;
+
+    fn app(pool: &PgPool, sub: &str) -> Router {
+        let user = AuthenticatedUser {
+            sub: sub.to_owned(),
+            display_name: None,
+            roles: Default::default(),
+        };
+        Router::new()
+            .route("/api/notes", get(list).post(create))
+            .layer(Extension(user))
+            .layer(Extension(pool.clone()))
+    }
+
+    async fn post(app: Router, body: Value) -> Response {
+        let request = Request::builder()
+            .method("POST")
+            .uri("/api/notes")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body.to_string()))
+            .expect("request is valid");
+        app.oneshot(request).await.expect("router responds")
+    }
+
+    async fn notes_of(app: Router) -> Vec<Value> {
+        let request = Request::builder()
+            .uri("/api/notes")
+            .body(Body::empty())
+            .expect("request is valid");
+        let response = app.oneshot(request).await.expect("router responds");
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body is readable");
+        serde_json::from_slice(&body).expect("body is a JSON array")
+    }
+
+    #[sqlx::test]
+    async fn a_saved_note_is_listed_for_its_owner(pool: PgPool) {
+        let created = post(app(&pool, "user-1"), json!({"body": "  buy milk  "})).await;
+        assert_eq!(created.status(), StatusCode::CREATED);
+
+        let notes = notes_of(app(&pool, "user-1")).await;
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0]["body"], "buy milk");
+    }
+
+    #[sqlx::test]
+    async fn users_only_see_their_own_notes(pool: PgPool) {
+        post(app(&pool, "user-1"), json!({"body": "mine"})).await;
+        post(app(&pool, "user-2"), json!({"body": "theirs"})).await;
+
+        let notes = notes_of(app(&pool, "user-2")).await;
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0]["body"], "theirs");
+    }
+
+    #[sqlx::test]
+    async fn empty_and_oversized_notes_are_rejected(pool: PgPool) {
+        for body in ["   ".to_owned(), "x".repeat(2001)] {
+            let response = post(app(&pool, "user-1"), json!({ "body": body })).await;
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        }
+        assert!(notes_of(app(&pool, "user-1")).await.is_empty());
+    }
+}

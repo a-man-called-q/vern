@@ -1,0 +1,19 @@
+tasks:
+  up:
+    command: sh up.sh
+    description: Start the data PostgreSQL and create each API's database
+    deps:
+      - 'workspace:check-ports'
+    toolchains: system
+    options:
+      cache: false
+      envFile: true
+      persistent: false
+
+  down:
+    command: docker compose down
+    description: Stop the data PostgreSQL and keep its volume
+    toolchains: system
+    options:
+      cache: false
+      envFile: true

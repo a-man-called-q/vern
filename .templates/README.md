@@ -29,7 +29,29 @@ moon generate axum -- --name process --port 4000
 ```
 
 An API that the TanStack and Next.js apps call with the signed-in user's access
-token. It verifies the token through ZITADEL introspection.
+token. It verifies the token through ZITADEL introspection, and offers roles
+(`require_role`) and JSON errors (`ApiError`) to its handlers.
+
+Add `--database` for an API that keeps its data in PostgreSQL: sqlx, embedded
+migrations, a `#[sqlx::test]` example, and the `db/init.sql` that gives it its
+own database. It needs the data project below.
+
+```sh
+moon generate axum -- --name ads --port 4001 --database
+```
+
+## PostgreSQL
+
+```sh
+moon generate postgres -- --name data --port 5433
+moon run data:up
+```
+
+A PostgreSQL for the data of your Axum APIs, apart from the one ZITADEL uses.
+`data:up` starts it and creates the database and login role of every API
+generated with `--database`. Name the project `data`: the APIs' `dev` and
+`test` tasks start it as `data:up`, and their `.env.example` points at port
+5433.
 
 After generation, create the app's `.env` and its ZITADEL application as the
 [quick start](../README.md#quick-start) describes, then run the workspace with

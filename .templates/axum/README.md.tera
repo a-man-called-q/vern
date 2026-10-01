@@ -13,6 +13,10 @@ verified `sub` to a protected handler.
   audience and returns the verified subject, the user's display name when
   ZITADEL has one, and their roles: `{"sub":"...","name":"...","roles":["..."]}`.
 
+{% if database %}- `GET /api/notes` and `POST /api/notes` list and add the signed-in user's own
+  notes. They are an example of a handler that uses the database; replace them
+  with your own.
+{% endif %}
 An absent, malformed, inactive, wrong-issuer, wrong-audience, or subject-less
 token receives `401 Unauthorized`. A ZITADEL discovery/introspection failure
 receives `503 Service Unavailable`; the API does not accept a token when it
@@ -42,7 +46,44 @@ users there; `has_role` is the non-failing check. Both claim forms ZITADEL uses
 (`urn:zitadel:iam:org:project:roles` and the one scoped to this project's ID)
 are read.
 
-## Local ZITADEL setup
+{% if database %}## Database
+
+This API was generated with a PostgreSQL database. `moon run data:up` starts the
+PostgreSQL of the data project (the `dev` and `test` tasks run it first) and
+applies `db/init.sql`, which creates this API's own database and login role. The
+connection string is `DATABASE_URL` in `.env`.
+
+- `migrations/` is the schema. It is embedded in the binary and applied when the
+  API starts. Add `migrations/0002_<what>.sql` for a change, and never edit one
+  that has shipped.
+- Queries use sqlx's runtime API (`sqlx::query_as`), so building needs neither a
+  database nor `DATABASE_URL`.
+- `src/notes.rs` is the example: handlers that read `AuthenticatedUser` and the
+  pool from the router, and `#[sqlx::test]` tests. Each of those tests gets a
+  throwaway database made from `DATABASE_URL`, with `migrations/` applied, and
+  dropped afterwards, which is why the role has `CREATEDB`.
+
+### In production
+
+Give the container `DATABASE_URL`. The image needs nothing else: the migrations
+are inside the binary.
+
+The default build has no TLS support, so it connects in plain text. Note that
+`sslmode=prefer`, the default, does so silently, and `sslmode=require` fails
+with "built without TLS support". That is fine on a private network; over the
+internet add TLS in `Cargo.toml`:
+
+```toml
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "migrate", "macros", "chrono", "tls-rustls-aws-lc-rs"] }
+```
+
+and ask for it in the URL. `?sslmode=require` encrypts the connection but does
+not check who answers. `?sslmode=verify-full` checks the server's certificate
+against the public CAs, or against your own with
+`&sslrootcert=/run/secrets/db-ca.pem` (mount that file into the container). The
+production image still builds, at about 17 MB.
+
+{% endif %}## Local ZITADEL setup
 
 From the repository root, run:
 
