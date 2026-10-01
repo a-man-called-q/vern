@@ -1,0 +1,25 @@
+# The event bus between the APIs. The project name includes the repository
+# folder, so two projects on one machine do not share a volume.
+name: {{ workspace_root | split(pat="/") | last | kebab_case }}-{{ name | kebab_case }}
+
+services:
+  nats:
+    image: nats:2.11-alpine
+    restart: unless-stopped
+    # JetStream keeps messages on disk; --http_port opens the monitoring endpoint the
+    # health check uses (inside the container only).
+    command: ["--jetstream", "--store_dir", "/data", "--http_port", "8222"]
+    # PORT is what scripts/check-ports.ts reads, so it also checks this service.
+    ports:
+      - "127.0.0.1:${PORT:-{{ port }}}:4222"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8222/healthz >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 3s
+    volumes:
+      - nats-data:/data:rw
+
+volumes:
+  nats-data:

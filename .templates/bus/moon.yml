@@ -1,0 +1,19 @@
+tasks:
+  up:
+    command: docker compose up --detach --wait
+    description: Start the local NATS server with JetStream
+    deps:
+      - 'workspace:check-ports'
+    toolchains: system
+    options:
+      cache: false
+      envFile: true
+      persistent: false
+
+  down:
+    command: docker compose down
+    description: Stop the local NATS server and keep its data
+    toolchains: system
+    options:
+      cache: false
+      envFile: true

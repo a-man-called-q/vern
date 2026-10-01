@@ -40,6 +40,10 @@ A service stores the user's ID (`sub`) next to the rows that user owns.
    Leave out `--database` for a service that keeps no data. With it, the service
    gets sqlx, `migrations/`, `db/init.sql` (its own database and login role,
    named after the service), and example `/api/notes` endpoints.
+   Add `--events` for a service that tells other services what changed or hears
+   from them. It sends events over NATS JetStream through an outbox table, and
+   needs the bus project once (`moon generate bus -- --name bus --port 4222`).
+   The service's README, section "Events", explains `src/events.rs`.
 4. **Provision it:**
 
    ```sh

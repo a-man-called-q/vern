@@ -8,7 +8,8 @@ mod auth;
 mod config;
 {% if database %}mod db;
 {% endif %}mod error;
-{% if database %}mod notes;
+{% if events %}mod events;
+{% endif %}{% if database %}mod notes;
 {% endif %}
 #[derive(Debug, Error)]
 enum StartupError {
@@ -16,6 +17,8 @@ enum StartupError {
     Config(#[from] config::ConfigError),
 {% if database %}    #[error(transparent)]
     Database(#[from] db::DbError),
+{% endif %}{% if events %}    #[error(transparent)]
+    Events(#[from] events::EventsError),
 {% endif %}    #[error("invalid bind address: {0}")]
     BindAddress(#[from] std::net::AddrParseError),
     #[error("failed to bind API listener: {0}")]
@@ -39,6 +42,8 @@ async fn main() -> Result<(), StartupError> {
 
     let config = config::Config::from_env()?;
 {% if database %}    let pool = db::connect().await?;
+{% endif %}{% if events %}    let bus = events::Bus::from_env().await?;
+    events::spawn_relay(pool.clone(), std::sync::Arc::new(bus.clone()));
 {% endif %}    let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_owned());
     let port = std::env::var("PORT").map_err(|_| StartupError::MissingPort)?;
     let port = port
@@ -48,7 +53,7 @@ async fn main() -> Result<(), StartupError> {
         return Err(StartupError::PortOutOfRange);
     }
     let bind_address: SocketAddr = format!("{host}:{port}").parse()?;
-    let app = app::router(auth::AppState::from_config(config)){% if database %}.layer(axum::Extension(pool)){% endif %};
+    let app = app::router(auth::AppState::from_config(config)){% if database %}.layer(axum::Extension(pool)){% endif %}{% if events %}.layer(axum::Extension(bus)){% endif %};
     let listener = tokio::net::TcpListener::bind(bind_address).await?;
     tracing::info!(address = %listener.local_addr()?, "API server listening");
     axum::serve(listener, app).await.map_err(StartupError::Bind)

@@ -1,0 +1,16 @@
+#!/bin/sh
+# Starts the object store, then creates the bucket if it is missing. Local only:
+# the access key is the one in s3.json.
+set -eu
+cd "$(dirname "$0")"
+
+docker compose up --detach --wait
+
+port="${PORT:-{{ port }}}"
+status=$(curl -s -o /dev/null -w '%{http_code}' \
+  --aws-sigv4 "aws:amz:us-east-1:s3" --user "local-access-key:local-secret-key" \
+  -X PUT "http://127.0.0.1:${port}/{{ bucket }}")
+case "$status" in
+  200|409) echo "{{ name | kebab_case }}: bucket {{ bucket }} is ready" ;;
+  *) echo "{{ name | kebab_case }}: creating bucket {{ bucket }} failed (HTTP $status)" >&2; exit 1 ;;
+esac

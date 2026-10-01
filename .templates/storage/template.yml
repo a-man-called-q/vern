@@ -1,0 +1,18 @@
+title: S3-compatible object storage
+description: Generate a local S3-compatible object store (SeaweedFS) with one bucket, for the API that handles uploads.
+destination: '/apps/[name | kebab_case]'
+variables:
+  name:
+    type: string
+    default: storage
+    required: true
+    prompt: Storage project name?
+  port:
+    type: number
+    required: true
+    prompt: Unique local port (1024-65535) for the S3 API? (9000 is the usual one)
+  bucket:
+    type: string
+    default: media
+    required: true
+    prompt: Name of the bucket to create?

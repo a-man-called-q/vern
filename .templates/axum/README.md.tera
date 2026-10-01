@@ -100,6 +100,26 @@ against the public CAs, or against your own with
 `&sslrootcert=/run/secrets/db-ca.pem` (mount that file into the container). The
 production image still builds, at about 17 MB.
 
+{% endif %}{% if events %}## Events
+
+This API sends events to the other APIs and hears from them over NATS JetStream
+(`NATS_URL` in `.env`; `moon run bus:up` starts the local server, and the `dev`
+and `test` tasks run it first). `src/events.rs` has everything:
+
+- `events::enqueue(&mut *tx, "campaign.changed", &payload)` writes the event to
+  the `outbox` table in the same transaction as the change, so the event exists
+  exactly when the change does. `main.rs` starts the relay that publishes the
+  outbox, oldest first; several replicas can run it at once.
+- `events::spawn_consumer(bus, "ads-campaigns", "campaign.*", handler)` receives
+  events by name. `durable` names the consumer, which replicas of one service
+  share, and it resumes where it stopped after a restart. A handler returns
+  `Failure::Retry` when the database was down and `Failure::Drop` for a payload
+  that will never parse.
+- Delivery is at least once. An event carries the new state of the thing and a
+  version, not the change, so a consumer can ignore an old one and run a handler
+  twice with the same result. A second publish with the same ID inside the
+  server's duplicate window is dropped.
+
 {% endif %}## Local ZITADEL setup
 
 From the repository root, run:

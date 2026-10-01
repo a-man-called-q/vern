@@ -13,6 +13,8 @@ against.
 | `.templates/next` | Next.js App Router app with the same sign-in, sessions, and API calls |
 | `.templates/axum` | Axum API that verifies access tokens through ZITADEL introspection |
 | `.templates/postgres` | Optional PostgreSQL for the APIs' own data, one database per API |
+| `.templates/bus` | Optional NATS JetStream, the event bus between APIs generated with `--events` |
+| `.templates/storage` | Optional S3-compatible object store for uploads, with one bucket |
 | `apps/auth-server` | Local Docker Compose stack: ZITADEL, its Login App, PostgreSQL, and Redis |
 | `deploy` | Production Docker Compose stack for one server, with HTTPS |
 | `apps/storybook` | Storybook workbench for the shared UI components |

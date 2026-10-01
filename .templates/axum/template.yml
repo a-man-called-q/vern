@@ -15,3 +15,7 @@ variables:
     type: boolean
     default: false
     prompt: Add a PostgreSQL database? It needs the data project (moon generate postgres).
+  events:
+    type: boolean
+    default: false
+    prompt: Send and receive events over NATS (needs --database and the bus project, moon generate bus)?
