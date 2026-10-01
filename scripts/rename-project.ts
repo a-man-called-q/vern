@@ -9,6 +9,7 @@ import {
 	gitTry,
 	listTextFiles,
 	readConfig,
+	rebrandText,
 	replaceIdentity,
 	run,
 	validateIdentity,
@@ -146,7 +147,7 @@ export function renameProject(root: string, options: Options): string[] {
 		if (protectedScripts.has(path)) continue;
 		const absolute = resolve(root, path);
 		const source = readFileSync(absolute, "utf8");
-		const content = replaceIdentity(source, from, to);
+		const content = rebrandText(path, source, from, to);
 		if (content !== source) changed.push({ path, content });
 	}
 

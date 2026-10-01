@@ -20,7 +20,7 @@ import {
 	ROOT,
 	readConfig,
 	readGitFile,
-	replaceIdentity,
+	rebrandText,
 	run,
 	sha256,
 	UPDATE_STATE_PATH,
@@ -160,7 +160,7 @@ function rebrandSnapshot(
 		return data;
 	const text = new TextDecoder().decode(data);
 	return Buffer.from(
-		replaceIdentity(text, { name: "Vern", slug: "vern" }, config.project),
+		rebrandText(path, text, { name: "Vern", slug: "vern" }, config.project),
 		"utf8",
 	);
 }

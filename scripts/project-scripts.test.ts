@@ -11,8 +11,10 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
+	fitLogoText,
 	type ProjectConfig,
 	readConfig,
+	rebrandText,
 	replaceIdentity,
 	run,
 } from "./project-utils";
@@ -305,6 +307,53 @@ describe("rename-project", () => {
 				apply: true,
 			}),
 		).toEqual([]);
+	});
+
+	describe("logo text", () => {
+		const logo = readFileSync(
+			resolve(import.meta.dir, "../apps/auth-server/brand/logo-light.svg"),
+			"utf8",
+		);
+		const logoPath = "apps/auth-server/brand/logo-light.svg";
+		const vern = { name: "Vern", slug: "vern" };
+		const textTag = (svg: string) => svg.match(/<text\b[^>]*>[^<]*<\/text>/)?.[0];
+
+		test("leaves the shipped logo untouched", () => {
+			expect(fitLogoText(logo)).toBe(logo);
+		});
+
+		test("keeps the size for a name that fits", () => {
+			const renamed = rebrandText(logoPath, logo, vern, { name: "Acme", slug: "acme" });
+			expect(textTag(renamed)).toContain('font-size="38"');
+			expect(textTag(renamed)).not.toContain("textLength");
+		});
+
+		test("shrinks and pins a long name inside the box", () => {
+			const renamed = rebrandText(logoPath, logo, vern, {
+				name: "Testing Vern Aja",
+				slug: "testing-vern-aja",
+			});
+			const tag = textTag(renamed) ?? "";
+			expect(tag).toContain(">testing-vern-aja</text>");
+			expect(tag).toContain('textLength="166"');
+			expect(tag).toContain('lengthAdjust="spacingAndGlyphs"');
+			expect(Number(tag.match(/font-size="([\d.]+)"/)?.[1])).toBeLessThan(38);
+		});
+
+		test("restores the size when renamed back to a short name", () => {
+			const long = { name: "Testing Vern Aja", slug: "testing-vern-aja" };
+			const longLogo = rebrandText(logoPath, logo, vern, long);
+			const shortLogo = rebrandText(logoPath, longLogo, long, { name: "Q", slug: "q" });
+			expect(textTag(shortLogo)).toBe(textTag(logo)?.replace(">vern<", ">q<"));
+		});
+
+		test("only touches the logos of the login shell", () => {
+			const other = rebrandText("apps/web/logo.svg", logo, vern, {
+				name: "Testing Vern Aja",
+				slug: "testing-vern-aja",
+			});
+			expect(textTag(other)).not.toContain("textLength");
+		});
 	});
 
 	test("keeps container image references", () => {
