@@ -183,6 +183,11 @@ export async function readAppSession(): Promise<LoadedAuthSession | null> {
 	return { id, data: session };
 }
 
+/** How long ago the session was created (`sessionExpiresAt` is creation + max age). */
+export function getSessionAgeMs(data: StoredAuthSession) {
+	return Date.now() - (data.sessionExpiresAt - APP_SESSION_MAX_AGE * 1000);
+}
+
 export async function updateAppSession(id: string, data: StoredAuthSession) {
 	await writeAppSession(id, data);
 }

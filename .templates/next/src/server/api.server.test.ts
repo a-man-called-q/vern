@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createAuthenticatedApiFetcher } from "./api.server";
+import { AuthenticationRequiredError } from "./auth-error";
 
 /** Bun's types give `fetch` a `preconnect` member, so a bare function is not assignable. */
 function fakeFetch(
@@ -44,4 +45,42 @@ test("refuses caller-controlled API URLs", async () => {
 	});
 	await assert.rejects(fetchApi("//attacker.test/api/me"));
 	await assert.rejects(fetchApi("https://attacker.test/api/me"));
+});
+
+function apiAnswering(status: number, onUnauthorized?: () => Promise<boolean>) {
+	return createAuthenticatedApiFetcher({
+		baseUrl: "http://axum.test",
+		getAccessToken: async () => "opaque-token",
+		fetcher: fakeFetch(async () => new Response(null, { status })),
+		onUnauthorized,
+	});
+}
+
+test("asks to sign in again when the API refuses the token", async () => {
+	let sessionsDropped = 0;
+	const fetchApi = apiAnswering(401, async () => {
+		sessionsDropped += 1;
+		return true;
+	});
+	await assert.rejects(fetchApi("/api/me"), AuthenticationRequiredError);
+	assert.equal(sessionsDropped, 1);
+});
+
+test("returns the 401 when the session was kept", async () => {
+	const response = await apiAnswering(401, async () => false)("/api/me");
+	assert.equal(response.status, 401);
+});
+
+test("returns the 401 when nothing handles it", async () => {
+	const response = await apiAnswering(401)("/api/me");
+	assert.equal(response.status, 401);
+});
+
+test("leaves other statuses to the caller", async () => {
+	for (const status of [200, 403, 500]) {
+		const response = await apiAnswering(status, async () => {
+			throw new Error("only a 401 may drop the session");
+		})("/api/me");
+		assert.equal(response.status, status);
+	}
 });

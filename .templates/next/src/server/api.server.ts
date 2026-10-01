@@ -1,4 +1,5 @@
 import { env } from "node:process";
+import { AuthenticationRequiredError } from "./auth-error";
 
 function parseApiBaseUrl(value: string, requireHttps: boolean) {
 	const url = new URL(value);
@@ -24,6 +25,12 @@ export function createAuthenticatedApiFetcher(options: {
 	getAccessToken: () => Promise<string>;
 	fetcher?: typeof fetch;
 	requireHttps?: boolean;
+	/**
+	 * Called when the API answers 401. Return true when the session is gone and
+	 * the user must sign in again; the call then throws `AuthenticationRequiredError`.
+	 * Without it, or when it returns false, the 401 reaches the caller.
+	 */
+	onUnauthorized?: () => Promise<boolean>;
 }) {
 	const baseUrl = parseApiBaseUrl(
 		options.baseUrl,
@@ -46,26 +53,37 @@ export function createAuthenticatedApiFetcher(options: {
 		headers.set("Authorization", `Bearer ${accessToken}`);
 		headers.delete("Cookie");
 
-		return fetcher(targetUrl, {
+		const response = await fetcher(targetUrl, {
 			...init,
 			headers,
 			cache: "no-store",
 			credentials: "omit",
 			redirect: "manual",
 		});
+		if (response.status === 401 && (await options.onUnauthorized?.())) {
+			throw new AuthenticationRequiredError();
+		}
+		return response;
 	};
 }
 
-/** Server-only BFF helper. `path` must be a relative path, never a caller URL. */
+/**
+ * Server-only BFF helper. `path` must be a relative path, never a caller URL.
+ * Throws `AuthenticationRequiredError` when the API refuses the user's token
+ * (revoked upstream) and the app session was dropped: send the user to sign in.
+ */
 export async function fetchAuthenticatedApi(
 	path: string,
 	init: RequestInit = {},
 ): Promise<Response> {
 	const baseUrl = env.API_BASE_URL;
 	if (!baseUrl) throw new Error("API_BASE_URL is required");
-	const { getApiAccessToken } = await import("./auth.server");
+	const { dropRevokedSession, getApiAccessToken } = await import(
+		"./auth.server"
+	);
 	return createAuthenticatedApiFetcher({
 		baseUrl,
 		getAccessToken: getApiAccessToken,
+		onUnauthorized: dropRevokedSession,
 	})(path, init);
 }

@@ -1,8 +1,9 @@
 import "server-only";
 import { env } from "node:process";
+import { redirect } from "next/navigation";
 import type { DashboardData } from "../types/auth";
 import { fetchAuthenticatedApi } from "./api.server";
-import { requireUser } from "./auth.server";
+import { AuthenticationRequiredError, requireUser } from "./auth.server";
 import { logAuthWarning } from "./log.server";
 
 export async function getDashboardData(): Promise<DashboardData> {
@@ -36,6 +37,9 @@ export async function getDashboardData(): Promise<DashboardData> {
 			apiSubject: (payload as { sub: string }).sub,
 		};
 	} catch (error) {
+		// The session is gone (revoked token); a page that needs the API cannot
+		// render without it, so sign in again.
+		if (error instanceof AuthenticationRequiredError) redirect("/auth/login");
 		logAuthWarning("api /api/me", error);
 		return { user, apiStatus: "unavailable" };
 	}

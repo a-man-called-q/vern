@@ -79,6 +79,14 @@ callbacks or sessions.
 - Name and email are read from the ID token, or from the userinfo endpoint when
   the ID token omits them. Enabling **Include user's profile info in the ID
   Token** on the ZITADEL application skips that extra request but is optional.
+- A token can be revoked while the app session still looks valid: signing out
+  of any app ends the shared ZITADEL session, which revokes the tokens of every
+  app signed in under it, and so does deactivating the user. The API then
+  answers 401. `fetchAuthenticatedApi` removes the app session and throws
+  `AuthenticationRequiredError`, and `getDashboardData` sends the user to sign
+  in again. A 401 within a minute of sign-in keeps the session, since that is a
+  misconfigured API rather than a revocation. Handle the error the same way in
+  your own pages.
 - Failed sign-in, sign-out, token-refresh, and API steps are written to the
   server log as `[auth] ...` lines with the error name and code, never tokens or
   cookies. Send server logs somewhere you can search.

@@ -1,7 +1,11 @@
 import { env } from "node:process";
 import { fetchAuthenticatedApi } from "./api.server";
 import type { DashboardData } from "./auth";
-import { requireUser } from "./auth.server";
+import {
+	AuthenticationRequiredError,
+	redirectToLogin,
+	requireUser,
+} from "./auth.server";
 import { logAuthWarning } from "./log.server";
 
 export async function getDashboardData(): Promise<DashboardData> {
@@ -35,6 +39,9 @@ export async function getDashboardData(): Promise<DashboardData> {
 			apiSubject: (payload as { sub: string }).sub,
 		};
 	} catch (error) {
+		// The session is gone (revoked token); a page that needs the API cannot
+		// render without it, so sign in again.
+		if (error instanceof AuthenticationRequiredError) return redirectToLogin();
 		logAuthWarning("api /api/me", error);
 		return { user, apiStatus: "unavailable" };
 	}
