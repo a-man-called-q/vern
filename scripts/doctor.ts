@@ -10,6 +10,7 @@ import {
 	UPSTREAM_URL,
 } from "./project-utils";
 import { readProjectRoles, ROLES_FILE } from "./zitadel-roles";
+import { readSeedUsers, SEED_FILE } from "./zitadel-seed";
 
 type Level = "OK" | "INFO" | "WARN" | "FAIL";
 const results: Array<{ level: Level; message: string }> = [];
@@ -130,6 +131,13 @@ function main(): void {
 			roles.length > 0
 				? ROLES_FILE + " declares " + roles.length + " project role(s)."
 				: ROLES_FILE + " declares no project roles.",
+		);
+		const seed = readSeedUsers(ROOT, roles.map((role) => role.key));
+		report(
+			"OK",
+			seed.users.length > 0 || seed.adminRoles.length > 0
+				? SEED_FILE + " seeds " + seed.users.length + " user(s) and " + seed.adminRoles.length + " admin role(s) locally."
+				: SEED_FILE + " seeds nothing.",
 		);
 	} catch (error) {
 		report("FAIL", error instanceof Error ? error.message : String(error));

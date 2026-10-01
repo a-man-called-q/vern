@@ -32,7 +32,9 @@ jobs:
           version="$(grep '^ZITADEL_VERSION=' apps/auth-server/.env.example | cut -d= -f2)"
           dir="$RUNNER_TEMP/zitadel-proto"
           mkdir -p "$dir"
-          for file in management.proto app.proto; do
+          for file in management.proto app.proto user.proto \
+            user/v2/user_service.proto user/v2/user.proto user/v2/email.proto user/v2/password.proto; do
+            mkdir -p "$dir/$(dirname "$file")"
             curl --fail --silent --show-error --location --output "$dir/$file" \
               "https://raw.githubusercontent.com/zitadel/zitadel/${version}/proto/zitadel/${file}"
           done

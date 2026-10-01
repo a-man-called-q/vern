@@ -81,8 +81,9 @@ moon run :dev
   project ID, client IDs, session secrets, key files, and each web app's
   `API_BASE_URL`: the only API there is, or the one named by `API_APP` in the
   app's `.env` when there are several. It also creates the project roles listed
-  in `roles.json` (see [Roles and users](#roles-and-users)). Run it again after generating another app; it keeps what
-  already exists.
+  in `roles.json`, and, locally, the test users in `seed-users.json` (see
+  [Roles and users](#roles-and-users)). Run it again after generating another
+  app; it keeps what already exists.
 - `moon run :dev` checks the ports, starts the auth stack, and runs every app
   plus Storybook.
 
@@ -138,6 +139,37 @@ remove roles in the Console. Grant roles to users in the Console, or from your
 product with the service account below. The Axum template reads a user's roles
 from the token and offers `require_role("publisher")?` for its handlers (see its
 README).
+
+To have someone to sign in as while you build, list local test users in
+`seed-users.json` at the repository root, next to `roles.json`:
+
+```json
+{
+  "adminRoles": ["admin"],
+  "users": [
+    { "name": "publisher", "givenName": "Demo", "familyName": "Publisher", "roles": ["publisher"] }
+  ]
+}
+```
+
+`bun run setup` then grants `adminRoles` to the admin ZITADEL created
+(`zitadel-admin@vern.localhost`) and creates each user as
+`<name>@vern.localhost` (the organization's login domain), with its roles. Every
+role must be one `roles.json` declares; a mistake stops `setup` before it starts
+a container, and `bun run project:doctor` checks the file too.
+
+- **Local only.** It never runs with `--deploy`, and it is skipped when
+  `ZITADEL_ISSUER` is not `localhost`, `127.0.0.1`, or `[::1]`. In production,
+  create users and grant roles in the Console or with the service account below.
+  `--no-seed` skips it on a local ZITADEL too.
+- **The password is yours, not shared.** The seeded users share one password,
+  which `setup` generates into `ZITADEL_SEED_PASSWORD` in
+  `apps/auth-server/.env` the first time it creates a user (set it there first to
+  choose your own). It is never committed or printed, because the auth stack
+  listens on every network interface of your machine.
+- **Additive.** A user that already exists is left as it is, password included,
+  and only gets the roles it lacks; no role is ever removed. Running `setup` again
+  changes nothing.
 
 An admin screen that creates users and grants roles needs a credential, and the
 token `setup` signs in with can do everything in ZITADEL, so it must never reach

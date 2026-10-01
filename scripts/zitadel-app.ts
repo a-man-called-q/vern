@@ -4,7 +4,7 @@ import { parseArgs } from "node:util";
 import { readEffectiveEnv } from "./env-files";
 
 const ROOT = resolve(import.meta.dir, "..");
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+export const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 // ZITADEL rejects an update that changes nothing with this error id.
 const NO_CHANGES_ID = "COMMAND-1m88i";
 

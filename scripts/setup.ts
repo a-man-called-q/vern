@@ -24,6 +24,7 @@ import {
 	ZitadelApiError,
 } from "./zitadel-app";
 import { ensureProjectRoles, readProjectRoles, ROLES_FILE } from "./zitadel-roles";
+import { isLocalIssuer, readSeedUsers, SEED_FILE, SEED_PASSWORD_KEY, type SeedUsers, seedUsers } from "./zitadel-seed";
 
 const ROOT = resolve(import.meta.dir, "..");
 export const AUTH = "apps/auth-server";
@@ -41,15 +42,17 @@ Usage: bun run setup [-- options]
                      (default: ZITADEL_PAT, then the token the stack created
                      for its vern-setup service account)
   --skip-start       Do not start containers
+  --no-seed          Do not create the users of ${SEED_FILE}
   -h, --help         Show this help
 
 Locally, creates the .env files from their examples, starts the auth stack,
 and creates the ZITADEL project, an OIDC application for each web app, and an
 API application with a key for each Axum API. A web app gets its API_BASE_URL
 from API_APP in its .env (the name of an Axum app), or from the only API there
-is. It also creates the project roles listed in ${ROLES_FILE}. With --deploy, it
-also generates the missing secrets in deploy/.env and starts the whole
-production stack. Safe to run again: existing settings are kept.`;
+is. It also creates the project roles listed in ${ROLES_FILE}, and, on a local
+ZITADEL only, the users and the admin's roles listed in ${SEED_FILE}. With
+--deploy, it also generates the missing secrets in deploy/.env and starts the
+whole production stack. Safe to run again: existing settings are kept.`;
 
 type App = { name: string; path: string; kind: "web" | "api" };
 type Log = (message: string) => void;
@@ -271,9 +274,14 @@ export function resolveToken(
 	return token;
 }
 
-function adminLogin(env: Map<string, string>, domain: string): string {
+/** What follows the @ in the organization's login names: `<org-name-slug>.<domain>`. */
+function loginDomain(env: Map<string, string>, domain: string): string {
 	const org = (env.get("ZITADEL_ORG_NAME") || "vern").toLowerCase().replace(/[^a-z0-9]+/g, "-");
-	return `${env.get("ZITADEL_ADMIN_USERNAME") || "zitadel-admin"}@${org}.${domain}`;
+	return `${org}.${domain}`;
+}
+
+function adminLogin(env: Map<string, string>, domain: string): string {
+	return `${env.get("ZITADEL_ADMIN_USERNAME") || "zitadel-admin"}@${loginDomain(env, domain)}`;
 }
 
 /**
@@ -306,13 +314,59 @@ function chooseApiUrl(
 	return {};
 }
 
+/**
+ * Creates the users of seed-users.json and grants the admin's roles. Only a
+ * ZITADEL on this machine gets them: the users share one password, so they must
+ * never reach a server others can sign in to.
+ */
+async function seedLocal(
+	seed: SeedUsers,
+	root: string,
+	api: ApiOptions,
+	projectId: string,
+	authEnv: Map<string, string>,
+	secret: (kind: "hex" | "base64" | "password", bytes: number) => string,
+	log: Log,
+): Promise<void> {
+	if (seed.adminRoles.length === 0 && seed.users.length === 0) return;
+	if (!isLocalIssuer(api.issuer)) {
+		log(`Not seeding ${SEED_FILE}: ZITADEL_ISSUER (${api.issuer}) is not on this machine. Grant roles and create users in the Console.`);
+		return;
+	}
+	const domain = authEnv.get("ZITADEL_DOMAIN") || "localhost";
+	const env = resolve(root, AUTH, ".env");
+	const example = resolve(root, AUTH, ".env.example");
+	// Only a user that has to be created needs it, so an existing one is never
+	// followed by a password that does not match.
+	const password = () => {
+		const current = parseEnv(env).get(SEED_PASSWORD_KEY);
+		if (!isUnset(current)) return current!;
+		const generated = secret("password", 18);
+		setEnvValue(env, example, SEED_PASSWORD_KEY, generated);
+		log(`Generated ${SEED_PASSWORD_KEY} in ${AUTH}/.env`);
+		return generated;
+	};
+	const logins = await seedUsers(api, seed, {
+		projectId,
+		domain: loginDomain(authEnv, domain),
+		adminName: adminLogin(authEnv, domain),
+		password,
+		log,
+	});
+	if (logins.length > 0) log(`Seeded users: ${logins.join(", ")} (password: ${SEED_PASSWORD_KEY} in ${AUTH}/.env)`);
+}
+
 async function setupLocal(
-	values: { "pat-file"?: string; "skip-start"?: boolean },
+	values: { "pat-file"?: string; "skip-start"?: boolean; "no-seed"?: boolean },
 	root: string,
 	log: Log,
 	processEnv: Record<string, string | undefined>,
 	deps: SetupDeps,
 ): Promise<number> {
+	// A mistake in the file stops setup before a container starts.
+	const seed = values["no-seed"]
+		? { adminRoles: [], users: [] }
+		: readSeedUsers(root, readProjectRoles(root).map((role) => role.key));
 	const apps = findApps(root);
 	for (const dir of ["", AUTH, ...apps.map((app) => app.path)]) copyIfMissing(root, dir, log);
 
@@ -383,6 +437,8 @@ async function setupLocal(
 		setEnvValue(env, example, "ZITADEL_CLIENT_ID", result.clientId);
 		log(`${app.path}: ${result.action} OIDC application "${app.name}" for ${appUrl}`);
 	}
+
+	await seedLocal(seed, root, api, projectId, authEnv, secret, log);
 
 	if (apps.length === 0) {
 		log("No generated apps yet. Generate one (moon generate tanstack -- --name dashboard --port 3000) and run this again.");
@@ -500,6 +556,7 @@ export async function setup(argv: string[], deps: SetupDeps = {}): Promise<numbe
 			deploy: { type: "boolean", default: false },
 			"pat-file": { type: "string" },
 			"skip-start": { type: "boolean", default: false },
+			"no-seed": { type: "boolean", default: false },
 			help: { type: "boolean", short: "h", default: false },
 		},
 	});

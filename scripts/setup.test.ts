@@ -44,6 +44,10 @@ function fakeZitadel() {
 	const apps: { id: string; name: string; oidcConfig?: { clientId: string }; apiConfig?: object }[] = [];
 	const keys: { appId: string; keyId: string }[] = [];
 	const roles: { projectId: string; roleKey: string; displayName: string; group?: string }[] = [];
+	const users: { id: string; userName: string; password?: string }[] = [
+		{ id: "admin1", userName: "zitadel-admin@vern.localhost" },
+	];
+	const grants: { id: string; userId: string; projectId: string; roleKeys: string[] }[] = [];
 	let next = 100;
 	const json = (body: unknown, status = 200) =>
 		new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -68,6 +72,28 @@ function fakeZitadel() {
 				return json({ code: 6, message: "Role already exists (PROJECT-vq8wu)" }, 409);
 			}
 			roles.push({ projectId: role[1], ...body });
+			return json({});
+		}
+		if (path === "/management/v1/users/_search") {
+			return json({ result: users.filter((u) => u.userName === body.queries[0].userNameQuery.userName) });
+		}
+		if (path === "/v2/users/human") {
+			const user = { id: `user${next++}`, userName: body.username, password: body.password.password };
+			users.push(user);
+			return json({ userId: user.id });
+		}
+		if (path === "/management/v1/users/grants/_search") {
+			const userId = body.queries[0].userIdQuery.userId;
+			return json({ result: grants.filter((g) => g.userId === userId) });
+		}
+		const grant = path.match(/^\/management\/v1\/users\/([^/]+)\/grants(?:\/([^/]+))?$/);
+		if (grant && method === "POST") {
+			grants.push({ id: `grant${next++}`, userId: grant[1], ...body });
+			return json({});
+		}
+		if (grant && method === "PUT") {
+			const existing = grants.find((g) => g.id === grant[2]);
+			if (existing) existing.roleKeys = body.roleKeys;
 			return json({});
 		}
 		const project = path.match(/^\/management\/v1\/projects\/([^/]+)$/);
@@ -101,7 +127,7 @@ function fakeZitadel() {
 		}
 		return json({ message: `unexpected ${method} ${path}` }, 500);
 	}) as typeof fetch;
-	return { calls, fetcher, projects, apps, keys, roles };
+	return { calls, fetcher, projects, apps, keys, roles, users, grants };
 }
 
 function deps(root: string, zitadel: ReturnType<typeof fakeZitadel>, logs: string[] = []) {
@@ -262,6 +288,118 @@ describe("setup", () => {
 			const zitadel = fakeZitadel();
 			await setup(["--deploy"], { ...deps(root, zitadel), runCompose: () => {} });
 			expect(zitadel.roles.map((role) => role.roleKey)).toEqual(["publisher"]);
+		});
+	});
+
+	describe("with seed-users.json", () => {
+		const SEED = {
+			adminRoles: ["admin"],
+			users: [{ name: "publisher", givenName: "Demo", familyName: "Publisher", roles: ["publisher"] }],
+		};
+		function seeded(seed: unknown = SEED): string {
+			const root = workspace();
+			write(root, "roles.json", JSON.stringify(["admin", "publisher"]));
+			write(root, "seed-users.json", JSON.stringify(seed));
+			return root;
+		}
+		const passwordOf = (root: string) => parseEnv(resolve(root, "apps/auth-server/.env")).get("ZITADEL_SEED_PASSWORD");
+
+		test("grants the admin and creates the users with a generated password, once", async () => {
+			const root = seeded();
+			const zitadel = fakeZitadel();
+			const logs: string[] = [];
+			expect(await setup([], deps(root, zitadel, logs))).toBe(0);
+
+			expect(zitadel.users.map((user) => user.userName)).toEqual([
+				"zitadel-admin@vern.localhost",
+				"publisher@vern.localhost",
+			]);
+			expect(zitadel.users[1].password).toBe("generated-secret");
+			expect(zitadel.grants).toMatchObject([
+				{ userId: "admin1", projectId: "100", roleKeys: ["admin"] },
+				{ userId: zitadel.users[1].id, projectId: "100", roleKeys: ["publisher"] },
+			]);
+			expect(passwordOf(root)).toBe("generated-secret");
+			expect(logs).toContain("Generated ZITADEL_SEED_PASSWORD in apps/auth-server/.env");
+			expect(logs).toContain("Seeded users: publisher@vern.localhost (password: ZITADEL_SEED_PASSWORD in apps/auth-server/.env)");
+			expect(logs.join("\n")).not.toContain("generated-secret");
+
+			zitadel.calls.length = 0;
+			expect(await setup([], deps(root, zitadel))).toBe(0);
+			expect(zitadel.users).toHaveLength(2);
+			expect(zitadel.grants).toHaveLength(2);
+			expect(zitadel.calls.some((call) => call.path === "/v2/users/human")).toBe(false);
+		});
+
+		test("keeps a password that is already set", async () => {
+			const root = seeded();
+			write(root, "apps/auth-server/.env", "ZITADEL_SEED_PASSWORD=my-own-Passw0rd!\n");
+			const zitadel = fakeZitadel();
+			const logs: string[] = [];
+			await setup([], deps(root, zitadel, logs));
+			expect(zitadel.users[1].password).toBe("my-own-Passw0rd!");
+			expect(passwordOf(root)).toBe("my-own-Passw0rd!");
+			expect(logs.some((line) => line.startsWith("Generated"))).toBe(false);
+		});
+
+		test("does not seed a ZITADEL that is not on this machine", async () => {
+			const root = seeded();
+			write(root, ".env", "ZITADEL_ISSUER=https://auth.acme.test\n");
+			const zitadel = fakeZitadel();
+			const logs: string[] = [];
+			expect(await setup([], deps(root, zitadel, logs))).toBe(0);
+			expect(zitadel.users).toHaveLength(1);
+			expect(zitadel.grants).toHaveLength(0);
+			expect(passwordOf(root)).toBeUndefined();
+			expect(logs).toContain(
+				"Not seeding seed-users.json: ZITADEL_ISSUER (https://auth.acme.test) is not on this machine. Grant roles and create users in the Console.",
+			);
+		});
+
+		test("--no-seed skips it, even when the file is wrong", async () => {
+			const root = seeded({ adminRoles: ["root"] });
+			const zitadel = fakeZitadel();
+			expect(await setup(["--no-seed"], deps(root, zitadel))).toBe(0);
+			expect(zitadel.users).toHaveLength(1);
+			expect(zitadel.grants).toHaveLength(0);
+		});
+
+		test("--deploy never seeds", async () => {
+			const root = seeded();
+			write(
+				root,
+				"deploy/.env",
+				"AUTH_DOMAIN=auth.acme.test\nAPP_DOMAIN=app.acme.test\nAPI_DOMAIN=api.acme.test\nACME_EMAIL=ops@acme.test\nWEB_APP=dashboard\nAPI_APP=api\n",
+			);
+			const zitadel = fakeZitadel();
+			await setup(["--deploy"], { ...deps(root, zitadel), runCompose: () => {} });
+			expect(zitadel.users).toHaveLength(1);
+			expect(zitadel.grants).toHaveLength(0);
+		});
+
+		test("stops before starting anything when a role is not declared in roles.json", async () => {
+			const root = seeded({ users: [{ name: "x", givenName: "X", familyName: "Y", roles: ["root"] }] });
+			const zitadel = fakeZitadel();
+			let started = false;
+			await expect(
+				setup([], {
+					...deps(root, zitadel),
+					startAuthStack: () => {
+						started = true;
+					},
+				}),
+			).rejects.toThrow('the roles of "x" lists "root", which roles.json does not declare');
+			expect(started).toBe(false);
+			expect(zitadel.calls).toHaveLength(0);
+		});
+
+		test("does nothing without a seed-users.json", async () => {
+			const root = workspace();
+			const zitadel = fakeZitadel();
+			await setup([], deps(root, zitadel));
+			expect(zitadel.users).toHaveLength(1);
+			expect(zitadel.grants).toHaveLength(0);
+			expect(passwordOf(root)).toBeUndefined();
 		});
 	});
 
