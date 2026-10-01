@@ -77,8 +77,9 @@ moon run :dev
   with its Login App, PostgreSQL, and Redis, and creates in ZITADEL the project,
   an OIDC application for each web app (Authorization Code with PKCE, no client
   secret), and an API application with a key for each Axum API. It fills in the
-  project ID, client IDs, session secrets, key files, and `API_BASE_URL` when
-  there is one API. Run it again after generating another app; it keeps what
+  project ID, client IDs, session secrets, key files, and each web app's
+  `API_BASE_URL`: the only API there is, or the one named by `API_APP` in the
+  app's `.env` when there are several. Run it again after generating another app; it keeps what
   already exists.
 - `moon run :dev` checks the ports, starts the auth stack, and runs every app
   plus Storybook.

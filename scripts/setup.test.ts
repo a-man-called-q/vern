@@ -139,6 +139,58 @@ describe("setup", () => {
 		expect(created?.body).toMatchObject({ redirectUris: ["http://localhost:3000/auth/callback"], devMode: true });
 	});
 
+	describe("with several APIs", () => {
+		function twoApis(): string {
+			const root = workspace();
+			write(
+				root,
+				"apps/ads-api/.env.example",
+				"PORT=4001\nZITADEL_ISSUER=http://localhost:8081\nZITADEL_PROJECT_ID=replace-with-your-zitadel-project-id\nZITADEL_API_KEY_FILE=./secrets/zitadel-api-key.json\n",
+			);
+			return root;
+		}
+
+		test("wires the API a web app names in API_APP", async () => {
+			const root = twoApis();
+			write(root, "apps/dashboard/.env", "API_APP=ads-api\n");
+			expect(await setup([], deps(root, fakeZitadel()))).toBe(0);
+			expect(parseEnv(resolve(root, "apps/dashboard/.env")).get("API_BASE_URL")).toBe("http://localhost:4001");
+		});
+
+		test("says which web app has no API when none is named", async () => {
+			const root = twoApis();
+			const logs: string[] = [];
+			expect(await setup([], deps(root, fakeZitadel(), logs))).toBe(0);
+			expect(parseEnv(resolve(root, "apps/dashboard/.env")).get("API_BASE_URL")).toBe("");
+			expect(logs).toContain(
+				"apps/dashboard: API_BASE_URL is not set (2 APIs found: ads-api, api). Set API_APP=<api> in apps/dashboard/.env and run this again.",
+			);
+		});
+
+		test("fails on an API_APP that is not an API", async () => {
+			const root = twoApis();
+			write(root, "apps/dashboard/.env", "API_APP=billing\n");
+			await expect(setup([], deps(root, fakeZitadel()))).rejects.toThrow(
+				"apps/dashboard: API_APP=billing does not name an Axum API with a PORT under apps/ (found: ads-api, api)",
+			);
+		});
+
+		test("keeps an API_BASE_URL that was set by hand", async () => {
+			const root = twoApis();
+			write(root, "apps/dashboard/.env", "API_APP=ads-api\nAPI_BASE_URL=https://api.acme.test\n");
+			await setup([], deps(root, fakeZitadel()));
+			expect(parseEnv(resolve(root, "apps/dashboard/.env")).get("API_BASE_URL")).toBe("https://api.acme.test");
+		});
+	});
+
+	test("says nothing about APIs when there are none", async () => {
+		const root = workspace();
+		rmSync(resolve(root, "apps/api"), { recursive: true });
+		const logs: string[] = [];
+		await setup([], deps(root, fakeZitadel(), logs));
+		expect(logs.some((line) => line.includes("API_BASE_URL"))).toBe(false);
+	});
+
 	test("keeps what already exists when run again", async () => {
 		const root = workspace();
 		const zitadel = fakeZitadel();

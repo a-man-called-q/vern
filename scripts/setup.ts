@@ -44,9 +44,11 @@ Usage: bun run setup [-- options]
 
 Locally, creates the .env files from their examples, starts the auth stack,
 and creates the ZITADEL project, an OIDC application for each web app, and an
-API application with a key for each Axum API. With --deploy, it also generates
-the missing secrets in deploy/.env and starts the whole production stack.
-Safe to run again: existing settings are kept.`;
+API application with a key for each Axum API. A web app gets its API_BASE_URL
+from API_APP in its .env (the name of an Axum app), or from the only API there
+is. With --deploy, it also generates the missing secrets in deploy/.env and
+starts the whole production stack. Safe to run again: existing settings are
+kept.`;
 
 type App = { name: string; path: string; kind: "web" | "api" };
 type Log = (message: string) => void;
@@ -264,6 +266,36 @@ function adminLogin(env: Map<string, string>, domain: string): string {
 	return `${env.get("ZITADEL_ADMIN_USERNAME") || "zitadel-admin"}@${org}.${domain}`;
 }
 
+/**
+ * The API a web app talks to. `API_BASE_URL` set by hand wins; then the Axum app
+ * named by `API_APP`; with no name, the workspace's only API. Several APIs and no
+ * name leave it empty, and say so instead of leaving the app quietly unwired.
+ */
+function chooseApiUrl(
+	app: App,
+	appEnv: Map<string, string>,
+	apiUrls: Map<string, string>,
+): { url?: string; message?: string } {
+	if (appEnv.get("API_BASE_URL")) return {};
+	const names = [...apiUrls.keys()].sort();
+	const wanted = appEnv.get("API_APP");
+	if (wanted) {
+		const url = apiUrls.get(wanted);
+		if (url) return { url };
+		throw new Error(
+			`${app.path}: API_APP=${wanted} does not name an Axum API with a PORT under apps/` +
+				(names.length > 0 ? ` (found: ${names.join(", ")})` : ""),
+		);
+	}
+	if (names.length === 1) return { url: apiUrls.get(names[0]) };
+	if (names.length > 1) {
+		return {
+			message: `${app.path}: API_BASE_URL is not set (${names.length} APIs found: ${names.join(", ")}). Set API_APP=<api> in ${app.path}/.env and run this again.`,
+		};
+	}
+	return {};
+}
+
 async function setupLocal(
 	values: { "pat-file"?: string; "skip-start"?: boolean },
 	root: string,
@@ -299,7 +331,7 @@ async function setupLocal(
 		log("Wrote ZITADEL_PROJECT_ID to .env");
 	}
 
-	const apiUrls: string[] = [];
+	const apiUrls = new Map<string, string>();
 	for (const app of apps.filter((item) => item.kind === "api")) {
 		const env = resolve(root, app.path, ".env");
 		const example = resolve(root, app.path, ".env.example");
@@ -318,7 +350,7 @@ async function setupLocal(
 			log(`${app.path}: created a key for API application "${app.name}" in ${relative(root, keyFile)}`);
 		}
 		const port = appEnv.get("PORT");
-		if (port) apiUrls.push(`http://localhost:${port}`);
+		if (port) apiUrls.set(app.name, `http://localhost:${port}`);
 	}
 
 	for (const app of apps.filter((item) => item.kind === "web")) {
@@ -326,9 +358,9 @@ async function setupLocal(
 		const example = resolve(root, app.path, ".env.example");
 		const appEnv = readEffectiveEnv(root, app.path);
 		if (!appEnv.get("SESSION_SECRET")) setEnvValue(env, example, "SESSION_SECRET", secret("base64", 32));
-		if (!appEnv.get("API_BASE_URL") && apiUrls.length === 1) {
-			setEnvValue(env, example, "API_BASE_URL", apiUrls[0]);
-		}
+		const apiUrl = chooseApiUrl(app, appEnv, apiUrls);
+		if (apiUrl.url) setEnvValue(env, example, "API_BASE_URL", apiUrl.url);
+		if (apiUrl.message) log(apiUrl.message);
 		const appUrl = appEnv.get("APP_URL");
 		if (!appUrl) throw new Error(`${app.path}: APP_URL is not set`);
 		const result = await provisionApplication({

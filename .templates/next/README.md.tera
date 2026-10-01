@@ -36,7 +36,7 @@ moon run {{ name | kebab_case }}:dev
 application (Authorization Code with PKCE, the **Refresh Token** grant, and
 Development Mode for `http://localhost:{{ port }}`), and fills in this app's
 `.env`: `ZITADEL_CLIENT_ID`, a `SESSION_SECRET`, and `API_BASE_URL` when the
-workspace has one Axum API. Then use **Log in** in the header. `/dashboard`
+workspace has one Axum API, or when `API_APP` in the `.env` names the one to use. Then use **Log in** in the header. `/dashboard`
 makes a server-to-server `GET /api/me` call when `API_BASE_URL` is set; it never
 forwards the browser's cookie to the API. To add an API, generate one with
 `moon generate axum -- --name api --port 4000` and run `bun run setup` again.
