@@ -31,8 +31,12 @@ export default defineConfig({
           enabled: true,
           headless: true,
           provider: playwright({}),
+          // Storybook's plugin sets this size itself, through a module Vitest 5
+          // no longer ships, so it silently does nothing. 1200x900 is the size
+          // it means to use, and wide enough to dock the sidebar.
           instances: [{
-            browser: 'chromium'
+            browser: 'chromium',
+            viewport: { width: 1200, height: 900 }
           }]
         }
       }
