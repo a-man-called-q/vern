@@ -43,6 +43,7 @@ function fakeZitadel() {
 	const projects: { id: string; name: string }[] = [];
 	const apps: { id: string; name: string; oidcConfig?: { clientId: string }; apiConfig?: object }[] = [];
 	const keys: { appId: string; keyId: string }[] = [];
+	const roles: { projectId: string; roleKey: string; displayName: string; group?: string }[] = [];
 	let next = 100;
 	const json = (body: unknown, status = 200) =>
 		new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -60,6 +61,14 @@ function fakeZitadel() {
 			const project = { id: String(next++), name: body.name };
 			projects.push(project);
 			return json({ id: project.id });
+		}
+		const role = path.match(/^\/management\/v1\/projects\/([^/]+)\/roles$/);
+		if (role && method === "POST") {
+			if (roles.some((r) => r.projectId === role[1] && r.roleKey === body.roleKey)) {
+				return json({ code: 6, message: "Role already exists (PROJECT-vq8wu)" }, 409);
+			}
+			roles.push({ projectId: role[1], ...body });
+			return json({});
 		}
 		const project = path.match(/^\/management\/v1\/projects\/([^/]+)$/);
 		if (project && method === "GET") {
@@ -92,7 +101,7 @@ function fakeZitadel() {
 		}
 		return json({ message: `unexpected ${method} ${path}` }, 500);
 	}) as typeof fetch;
-	return { calls, fetcher, projects, apps, keys };
+	return { calls, fetcher, projects, apps, keys, roles };
 }
 
 function deps(root: string, zitadel: ReturnType<typeof fakeZitadel>, logs: string[] = []) {
@@ -189,6 +198,71 @@ describe("setup", () => {
 		const logs: string[] = [];
 		await setup([], deps(root, fakeZitadel(), logs));
 		expect(logs.some((line) => line.includes("API_BASE_URL"))).toBe(false);
+	});
+
+	describe("with roles.json", () => {
+		test("creates the declared roles on the project, once", async () => {
+			const root = workspace();
+			write(
+				root,
+				"roles.json",
+				JSON.stringify(["publisher", { key: "advertiser", displayName: "Advertiser", group: "Marketplace" }]),
+			);
+			const zitadel = fakeZitadel();
+			const logs: string[] = [];
+			expect(await setup([], deps(root, zitadel, logs))).toBe(0);
+			expect(zitadel.roles).toEqual([
+				{ projectId: "100", roleKey: "publisher", displayName: "publisher" },
+				{ projectId: "100", roleKey: "advertiser", displayName: "Advertiser", group: "Marketplace" },
+			]);
+			expect(logs).toContain("Created ZITADEL project roles: publisher, advertiser");
+
+			logs.length = 0;
+			expect(await setup([], deps(root, zitadel, logs))).toBe(0);
+			expect(zitadel.roles).toHaveLength(2);
+			expect(logs).toContain("Project roles already there: publisher, advertiser");
+		});
+
+		test("creates only the roles that are missing", async () => {
+			const root = workspace();
+			write(root, "roles.json", JSON.stringify(["publisher"]));
+			const zitadel = fakeZitadel();
+			await setup([], deps(root, zitadel));
+			write(root, "roles.json", JSON.stringify(["publisher", "admin"]));
+			const logs: string[] = [];
+			await setup([], deps(root, zitadel, logs));
+			expect(zitadel.roles.map((role) => role.roleKey)).toEqual(["publisher", "admin"]);
+			expect(logs).toContain("Created ZITADEL project roles: admin");
+			expect(logs).toContain("Project roles already there: publisher");
+		});
+
+		test("stops before calling ZITADEL when the file is wrong", async () => {
+			const root = workspace();
+			write(root, "roles.json", '{"publisher": true}');
+			const zitadel = fakeZitadel();
+			await expect(setup([], deps(root, zitadel))).rejects.toThrow("roles.json must be an array");
+			expect(zitadel.roles).toHaveLength(0);
+		});
+
+		test("does nothing without a roles.json", async () => {
+			const root = workspace();
+			const zitadel = fakeZitadel();
+			await setup([], deps(root, zitadel));
+			expect(zitadel.roles).toHaveLength(0);
+		});
+
+		test("also creates them with --deploy", async () => {
+			const root = workspace();
+			write(root, "roles.json", JSON.stringify(["publisher"]));
+			write(
+				root,
+				"deploy/.env",
+				"AUTH_DOMAIN=auth.acme.test\nAPP_DOMAIN=app.acme.test\nAPI_DOMAIN=api.acme.test\nACME_EMAIL=ops@acme.test\nWEB_APP=dashboard\nAPI_APP=api\n",
+			);
+			const zitadel = fakeZitadel();
+			await setup(["--deploy"], { ...deps(root, zitadel), runCompose: () => {} });
+			expect(zitadel.roles.map((role) => role.roleKey)).toEqual(["publisher"]);
+		});
 	});
 
 	test("keeps what already exists when run again", async () => {

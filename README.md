@@ -79,7 +79,8 @@ moon run :dev
   secret), and an API application with a key for each Axum API. It fills in the
   project ID, client IDs, session secrets, key files, and each web app's
   `API_BASE_URL`: the only API there is, or the one named by `API_APP` in the
-  app's `.env` when there are several. Run it again after generating another app; it keeps what
+  app's `.env` when there are several. It also creates the project roles listed
+  in `roles.json` (see [Roles and users](#roles-and-users)). Run it again after generating another app; it keeps what
   already exists.
 - `moon run :dev` checks the ports, starts the auth stack, and runs every app
   plus Storybook.
@@ -98,6 +99,43 @@ or a token of a service user with the IAM Owner role in `ZITADEL_PAT`.
 To manage one app's OIDC application by hand, use
 `bun run zitadel:app -- --app <name> --write-env` (`--help` lists the options).
 It resets changes made to that application in the Console.
+
+## Roles and users
+
+Roles say who may do what in your product. List the ones your APIs check in
+`roles.json` at the repository root, as plain keys or with a display name and
+group:
+
+```json
+[
+  "publisher",
+  { "key": "admin", "displayName": "Administrator", "group": "Staff" }
+]
+```
+
+`bun run setup` creates the missing roles on the ZITADEL project, locally and
+with `--deploy`. It never changes or deletes a role that exists, so edit or
+remove roles in the Console. Grant roles to users in the Console, or from your
+product with the service account below. The Axum template reads a user's roles
+from the token and offers `require_role("publisher")?` for its handlers (see its
+README).
+
+An admin screen that creates users and grants roles needs a credential, and the
+token `setup` signs in with can do everything in ZITADEL, so it must never reach
+an app. This command creates a service user that only manages users (the
+`ORG_USER_MANAGER` role in the organization, which cannot create projects or
+roles) and writes its token to one app's `.env`:
+
+```sh
+bun run zitadel:service-account -- --app user-management
+```
+
+The token is stored as `ZITADEL_USER_ADMIN_TOKEN`. It manages every user of the
+organization and can grant them project roles, so keep it on the server. Running the command again changes nothing while the token
+still works; to rotate it, remove the variable and run it again. For a
+production ZITADEL, pass an IAM Owner token and the issuer:
+`ZITADEL_PAT=<token> bun run zitadel:service-account -- --app <name> --issuer https://auth.example.com`.
+`--help` lists the other options.
 
 ## Customize the login page
 
@@ -134,6 +172,7 @@ them. Change them at the level you need:
 | `moon run auth-server:down` | Stop the auth containers and keep their data |
 | `moon run workspace:check-ports` | Check that no two services share a port |
 | `bun run zitadel:app -- --app <name>` | Create or update an app's ZITADEL application |
+| `bun run zitadel:service-account -- --app <name>` | Create a service user that manages users, and store its token in the app's `.env` |
 | `bun run project:doctor` | Check the tools, configuration, and ports |
 | `bun test scripts` | Test the workspace scripts |
 

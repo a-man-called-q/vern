@@ -23,9 +23,10 @@ import {
 	setEnvValue,
 	ZitadelApiError,
 } from "./zitadel-app";
+import { ensureProjectRoles, readProjectRoles, ROLES_FILE } from "./zitadel-roles";
 
 const ROOT = resolve(import.meta.dir, "..");
-const AUTH = "apps/auth-server";
+export const AUTH = "apps/auth-server";
 const DEPLOY = "deploy";
 const ADMIN_PAT_PATH = "/zitadel/bootstrap/admin.pat";
 const DEPLOY_IDENTITY_SERVICES = ["traefik", "zitadel-api", "zitadel-login", "auth-server", "postgres", "redis"];
@@ -46,9 +47,9 @@ Locally, creates the .env files from their examples, starts the auth stack,
 and creates the ZITADEL project, an OIDC application for each web app, and an
 API application with a key for each Axum API. A web app gets its API_BASE_URL
 from API_APP in its .env (the name of an Axum app), or from the only API there
-is. With --deploy, it also generates the missing secrets in deploy/.env and
-starts the whole production stack. Safe to run again: existing settings are
-kept.`;
+is. It also creates the project roles listed in ${ROLES_FILE}. With --deploy, it
+also generates the missing secrets in deploy/.env and starts the whole
+production stack. Safe to run again: existing settings are kept.`;
 
 type App = { name: string; path: string; kind: "web" | "api" };
 type Log = (message: string) => void;
@@ -101,7 +102,7 @@ export function findApps(root: string): App[] {
 	return apps.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function composeArgs(root: string, envFile: string, files: string[]): string[] {
+export function composeArgs(root: string, envFile: string, files: string[]): string[] {
 	return ["compose", "--env-file", resolve(root, envFile), ...files.flatMap((file) => ["-f", resolve(root, file)])];
 }
 
@@ -116,7 +117,7 @@ function runCompose(root: string, args: string[]): void {
 }
 
 /** Reads the token ZITADEL wrote for the vern-setup service account on its first start. */
-function readStackToken(root: string, compose: string[]): string | undefined {
+export function readStackToken(root: string, compose: string[]): string | undefined {
 	const dir = mkdtempSync(join(tmpdir(), "vern-setup-"));
 	try {
 		const target = join(dir, "admin.pat");
@@ -200,6 +201,15 @@ async function ensureProject(
 	return { id: project.id, changed: true };
 }
 
+/** Creates the roles declared in roles.json on the project. */
+async function ensureRoles(root: string, api: ApiOptions, projectId: string, log: Log): Promise<void> {
+	const roles = readProjectRoles(root);
+	if (roles.length === 0) return;
+	const { created, existing } = await ensureProjectRoles(api, projectId, roles);
+	if (created.length > 0) log(`Created ZITADEL project roles: ${created.join(", ")}`);
+	if (existing.length > 0) log(`Project roles already there: ${existing.join(", ")}`);
+}
+
 /** Whether ZITADEL still has the key in this file, e.g. after a database reset. */
 async function keyIsKnown(api: ApiOptions, projectId: string, keyFile: string): Promise<boolean> {
 	let key: { appId?: string; keyId?: string };
@@ -243,7 +253,7 @@ async function createApiKey(api: ApiOptions, projectId: string, name: string): P
 	return Buffer.from(String(key.keyDetails), "base64").toString("utf8");
 }
 
-function resolveToken(
+export function resolveToken(
 	values: { "pat-file"?: string },
 	processEnv: Record<string, string | undefined>,
 	fromStack: () => string | undefined,
@@ -330,6 +340,7 @@ async function setupLocal(
 		setEnvValue(resolve(root, ".env"), resolve(root, ".env.example"), "ZITADEL_PROJECT_ID", projectId);
 		log("Wrote ZITADEL_PROJECT_ID to .env");
 	}
+	await ensureRoles(root, api, projectId, log);
 
 	const apiUrls = new Map<string, string>();
 	for (const app of apps.filter((item) => item.kind === "api")) {
@@ -447,6 +458,7 @@ async function setupDeploy(
 
 	const project = await ensureProject(api, env.get("ZITADEL_PROJECT_ID"), env.get("ZITADEL_ORG_NAME") || "Vern", log);
 	if (project.changed) set("ZITADEL_PROJECT_ID", project.id);
+	await ensureRoles(root, api, project.id, log);
 
 	const appUrl = `https://${env.get("APP_DOMAIN")}`;
 	const result = await provisionApplication({

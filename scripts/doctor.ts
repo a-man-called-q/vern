@@ -9,6 +9,7 @@ import {
 	UPDATE_STATE_PATH,
 	UPSTREAM_URL,
 } from "./project-utils";
+import { readProjectRoles, ROLES_FILE } from "./zitadel-roles";
 
 type Level = "OK" | "INFO" | "WARN" | "FAIL";
 const results: Array<{ level: Level; message: string }> = [];
@@ -120,6 +121,18 @@ function main(): void {
 			"WARN",
 			"An upstream update is pending; resolve it with update-project.ts --continue.",
 		);
+	}
+
+	try {
+		const roles = readProjectRoles(ROOT);
+		report(
+			"OK",
+			roles.length > 0
+				? ROLES_FILE + " declares " + roles.length + " project role(s)."
+				: ROLES_FILE + " declares no project roles.",
+		);
+	} catch (error) {
+		report("FAIL", error instanceof Error ? error.message : String(error));
 	}
 
 	for (const path of [
