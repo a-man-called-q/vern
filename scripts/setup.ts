@@ -349,7 +349,7 @@ async function seedLocal(
 	secret: (kind: "hex" | "base64" | "password", bytes: number) => string,
 	log: Log,
 ): Promise<void> {
-	if (seed.adminRoles.length === 0 && seed.users.length === 0) return;
+	if (seed.adminRoles.length === 0 && seed.users.length === 0 && seed.companies.length === 0) return;
 	if (!isLocalIssuer(api.issuer)) {
 		log(`Not seeding ${SEED_FILE}: ZITADEL_ISSUER (${api.issuer}) is not on this machine. Grant roles and create users in the Console.`);
 		return;
@@ -386,7 +386,7 @@ async function setupLocal(
 ): Promise<number> {
 	// A mistake in the file stops setup before a container starts.
 	const seed = values["no-seed"]
-		? { adminRoles: [], users: [] }
+		? { adminRoles: [], users: [], companies: [] }
 		: readSeedUsers(root, readProjectRoles(root).map((role) => role.key));
 	const apps = findApps(root);
 	for (const dir of ["", AUTH, ...apps.map((app) => app.path)]) copyIfMissing(root, dir, log);

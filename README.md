@@ -15,7 +15,7 @@ against.
 | `.templates/postgres` | Optional PostgreSQL for the APIs' own data, one database per API |
 | `.templates/bus` | Optional NATS JetStream, the event bus between APIs generated with `--events` |
 | `.templates/storage` | Optional S3-compatible object store for uploads, with one bucket |
-| `apps/auth-server` | Local Docker Compose stack: ZITADEL, its Login App, PostgreSQL, and Redis |
+| `apps/auth-server` | Local Docker Compose stack: ZITADEL, its Login App, PostgreSQL, Redis, and Mailpit (a local inbox for the email ZITADEL sends) |
 | `deploy` | Production Docker Compose stack for one server, with HTTPS |
 | `apps/storybook` | Storybook workbench for the shared UI components |
 | `packages/ui` | Shared shadcn components and design tokens (`@vern/ui`) |
@@ -161,6 +161,31 @@ To have someone to sign in as while you build, list local test users in
 role must be one `roles.json` declares; a mistake stops `setup` before it starts
 a container, and `bun run project:doctor` checks the file too.
 
+A product where each company is a ZITADEL organization with several users lists
+them under `companies`. Each company becomes an organization that may use the
+project roles in its own `roles` (the company's project grant), and its users hold
+those roles plus their own:
+
+```json
+{
+  "companies": [
+    {
+      "name": "Acme Ads",
+      "roles": ["advertiser"],
+      "users": [
+        { "name": "owner", "givenName": "Ada", "familyName": "Owner", "roles": ["owner"] },
+        { "name": "member", "givenName": "Max", "familyName": "Member" }
+      ]
+    }
+  ]
+}
+```
+
+The users sign in as `<name>@<organization domain>`, such as
+`owner@acme-ads.localhost`; `setup` prints the logins it seeded. A token of such a
+user carries the organization's ID next to each role, which the Axum template
+reads as `AuthenticatedUser::org_id`.
+
 - **Local only.** It never runs with `--deploy`, and it is skipped when
   `ZITADEL_ISSUER` is not `localhost`, `127.0.0.1`, or `[::1]`. In production,
   create users and grant roles in the Console or with the service account below.
@@ -183,6 +208,21 @@ roles) and writes its token to one app's `.env`:
 ```sh
 bun run zitadel:service-account -- --app user-management
 ```
+
+A service that signs companies up creates organizations, which no organization
+role allows; it needs an instance role. `--instance-role IAM_ORG_MANAGER` grants
+it, and `--role none` skips the organization role:
+
+```sh
+bun run zitadel:service-account -- --app tenants --name tenants --role none \
+  --instance-role IAM_ORG_MANAGER --env-key ZITADEL_ORG_ADMIN_TOKEN
+```
+
+That token can create organizations, give them project roles, and create their
+users, and it can also create projects, roles, and applications in the default
+organization. ZITADEL has no narrower role that creates organizations, so treat
+the token like a database password: server only, one service, rotated on a
+schedule.
 
 The token is stored as `ZITADEL_USER_ADMIN_TOKEN`. It manages every user of the
 organization and can grant them project roles, so keep it on the server. Running the command again changes nothing while the token

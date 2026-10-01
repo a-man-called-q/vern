@@ -122,6 +122,14 @@ services:
       # an existing instance in line.
       ZITADEL_DEFAULTINSTANCE_LOGINPOLICY_ALLOWREGISTER: "${ZITADEL_ALLOW_REGISTER:-false}"
 
+      # Outgoing email (verification, user initialization, invitations) goes to
+      # Mailpit, a local inbox at http://localhost:${MAIL_UI_PORT:-8025}. Applied only
+      # when ZITADEL creates its database; point production at a real SMTP server.
+      ZITADEL_DEFAULTINSTANCE_SMTPCONFIGURATION_SMTP_HOST: "mailpit:1025"
+      ZITADEL_DEFAULTINSTANCE_SMTPCONFIGURATION_TLS: "false"
+      ZITADEL_DEFAULTINSTANCE_SMTPCONFIGURATION_FROM: "no-reply@${ZITADEL_DOMAIN:-localhost}"
+      ZITADEL_DEFAULTINSTANCE_SMTPCONFIGURATION_FROMNAME: "${ZITADEL_ORG_NAME:-Vern}"
+
       ZITADEL_LOGSTORE_ACCESS_STDOUT_ENABLED: "true"
     healthcheck:
       test: ["CMD", "/app/zitadel", "ready"]
@@ -135,6 +143,8 @@ services:
       - vern-auth
     depends_on:
       postgres:
+        condition: service_healthy
+      mailpit:
         condition: service_healthy
     labels:
       - traefik.enable=true
@@ -194,6 +204,20 @@ services:
       start_period: 10s
     volumes:
       - postgres-data:/var/lib/postgresql/data:rw
+    networks:
+      - vern-auth
+
+  # A local inbox for the email ZITADEL sends. Nothing leaves the machine.
+  mailpit:
+    image: axllent/mailpit:v1.31
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MAIL_UI_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
     networks:
       - vern-auth
 

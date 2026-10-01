@@ -26,10 +26,13 @@ function workspace(): string {
 type Call = { method: string; path: string; body: unknown; authorization: string | null };
 
 /** A fake ZITADEL Management API with machine users, org members, and tokens. */
-function fakeZitadel(options: { orgMembers?: { userId: string; roles: string[] }[]; users?: object[] } = {}) {
+function fakeZitadel(
+	options: { orgMembers?: { userId: string; roles: string[] }[]; instanceMembers?: { userId: string; roles: string[] }[]; users?: object[] } = {},
+) {
 	const calls: Call[] = [];
 	const users: { id: string; userName: string; machine?: object; human?: object }[] = (options.users as never) ?? [];
 	const members = options.orgMembers ?? [];
+	const instanceMembers = options.instanceMembers ?? [];
 	const tokens = new Map<string, string>();
 	let next = 1;
 	const json = (body: unknown, status = 200) =>
@@ -66,6 +69,18 @@ function fakeZitadel(options: { orgMembers?: { userId: string; roles: string[] }
 			members.find((member) => member.userId === update[1])!.roles = body.roles;
 			return json({});
 		}
+		if (path === "/admin/v1/members/_search") {
+			return json({ result: instanceMembers.filter((member) => member.userId === body.queries[0].userIdQuery.userId) });
+		}
+		if (path === "/admin/v1/members" && method === "POST") {
+			instanceMembers.push({ userId: body.userId, roles: body.roles });
+			return json({});
+		}
+		const instanceUpdate = path.match(/^\/admin\/v1\/members\/([^/]+)$/);
+		if (instanceUpdate && method === "PUT") {
+			instanceMembers.find((member) => member.userId === instanceUpdate[1])!.roles = body.roles;
+			return json({});
+		}
 		const pat = path.match(/^\/management\/v1\/users\/([^/]+)\/pats$/);
 		if (pat && method === "POST") {
 			const token = `pat-${next++}`;
@@ -74,7 +89,7 @@ function fakeZitadel(options: { orgMembers?: { userId: string; roles: string[] }
 		}
 		return json({ message: `unexpected ${method} ${path}` }, 500);
 	}) as typeof fetch;
-	return { calls, fetcher, users, members, tokens };
+	return { calls, fetcher, users, members, instanceMembers, tokens };
 }
 
 function run(root: string, zitadel: ReturnType<typeof fakeZitadel>, argv: string[] = ["--app", "admin"], logs: string[] = []) {
@@ -162,6 +177,35 @@ describe("zitadel:service-account", () => {
 		expect(zitadel.users[0].userName).toBe("acme-user-admin");
 		expect(zitadel.members[0].roles).toEqual(["ORG_USER_PERMISSION_EDITOR"]);
 		expect(parseEnv(resolve(root, "apps/admin/.env")).get("ACME_ADMIN_TOKEN")).toBeTruthy();
+	});
+
+	test("grants an instance role, and no organization role with --role none", async () => {
+		const root = workspace();
+		const zitadel = fakeZitadel();
+		const logs: string[] = [];
+		const argv = ["--app", "admin", "--name", "orgs", "--role", "none", "--instance-role", "IAM_ORG_MANAGER", "--env-key", "ZITADEL_ORG_ADMIN_TOKEN"];
+		expect(await run(root, zitadel, argv, logs)).toBe(0);
+
+		expect(zitadel.members).toEqual([]);
+		expect(zitadel.instanceMembers).toEqual([{ userId: "user-1", roles: ["IAM_ORG_MANAGER"] }]);
+		expect(parseEnv(resolve(root, "apps/admin/.env")).get("ZITADEL_ORG_ADMIN_TOKEN")).toBe("pat-2");
+		expect(logs.join("\n")).toContain('Granted IAM_ORG_MANAGER to "orgs" in the instance');
+	});
+
+	test("adds an instance role to a member that has another, and keeps it when run again", async () => {
+		const root = workspace();
+		const zitadel = fakeZitadel({
+			users: [{ id: "u1", userName: "orgs", machine: {} }],
+			instanceMembers: [{ userId: "u1", roles: ["IAM_USER_MANAGER"] }],
+		});
+		const argv = ["--app", "admin", "--name", "orgs", "--role", "none", "--instance-role", "IAM_ORG_MANAGER"];
+		await run(root, zitadel, argv);
+		expect(zitadel.instanceMembers).toEqual([{ userId: "u1", roles: ["IAM_USER_MANAGER", "IAM_ORG_MANAGER"] }]);
+
+		const logs: string[] = [];
+		await run(root, zitadel, argv, logs);
+		expect(zitadel.instanceMembers[0].roles).toEqual(["IAM_USER_MANAGER", "IAM_ORG_MANAGER"]);
+		expect(logs.join("\n")).toContain("already holds IAM_ORG_MANAGER in the instance");
 	});
 
 	test("refuses a user name that belongs to a person", async () => {

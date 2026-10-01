@@ -92,7 +92,7 @@ export type ApiOptions = {
 
 export async function callApi(
 	options: ApiOptions,
-	method: "GET" | "POST" | "PUT",
+	method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
 	path: string,
 	body?: unknown,
 ): Promise<Record<string, unknown>> {

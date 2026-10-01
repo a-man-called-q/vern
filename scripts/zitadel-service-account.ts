@@ -20,7 +20,13 @@ Usage: bun run zitadel:service-account -- --app <apps folder> [options]
   --app <name>         Folder under apps/ whose .env receives the token
   --name <user name>   ZITADEL user name (default: <project slug>-user-admin)
   --role <role>        Organization role to grant (default: ${DEFAULT_ROLE}, which
-                       manages users and grants them project roles)
+                       manages users and grants them project roles); "none" grants
+                       no organization role
+  --instance-role <r>  Also grant this instance role, which reaches every
+                       organization. IAM_ORG_MANAGER lets the user create
+                       organizations: it is what a service that signs companies
+                       up needs, and it also lets the token create projects,
+                       roles, and applications in the default organization
   --env-key <key>      Variable to store the token in (default: ${DEFAULT_ENV_KEY})
   --issuer <url>       ZITADEL origin (default: ZITADEL_ISSUER)
   --pat-file <path>    Token of a service user with the IAM Owner role
@@ -83,6 +89,28 @@ export async function ensureOrgRole(
 	return "updated";
 }
 
+/** Makes sure the user holds `role` in the instance, keeping any other roles. */
+export async function ensureInstanceRole(
+	api: ApiOptions,
+	userId: string,
+	role: string,
+): Promise<"added" | "updated" | "unchanged"> {
+	const search = await callApi(api, "POST", "/admin/v1/members/_search", {
+		queries: [{ userIdQuery: { userId } }],
+	});
+	const member = ((search.result as { userId: string; roles?: string[] }[] | undefined) ?? []).find(
+		(item) => item.userId === userId,
+	);
+	if (!member) {
+		await callApi(api, "POST", "/admin/v1/members", { userId, roles: [role] });
+		return "added";
+	}
+	const roles = member.roles ?? [];
+	if (roles.includes(role)) return "unchanged";
+	await callApi(api, "PUT", `/admin/v1/members/${encodeURIComponent(userId)}`, { roles: [...roles, role] });
+	return "updated";
+}
+
 /** Whether ZITADEL accepts this token as the given user (it could be stale or revoked). */
 export async function tokenWorks(api: ApiOptions, token: string, userId: string): Promise<boolean> {
 	try {
@@ -118,6 +146,7 @@ export async function main(argv: string[], deps: ServiceAccountDeps = {}): Promi
 			app: { type: "string" },
 			name: { type: "string" },
 			role: { type: "string" },
+			"instance-role": { type: "string" },
 			"env-key": { type: "string" },
 			issuer: { type: "string" },
 			"pat-file": { type: "string" },
@@ -150,12 +179,23 @@ export async function main(argv: string[], deps: ServiceAccountDeps = {}): Promi
 
 	const user = await ensureServiceUser(api, userName);
 	log(`${user.created ? "Created" : "Found"} service user "${userName}" (${user.id})`);
-	const membership = await ensureOrgRole(api, user.id, role);
-	log(
-		membership === "unchanged"
-			? `"${userName}" already holds ${role} in the organization`
-			: `Granted ${role} to "${userName}" in the organization`,
-	);
+	if (role !== "none") {
+		const membership = await ensureOrgRole(api, user.id, role);
+		log(
+			membership === "unchanged"
+				? `"${userName}" already holds ${role} in the organization`
+				: `Granted ${role} to "${userName}" in the organization`,
+		);
+	}
+	const instanceRole = values["instance-role"];
+	if (instanceRole) {
+		const membership = await ensureInstanceRole(api, user.id, instanceRole);
+		log(
+			membership === "unchanged"
+				? `"${userName}" already holds ${instanceRole} in the instance`
+				: `Granted ${instanceRole} to "${userName}" in the instance`,
+		);
+	}
 
 	const envPath = resolve(root, appPath, ".env");
 	const examplePath = resolve(root, appPath, ".env.example");

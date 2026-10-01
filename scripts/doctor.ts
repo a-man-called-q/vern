@@ -137,8 +137,15 @@ function main(): void {
 		const seed = readSeedUsers(ROOT, roles.map((role) => role.key));
 		report(
 			"OK",
-			seed.users.length > 0 || seed.adminRoles.length > 0
-				? SEED_FILE + " seeds " + seed.users.length + " user(s) and " + seed.adminRoles.length + " admin role(s) locally."
+			seed.users.length > 0 || seed.adminRoles.length > 0 || seed.companies.length > 0
+				? SEED_FILE +
+						" seeds " +
+						seed.users.length +
+						" user(s), " +
+						seed.companies.length +
+						" company(ies), and " +
+						seed.adminRoles.length +
+						" admin role(s) locally."
 				: SEED_FILE + " seeds nothing.",
 		);
 	} catch (error) {

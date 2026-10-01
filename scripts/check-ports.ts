@@ -34,6 +34,7 @@ const authPort = authEnv.get("AUTH_HTTP_PORT") ?? "8081";
 const redisPort = authEnv.get("REDIS_PORT") ?? "6379";
 addPort("auth-server (ZITADEL)", authPort);
 addPort("auth-server (Redis)", redisPort);
+addPort("auth-server (Mailpit)", authEnv.get("MAIL_UI_PORT") ?? "8025");
 addPort("storybook", "6006");
 
 const redisUrl = rootEnv.get("REDIS_URL");

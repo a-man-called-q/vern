@@ -32,8 +32,9 @@ jobs:
           version="$(grep '^ZITADEL_VERSION=' apps/auth-server/.env.example | cut -d= -f2)"
           dir="$RUNNER_TEMP/zitadel-proto"
           mkdir -p "$dir"
-          for file in management.proto admin.proto app.proto user.proto \
-            user/v2/user_service.proto user/v2/user.proto user/v2/email.proto user/v2/password.proto; do
+          for file in management.proto admin.proto app.proto user.proto project.proto member.proto object.proto \
+            user/v2/user_service.proto user/v2/user.proto user/v2/email.proto user/v2/password.proto \
+            org/v2/org_service.proto org/v2/org.proto org/v2/query.proto; do
             mkdir -p "$dir/$(dirname "$file")"
             curl --fail --silent --show-error --location --output "$dir/$file" \
               "https://raw.githubusercontent.com/zitadel/zitadel/${version}/proto/zitadel/${file}"
@@ -116,6 +117,49 @@ jobs:
 
       - name: Build the production image
         run: moon run api:docker
+
+  # An API generated with --database --events: its outbox is tested against the
+  # data project's PostgreSQL, and an event goes through the bus project's NATS.
+  axum-events:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install the pinned toolchain
+        uses: moonrepo/setup-toolchain@v0
+        with:
+          auto-install: true
+
+      - name: Generate the data project, the bus, and the API
+        run: |
+          moon generate postgres -- --name data --port 5433
+          moon generate bus -- --name bus --port 4222
+          moon generate axum -- --name api --port 4000 --database --events
+          cp apps/api/.env.example apps/api/.env
+
+      - name: Check and test the API
+        run: moon run api:check api:test
+
+      - name: Build the production image
+        run: moon run api:docker
+
+  # The object store: its bucket is created and takes a signed request.
+  storage:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install the pinned toolchain
+        uses: moonrepo/setup-toolchain@v0
+        with:
+          auto-install: true
+
+      - name: Generate and start the object store
+        run: |
+          moon generate storage -- --name storage --port 9000
+          moon run storage:up
 
   # Runs deploy/ on the runner with certificates from a local authority, the
   # way deploy/README.md describes, and signs in through it.
