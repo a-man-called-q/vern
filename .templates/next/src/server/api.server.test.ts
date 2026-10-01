@@ -2,6 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createAuthenticatedApiFetcher } from "./api.server";
 
+/** Bun's types give `fetch` a `preconnect` member, so a bare function is not assignable. */
+function fakeFetch(
+	handler: (input: URL | RequestInfo, init?: RequestInit) => Promise<Response>,
+): typeof fetch {
+	return Object.assign(handler, { preconnect: () => undefined });
+}
+
 for (let webApp = 1; webApp <= 4; webApp += 1) {
 	for (let api = 1; api <= 3; api += 1) {
 		test(`web app ${webApp} sends its bearer token to API ${api}`, async () => {
@@ -10,14 +17,14 @@ for (let webApp = 1; webApp <= 4; webApp += 1) {
 			const fetchApi = createAuthenticatedApiFetcher({
 				baseUrl: `http://axum-${api}.test`,
 				getAccessToken: async () => token,
-				fetcher: async (input, init) => {
+				fetcher: fakeFetch(async (input, init) => {
 					assert.equal(String(input), `http://axum-${api}.test/api/me`);
 					const headers = new Headers(init?.headers);
 					assert.equal(headers.get("authorization"), `Bearer ${token}`);
 					assert.equal(headers.has("cookie"), false);
 					assert.equal(init?.credentials, "omit");
 					return Response.json({ sub: expectedSubject });
-				},
+				}),
 			});
 
 			const response = await fetchApi("/api/me", {
@@ -33,7 +40,7 @@ test("refuses caller-controlled API URLs", async () => {
 	const fetchApi = createAuthenticatedApiFetcher({
 		baseUrl: "http://axum.test",
 		getAccessToken: async () => "opaque-token",
-		fetcher: async () => new Response(null, { status: 200 }),
+		fetcher: fakeFetch(async () => new Response(null, { status: 200 })),
 	});
 	await assert.rejects(fetchApi("//attacker.test/api/me"));
 	await assert.rejects(fetchApi("https://attacker.test/api/me"));

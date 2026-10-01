@@ -13,7 +13,7 @@
     "preview": "vite preview",
     "format": "biome format",
     "lint": "biome lint",
-    "check": "bun run generate-routes && biome check",
+    "check": "bun run generate-routes && tsc --noEmit && biome check",
     "test": "bun test"
   },
   "dependencies": {
