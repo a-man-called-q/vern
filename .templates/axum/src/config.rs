@@ -7,6 +7,10 @@ use thiserror::Error;
 use tokio::sync::OnceCell;
 
 const PRIVATE_KEY_JWT_TTL_SECONDS: i64 = 5 * 60;
+const DEFAULT_INTROSPECTION_CACHE_SECONDS: u64 = 30;
+// A revoked token or a removed role keeps working for this long at most, so the
+// setting has a ceiling.
+const MAX_INTROSPECTION_CACHE_SECONDS: u64 = 300;
 
 #[derive(Debug, Error)]
 pub enum ConfigError {
@@ -32,6 +36,8 @@ pub enum ConfigError {
     InvalidPrivateKey(#[source] jsonwebtoken::errors::Error),
     #[error("failed to build HTTP client")]
     HttpClient(#[source] reqwest::Error),
+    #[error("INTROSPECTION_CACHE_SECONDS must be a whole number from 0 to 300")]
+    InvalidIntrospectionCache,
 }
 
 #[derive(Clone)]
@@ -44,6 +50,7 @@ pub struct Config {
     key_id: String,
     signing_key: Arc<EncodingKey>,
     http_client: Client,
+    introspection_cache_ttl: Duration,
 }
 
 #[derive(Deserialize)]
@@ -115,6 +122,16 @@ impl Config {
         let signing_key = EncodingKey::from_rsa_pem(key_file.key.as_bytes())
             .map_err(ConfigError::InvalidPrivateKey)?;
 
+        let introspection_cache_ttl = match env::var("INTROSPECTION_CACHE_SECONDS") {
+            Ok(seconds) if !seconds.trim().is_empty() => seconds
+                .trim()
+                .parse::<u64>()
+                .ok()
+                .filter(|seconds| *seconds <= MAX_INTROSPECTION_CACHE_SECONDS)
+                .ok_or(ConfigError::InvalidIntrospectionCache)?,
+            _ => DEFAULT_INTROSPECTION_CACHE_SECONDS,
+        };
+
         Ok(Self {
             issuer: issuer.trim_end_matches('/').to_owned(),
             project_id,
@@ -124,6 +141,7 @@ impl Config {
             key_id: key_file.key_id,
             signing_key: Arc::new(signing_key),
             http_client,
+            introspection_cache_ttl: Duration::from_secs(introspection_cache_ttl),
         })
     }
 
@@ -133,6 +151,11 @@ impl Config {
 
     pub fn project_id(&self) -> &str {
         &self.project_id
+    }
+
+    /// How long an introspection answer may be reused. Zero turns the cache off.
+    pub fn introspection_cache_ttl(&self) -> Duration {
+        self.introspection_cache_ttl
     }
 
     pub async fn introspection_endpoint(&self) -> Result<&str, ConfigError> {

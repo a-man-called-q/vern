@@ -111,6 +111,7 @@ fn app(pool: &PgPool, sub: &str, roles: &[&str]) -> Router {
         sub: sub.to_owned(),
         display_name: None,
         roles: roles.iter().map(|role| role.to_string()).collect(),
+        org_id: Some("org-1".to_owned()),
     };
     Router::new()
         .route("/api/invoices", get(list).post(create))

@@ -13,8 +13,8 @@ Read [`../../AGENTS.md`](../../AGENTS.md) first. Before adding an endpoint, read
 - **Handlers return `ApiError`** (`src/error.rs`). Log the cause of a failure
   and answer `ApiError::Internal`; never send a database or upstream error to
   the caller.
-- **The caller is the token.** Never take a user ID, an owner, or a role from
-  the request.
+- **The caller is the token.** Never take a user ID, an owner, an organization,
+  or a role from the request. `user.org()?` is the caller's company.
 {% if database %}- **Schema changes are new files** in `migrations/` (`000N_<what>.sql`),
   applied when the service starts. Never edit one that has shipped.
 - **Queries** use `sqlx::query_as` with `.bind`, and are limited to the

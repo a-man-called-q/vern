@@ -16,6 +16,8 @@ struct MeResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     name: Option<String>,
     roles: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    org_id: Option<String>,
 }
 
 async fn healthz() -> Json<HealthResponse> {
@@ -27,6 +29,7 @@ async fn api_me(Extension(user): Extension<AuthenticatedUser>) -> Json<MeRespons
         sub: user.sub,
         name: user.display_name,
         roles: user.roles.into_iter().collect(),
+        org_id: user.org_id,
     })
 }
 

@@ -46,6 +46,23 @@ users there; `has_role` is the non-failing check. Both claim forms ZITADEL uses
 (`urn:zitadel:iam:org:project:roles` and the one scoped to this project's ID)
 are read.
 
+## Organization
+
+The same claims say which ZITADEL organization the roles are granted in.
+`AuthenticatedUser` carries it as `org_id`, and `user.org()?` answers `403` when
+there is none (a token with no role, or roles from several organizations). A
+product where one company has several users keeps `org_id` on every row and
+limits each query with `WHERE org_id = $1`, so the company comes from the token
+and never from the request.
+
+## Token cache
+
+Asking ZITADEL about a token on every request puts it on the hot path, so the
+API keeps its answer for `INTROSPECTION_CACHE_SECONDS` (30 by default, at most
+300, 0 turns it off). Only an active token is kept, never past its own expiry.
+The price is that a revoked token, or a role granted or removed, takes effect
+after that long at most.
+
 {% if database %}## Database
 
 This API was generated with a PostgreSQL database. `moon run data:up` starts the

@@ -94,6 +94,7 @@ mod tests {
             sub: sub.to_owned(),
             display_name: None,
             roles: Default::default(),
+            org_id: None,
         };
         Router::new()
             .route("/api/notes", get(list).post(create))
