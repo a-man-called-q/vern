@@ -22,9 +22,21 @@ tasks:
       - 'workspace:install'
     toolchains: system
 
+  # The interaction tests run in Playwright's Chromium, which npm does not
+  # install. This is a quick check once the browser is there, so it is not cached.
+  browser:
+    command: bunx playwright install chromium
+    description: Install the Chromium that Storybook's tests run in
+    deps:
+      - 'workspace:install'
+    toolchains: system
+    options:
+      cache: false
+
   test:
     command: bun run test
     description: Run Storybook interaction tests
     deps:
       - 'workspace:install'
+      - '~:browser'
     toolchains: system

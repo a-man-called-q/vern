@@ -127,6 +127,7 @@ them. Change them at the level you need:
 | `bun run setup` | Create the `.env` files and the ZITADEL project, applications, and keys |
 | `moon run :dev` | Run every project that has a `dev` task |
 | `moon run :build` | Build every project that has a `build` task |
+| `moon run :test` | Run every project's tests. The first run downloads Chromium for Storybook's browser tests |
 | `moon run <project>:<task>` | Run one task, such as `dashboard:check` or `api:test` |
 | `moon run <app>:docker` | Build an app's production image |
 | `moon run auth-server:down` | Stop the auth containers and keep their data |
