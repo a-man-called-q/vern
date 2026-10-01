@@ -141,8 +141,10 @@ Shared components and design tokens are provided by `@vern/ui`. Import them from
 import { Button } from "@vern/ui/components/button";
 ```
 
-From this app's directory, the CLI routes shared primitives into
-`packages/ui` through the workspace configuration:
+Every shadcn component is already in `packages/ui`. For a form, use
+`@vern/ui/components/form-tanstack` with TanStack Form. When shadcn releases a component that is
+not there yet, add it from this app's directory; the CLI routes shared
+primitives into `packages/ui` through the workspace configuration:
 
 ```bash
 cd apps/{{ name | kebab_case }}

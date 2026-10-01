@@ -26,9 +26,9 @@ calling an API, read
   Reading the session never sets cookies; only the `/auth` Route Handlers do.
 - **Changes** (create, update, delete) are Server Actions that call the server
   module.
-- **UI** comes from `@vern/ui/components/<name>`. Add a shadcn component with
-  `bunx --bun shadcn@latest add <name>` from this folder.
-{% if include_demos %}- **Demo files** (`src/app/(site)/demo`, files named `demo.*`) are samples and
+- **UI** comes from `@vern/ui/components/<name>`. Every shadcn component is
+  already there; for a form, use `form-rhf` (React Hook Form).
+{% if include_demos %}- **Demo files** (`src/app/(site)/demo`, files named `demo-*`) are samples and
   can be deleted.
 {% endif %}
 Check your work from the repository root:
