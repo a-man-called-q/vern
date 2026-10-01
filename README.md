@@ -210,6 +210,19 @@ them. Change them at the level you need:
    the project). To deploy your login, publish an image from your fork (see its
    README) and set `ZITADEL_LOGIN_IMAGE` to that tag.
 
+## Building with a coding agent
+
+[`AGENTS.md`](AGENTS.md) tells a coding agent (Claude Code, Codex, Cursor, and
+others that read the file) what the project already provides, the rules that
+keep sign-in and access control intact, and how to check its own work. It points
+at short recipes in [`docs/agents/`](docs/agents) for adding a web app, adding an
+API service, building inside a service, calling an API from a web app, and roles
+and users. Each generated app carries its own `AGENTS.md` for its stack.
+
+Describe your product under **This project** at the end of `AGENTS.md`: what it
+is for, which app serves whom, and the decisions you have made. The sections
+above it are updated by `bun run project:update`.
+
 ## Commands
 
 | Command | What it does |

@@ -1,0 +1,89 @@
+# Vern: guide for coding agents
+
+Vern is a Moon monorepo for a product whose users sign in with ZITADEL: web
+apps (TanStack Start or Next.js) that call Rust Axum APIs. Sign-in, sessions,
+token verification, roles, a database tier, and deployment already exist. Build
+the product on top of them; do not rebuild them.
+
+## Map
+
+| Path | What it is |
+| --- | --- |
+| `apps/<name>` | One web app or API each, generated from `.templates/`. Product code lives here |
+| `apps/auth-server` | The local ZITADEL and Redis stack. Configuration only |
+| `packages/ui` | Shared shadcn components and design tokens (`@vern/ui`) |
+| `.templates/` | The generators behind `moon generate` |
+| `scripts/` | Setup, provisioning, doctor, rename, and update |
+| `roles.json`, `seed-users.json` | The product's roles, and local test users |
+| `deploy/` | The production Docker Compose stack |
+
+## Recipes
+
+Read the one that matches the task before writing code. Each is short.
+
+| The task | Read |
+| --- | --- |
+| Add a web app | [docs/agents/new-app.md](docs/agents/new-app.md) |
+| Add an API service, with or without a database | [docs/agents/new-service.md](docs/agents/new-service.md) |
+| Add an endpoint, a table, or a rule to a service | [docs/agents/service-engineering.md](docs/agents/service-engineering.md) |
+| Protect a page, or call an API from a web app | [docs/agents/web-to-api.md](docs/agents/web-to-api.md) |
+| Add a role, a test user, or a screen that manages users | [docs/agents/roles-and-users.md](docs/agents/roles-and-users.md) |
+
+Each generated app also has its own `AGENTS.md` and a README that covers its
+code and its production checklist.
+
+## Rules that hold everywhere
+
+1. **Generate, do not copy.** A new app or API comes from `moon generate`,
+   followed by `bun run setup`. A hand-copied app has no ZITADEL application, no
+   key, and a port that collides.
+2. **Do not write authentication.** No login page, password table, JWT parsing,
+   or session library. Users live in ZITADEL; refer to one by `sub`, the ZITADEL
+   user ID.
+3. **Tokens stay on the server.** A web app calls an API from server code with
+   `fetchAuthenticatedApi`. Browser code never holds a token and never calls an
+   API directly.
+4. **The API decides.** Every endpoint that is not deliberately public sits
+   behind `require_bearer`, checks the role with `require_role`, and limits its
+   queries to the caller's own rows. Hiding a button in a web app is not access
+   control.
+5. **Roles are declared, not invented.** A role an API checks is listed in
+   `roles.json` and created by `bun run setup`.
+6. **`.env` files belong to `setup`.** They are ignored by Git and hold
+   generated IDs and secrets. Add a new setting to the app's `.env.example`,
+   read it in one place, and fail at startup when it is missing.
+7. **Run through Moon.** `moon run <app>:dev` starts what the app depends on and
+   loads the shared settings from the root `.env`; an app started another way
+   misses them.
+8. **Keep the HTTPS guards.** The web apps refuse plain HTTP for `APP_URL`,
+   `ZITADEL_ISSUER`, and `API_BASE_URL` in production, because tokens travel over
+   those. Do not relax the checks to make something start.
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `moon generate <tanstack\|next\|axum\|postgres> -- --name <name> --port <port>` | Create `apps/<name>` |
+| `bun run setup` | Create the `.env` files, ZITADEL applications, keys, roles, and local test users. Safe to run again; needs Docker running |
+| `moon run :dev` | Run everything. `moon run <app>:dev` runs one app and what it needs |
+| `moon run <app>:check` | Type-check one app (and lint it, for a web app) |
+| `moon run <app>:test` | Run one app's tests |
+| `bun run project:doctor` | Check the tools, configuration, roles, and ports |
+
+## Done means
+
+- `moon run <app>:check` and `moon run <app>:test` pass for every app you
+  touched.
+- A new endpoint has tests for the happy path, bad input, a caller without the
+  role, and a caller asking for someone else's data.
+- A change to an API response is matched in the web app that reads it, in the
+  same change.
+- `bun run project:doctor` passes after a change to ports, roles, or `.env`
+  examples.
+- Nothing from a `.env` file, `secrets/`, or `deploy/.env` is committed.
+
+## This project
+
+Notes about this product (its domain, the apps and what each is for, decisions
+already made) go below this line. Keep the sections above as they are, so
+`bun run project:update` can bring in changes to them.
