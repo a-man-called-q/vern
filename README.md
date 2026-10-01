@@ -192,7 +192,10 @@ takes the same `--apply` and `--continue` flags.
 
 The updater needs a clean working tree, so commit the rename and your changes
 first. Generated app source is not synchronized, but its dependency manifests
-are upgraded. If a conflict or a failed check stops the update, fix it on the
+are upgraded. The TanStack packages are pinned in the templates, because
+`@tanstack/react-start` depends on one exact `@tanstack/react-router`; the
+updater moves them together and keeps the router on the version Start uses, so
+do the same when you bump them by hand. If a conflict or a failed check stops the update, fix it on the
 review branch and run `bun run project:update -- --continue`. Review the diff
 and merge it yourself.
 

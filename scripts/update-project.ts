@@ -290,6 +290,62 @@ function assertCargoEdit(root: string): void {
 	verifyCargoEdit(root);
 }
 
+const START_PACKAGE = "@tanstack/react-start";
+const ROUTER_PACKAGE = "@tanstack/react-router";
+
+/**
+ * `bun update --latest` bumps every @tanstack package on its own, but
+ * @tanstack/react-start depends on one exact @tanstack/react-router. A second
+ * router copy breaks route context at runtime, so the app's direct dependency
+ * follows the version react-start uses. `searchRoots` are folders whose
+ * node_modules hold the installed react-start. Returns whether it rewrote the file.
+ */
+export function alignRouterWithStart(
+	manifestPath: string,
+	searchRoots: string[],
+): boolean {
+	const text = readFileSync(manifestPath, "utf8");
+	const manifest = JSON.parse(text) as {
+		dependencies?: Record<string, string>;
+	};
+	const current = manifest.dependencies?.[ROUTER_PACKAGE];
+	if (!current || !manifest.dependencies?.[START_PACKAGE]) return false;
+	for (const searchRoot of searchRoots) {
+		const installed = resolve(
+			searchRoot,
+			"node_modules",
+			START_PACKAGE,
+			"package.json",
+		);
+		if (!existsSync(installed)) continue;
+		const wanted = (
+			JSON.parse(readFileSync(installed, "utf8")) as {
+				dependencies?: Record<string, string>;
+			}
+		).dependencies?.[ROUTER_PACKAGE];
+		if (!wanted || wanted === current) return false;
+		writeFileSync(
+			manifestPath,
+			text.replace(
+				`"${ROUTER_PACKAGE}": "${current}"`,
+				`"${ROUTER_PACKAGE}": "${wanted}"`,
+			),
+		);
+		return true;
+	}
+	return false;
+}
+
+function alignWorkspaceRouters(root: string): void {
+	const apps = resolve(root, "apps");
+	if (!existsSync(apps)) return;
+	for (const entry of readdirSync(apps, { withFileTypes: true })) {
+		const manifest = resolve(apps, entry.name, "package.json");
+		if (!entry.isDirectory() || !existsSync(manifest)) continue;
+		alignRouterWithStart(manifest, [resolve(apps, entry.name), root]);
+	}
+}
+
 function updateBunTemplate(
 	root: string,
 	template: string,
@@ -331,6 +387,7 @@ function updateBunTemplate(
 			JSON.stringify(manifest, null, 2) + "\n",
 		);
 		run("bun", ["update", "--latest"], { cwd: tempRoot });
+		alignRouterWithStart(resolve(tempRoot, "package.json"), [tempRoot]);
 		const updated = JSON.parse(
 			readFileSync(resolve(tempRoot, "package.json"), "utf8"),
 		) as Record<string, unknown>;
@@ -392,6 +449,7 @@ function updateRustTemplate(root: string): void {
 function updateDependencies(root: string): void {
 	assertCargoEdit(root);
 	run("bun", ["update", "--latest", "--recursive"], { cwd: root });
+	alignWorkspaceRouters(root);
 	updateBunTemplate(root, "tanstack", "TanStack");
 	updateBunTemplate(root, "next", "Next.js");
 

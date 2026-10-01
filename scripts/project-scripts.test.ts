@@ -19,7 +19,7 @@ import {
 	run,
 } from "./project-utils";
 import { renameProject } from "./rename-project";
-import { updateProject } from "./update-project";
+import { alignRouterWithStart, updateProject } from "./update-project";
 
 const tempRoots: string[] = [];
 const originalPath = process.env.PATH;
@@ -528,3 +528,72 @@ function readStateForTest(root: string): { phase: string } {
 function existsState(root: string): boolean {
 	return existsSync(resolve(root, ".vern/update-state.json"));
 }
+
+describe("alignRouterWithStart", () => {
+	function app(start: string | undefined, router: string) {
+		const root = tempRoot("vern-router-align-test-");
+		const dependencies: Record<string, string> = {
+			"@tanstack/react-router": router,
+			react: "^19.0.0",
+		};
+		if (start) dependencies["@tanstack/react-start"] = start;
+		write(
+			root,
+			"package.json",
+			`${JSON.stringify({ name: "web", dependencies }, null, 2)}\n`,
+		);
+		return root;
+	}
+
+	function installStart(root: string, router: string) {
+		write(
+			root,
+			"node_modules/@tanstack/react-start/package.json",
+			JSON.stringify({
+				name: "@tanstack/react-start",
+				dependencies: { "@tanstack/react-router": router },
+			}),
+		);
+	}
+
+	const routerOf = (root: string) =>
+		JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"))
+			.dependencies["@tanstack/react-router"];
+
+	test("sets the router to the exact version react-start uses", () => {
+		const root = app("1.2.0", "1.9.0");
+		installStart(root, "1.1.5");
+		expect(alignRouterWithStart(resolve(root, "package.json"), [root])).toBe(true);
+		expect(routerOf(root)).toBe("1.1.5");
+		expect(readFileSync(resolve(root, "package.json"), "utf8")).toContain(
+			'    "react": "^19.0.0"',
+		);
+	});
+
+	test("changes nothing when they already agree", () => {
+		const root = app("1.2.0", "1.1.5");
+		installStart(root, "1.1.5");
+		expect(alignRouterWithStart(resolve(root, "package.json"), [root])).toBe(false);
+	});
+
+	test("finds react-start in a later search root", () => {
+		const root = app("1.2.0", "1.9.0");
+		const workspace = tempRoot("vern-router-align-root-");
+		installStart(workspace, "1.1.5");
+		expect(
+			alignRouterWithStart(resolve(root, "package.json"), [root, workspace]),
+		).toBe(true);
+		expect(routerOf(root)).toBe("1.1.5");
+	});
+
+	test("leaves apps without react-start or without an install alone", () => {
+		const plain = app(undefined, "1.9.0");
+		installStart(plain, "1.1.5");
+		expect(alignRouterWithStart(resolve(plain, "package.json"), [plain])).toBe(false);
+		const notInstalled = app("1.2.0", "1.9.0");
+		expect(
+			alignRouterWithStart(resolve(notInstalled, "package.json"), [notInstalled]),
+		).toBe(false);
+		expect(routerOf(notInstalled)).toBe("1.9.0");
+	});
+});
