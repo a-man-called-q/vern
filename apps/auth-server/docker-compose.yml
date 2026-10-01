@@ -116,6 +116,12 @@ services:
       ZITADEL_DEFAULTINSTANCE_LABELPOLICY_HIDELOGINNAMESUFFIX: "true"
       ZITADEL_DEFAULTINSTANCE_LABELPOLICY_DISABLEWATERMARK: "true"
 
+      # Whether the sign-in page offers "Sign up". Off unless you opt in: in most
+      # products an administrator creates the accounts. Like the branding above,
+      # it applies only when ZITADEL creates its database; `bun run setup` brings
+      # an existing instance in line.
+      ZITADEL_DEFAULTINSTANCE_LOGINPOLICY_ALLOWREGISTER: "${ZITADEL_ALLOW_REGISTER:-false}"
+
       ZITADEL_LOGSTORE_ACCESS_STDOUT_ENABLED: "true"
     healthcheck:
       test: ["CMD", "/app/zitadel", "ready"]

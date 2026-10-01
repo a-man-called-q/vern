@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { parseEnv } from "./env-files";
 import {
 	CONFIG_PATH,
 	gitTry,
@@ -9,6 +10,7 @@ import {
 	UPDATE_STATE_PATH,
 	UPSTREAM_URL,
 } from "./project-utils";
+import { ALLOW_REGISTER_KEY, parseAllowRegister } from "./zitadel-login-policy";
 import { readProjectRoles, ROLES_FILE } from "./zitadel-roles";
 import { readSeedUsers, SEED_FILE } from "./zitadel-seed";
 
@@ -141,6 +143,22 @@ function main(): void {
 		);
 	} catch (error) {
 		report("FAIL", error instanceof Error ? error.message : String(error));
+	}
+
+	// The file the stack reads, or its example before `bun run setup` copies it.
+	for (const dir of ["apps/auth-server", "deploy"]) {
+		const file = [".env", ".env.example"].map((name) => dir + "/" + name).find((path) => existsSync(resolve(ROOT, path)));
+		if (!file) continue;
+		try {
+			const allowed = parseAllowRegister(parseEnv(resolve(ROOT, file)).get(ALLOW_REGISTER_KEY), file);
+			if (allowed === undefined)
+				report("INFO", ALLOW_REGISTER_KEY + " is not set in " + file + "; an existing ZITADEL keeps its setting, a new one starts with sign-up off.");
+			else if (allowed)
+				report("INFO", ALLOW_REGISTER_KEY + "=true in " + file + ": anyone can create an account from the sign-in page.");
+			else report("OK", ALLOW_REGISTER_KEY + "=false in " + file + ": accounts are created by an administrator.");
+		} catch (error) {
+			report("FAIL", error instanceof Error ? error.message : String(error));
+		}
 	}
 
 	for (const path of [

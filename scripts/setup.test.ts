@@ -48,6 +48,18 @@ function fakeZitadel() {
 		{ id: "admin1", userName: "zitadel-admin@vern.localhost" },
 	];
 	const grants: { id: string; userId: string; projectId: string; roleKeys: string[] }[] = [];
+	// Like ZITADEL's JSON, the settings leave out a flag that is false.
+	const loginPolicy: { settings: Record<string, unknown> } = {
+		settings: {
+			allowUsernamePassword: true,
+			allowExternalIdp: true,
+			forceMfa: true,
+			passwordlessType: "PASSWORDLESS_TYPE_ALLOWED",
+			passwordCheckLifetime: "864000s",
+		},
+	};
+	const flagsOnly = (settings: Record<string, unknown>) =>
+		JSON.stringify(Object.entries(settings).filter(([, value]) => value !== false).sort(([a], [b]) => a.localeCompare(b)));
 	let next = 100;
 	const json = (body: unknown, status = 200) =>
 		new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -125,9 +137,27 @@ function fakeZitadel() {
 			const keyDetails = Buffer.from(JSON.stringify({ type: "application", keyId, key: "PEM", appId: key[1], clientId: "c1" })).toString("base64");
 			return json({ id: keyId, keyDetails });
 		}
+		if (path === "/admin/v1/policies/login" && method === "GET") {
+			return json({
+				policy: {
+					details: { sequence: "19" },
+					isDefault: true,
+					secondFactors: ["SECOND_FACTOR_TYPE_OTP"],
+					multiFactors: ["MULTI_FACTOR_TYPE_U2F_WITH_VERIFICATION"],
+					...loginPolicy.settings,
+				},
+			});
+		}
+		if (path === "/admin/v1/policies/login" && method === "PUT") {
+			if (flagsOnly(body) === flagsOnly(loginPolicy.settings)) {
+				return json({ code: 9, message: "Default Login Policy has not been changed (INSTANCE-5M9vdd)" }, 400);
+			}
+			loginPolicy.settings = Object.fromEntries(Object.entries(body).filter(([, value]) => value !== false));
+			return json({ details: { sequence: "20" } });
+		}
 		return json({ message: `unexpected ${method} ${path}` }, 500);
 	}) as typeof fetch;
-	return { calls, fetcher, projects, apps, keys, roles, users, grants };
+	return { calls, fetcher, projects, apps, keys, roles, users, grants, loginPolicy };
 }
 
 function deps(root: string, zitadel: ReturnType<typeof fakeZitadel>, logs: string[] = []) {
@@ -400,6 +430,133 @@ describe("setup", () => {
 			expect(zitadel.users).toHaveLength(1);
 			expect(zitadel.grants).toHaveLength(0);
 			expect(passwordOf(root)).toBeUndefined();
+		});
+	});
+
+	describe("with ZITADEL_ALLOW_REGISTER", () => {
+		const policyCalls = (zitadel: ReturnType<typeof fakeZitadel>, method: string) =>
+			zitadel.calls.filter((call) => call.method === method && call.path === "/admin/v1/policies/login");
+
+		test("turns sign-up off on an instance that has it on, keeping the other settings", async () => {
+			const root = workspace();
+			write(root, "apps/auth-server/.env", "ZITADEL_ALLOW_REGISTER=false\n");
+			const zitadel = fakeZitadel();
+			zitadel.loginPolicy.settings.allowRegister = true;
+			const logs: string[] = [];
+			expect(await setup([], deps(root, zitadel, logs))).toBe(0);
+
+			expect(zitadel.loginPolicy.settings).toEqual({
+				allowUsernamePassword: true,
+				allowExternalIdp: true,
+				forceMfa: true,
+				passwordlessType: "PASSWORDLESS_TYPE_ALLOWED",
+				passwordCheckLifetime: "864000s",
+			});
+			// Only what the update accepts is sent back.
+			const [update] = policyCalls(zitadel, "PUT");
+			expect(Object.keys(update.body as object).sort()).toEqual([
+				"allowExternalIdp",
+				"allowRegister",
+				"allowUsernamePassword",
+				"forceMfa",
+				"passwordCheckLifetime",
+				"passwordlessType",
+			]);
+			expect(logs).toContain("Turned self-registration off in ZITADEL (ZITADEL_ALLOW_REGISTER=false in apps/auth-server/.env)");
+			expect(logs.some((line) => line.startsWith("The sign-in pages follow within 15 minutes"))).toBe(true);
+		});
+
+		test("turns sign-up on when asked to", async () => {
+			const root = workspace();
+			write(root, "apps/auth-server/.env", "ZITADEL_ALLOW_REGISTER=true\n");
+			const zitadel = fakeZitadel();
+			await setup([], deps(root, zitadel));
+			expect(zitadel.loginPolicy.settings.allowRegister).toBe(true);
+			expect(zitadel.loginPolicy.settings.forceMfa).toBe(true);
+		});
+
+		test("leaves the policy alone when it already matches", async () => {
+			const root = workspace();
+			write(root, "apps/auth-server/.env", "ZITADEL_ALLOW_REGISTER=false\n");
+			const zitadel = fakeZitadel();
+			const logs: string[] = [];
+			await setup([], deps(root, zitadel, logs));
+			expect(policyCalls(zitadel, "PUT")).toHaveLength(0);
+			expect(logs).toContain("Self-registration is off (ZITADEL_ALLOW_REGISTER=false in apps/auth-server/.env)");
+			expect(logs.some((line) => line.startsWith("The sign-in pages follow"))).toBe(false);
+		});
+
+		test("takes a new project's choice from the copied .env.example", async () => {
+			const root = workspace();
+			write(root, "apps/auth-server/.env.example", "ZITADEL_ORG_NAME=Vern\nZITADEL_ALLOW_REGISTER=false\n");
+			const zitadel = fakeZitadel();
+			zitadel.loginPolicy.settings.allowRegister = true;
+			await setup([], deps(root, zitadel));
+			expect(zitadel.loginPolicy.settings.allowRegister).toBeUndefined();
+		});
+
+		test("without a value, changes nothing and says that anyone can sign up", async () => {
+			const root = workspace();
+			const zitadel = fakeZitadel();
+			zitadel.loginPolicy.settings.allowRegister = true;
+			const logs: string[] = [];
+			await setup([], deps(root, zitadel, logs));
+			expect(policyCalls(zitadel, "PUT")).toHaveLength(0);
+			expect(zitadel.loginPolicy.settings.allowRegister).toBe(true);
+			expect(logs.find((line) => line.startsWith("Anyone can create an account"))).toContain(
+				"Set ZITADEL_ALLOW_REGISTER=false in apps/auth-server/.env",
+			);
+		});
+
+		test("without a value, says nothing when sign-up is already off", async () => {
+			const root = workspace();
+			const logs: string[] = [];
+			await setup([], deps(root, fakeZitadel(), logs));
+			expect(logs.filter((line) => /self-registration|create an account/i.test(line))).toEqual([]);
+		});
+
+		test("treats ZITADEL's refusal of a no-op update as nothing to do", async () => {
+			const root = workspace();
+			write(root, "apps/auth-server/.env", "ZITADEL_ALLOW_REGISTER=false\n");
+			const zitadel = fakeZitadel();
+			zitadel.loginPolicy.settings.allowRegister = true;
+			const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
+				const response = await zitadel.fetcher(input, init);
+				// Another run closes it between our read and our update.
+				if ((init?.method ?? "GET") === "GET" && new URL(String(input)).pathname === "/admin/v1/policies/login") {
+					delete zitadel.loginPolicy.settings.allowRegister;
+				}
+				return response;
+			}) as typeof fetch;
+			expect(await setup([], { ...deps(root, zitadel), fetcher })).toBe(0);
+		});
+
+		test("stops before starting anything on a value that is not true or false", async () => {
+			const root = workspace();
+			write(root, "apps/auth-server/.env", "ZITADEL_ALLOW_REGISTER=nope\n");
+			let started = false;
+			await expect(
+				setup([], {
+					...deps(root, fakeZitadel()),
+					startAuthStack: () => {
+						started = true;
+					},
+				}),
+			).rejects.toThrow('ZITADEL_ALLOW_REGISTER must be true or false in apps/auth-server/.env, not "nope"');
+			expect(started).toBe(false);
+		});
+
+		test("applies deploy/.env with --deploy", async () => {
+			const root = workspace();
+			write(
+				root,
+				"deploy/.env",
+				"AUTH_DOMAIN=auth.acme.test\nAPP_DOMAIN=app.acme.test\nAPI_DOMAIN=api.acme.test\nACME_EMAIL=ops@acme.test\nWEB_APP=dashboard\nAPI_APP=api\nZITADEL_ALLOW_REGISTER=false\n",
+			);
+			const zitadel = fakeZitadel();
+			zitadel.loginPolicy.settings.allowRegister = true;
+			await setup(["--deploy"], { ...deps(root, zitadel), runCompose: () => {} });
+			expect(zitadel.loginPolicy.settings.allowRegister).toBeUndefined();
 		});
 	});
 

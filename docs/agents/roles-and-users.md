@@ -73,3 +73,6 @@ It writes `ZITADEL_USER_ADMIN_TOKEN` to that app's `.env`.
   auth stack) in an app. It can do everything in ZITADEL.
 - In production, users and roles are managed in the Console or through this
   service account; test users are never seeded there.
+- Visitors cannot register themselves: `ZITADEL_ALLOW_REGISTER` is `false` in
+  `apps/auth-server/.env` and `deploy/.env`. Leave it that way for a screen that
+  manages users; a self-registered account has no roles.

@@ -43,6 +43,15 @@ Open `https://APP_DOMAIN`. The ZITADEL Console is at
 with `ZITADEL_ADMIN_PASSWORD` from `deploy/.env`. ZITADEL asks for a new
 password on the first sign-in.
 
+The sign-in page has no "Sign up" link: accounts are created in the Console or
+from your product. To let visitors register, set `ZITADEL_ALLOW_REGISTER=true`
+in `deploy/.env` and run `bun run setup -- --deploy` again; it changes only that
+setting of the running ZITADEL's login policy. With the variable missing from
+`deploy/.env`, setup leaves the policy as it is and says so when sign-up is open.
+The sign-in pages cache ZITADEL's settings for 15 minutes; restart `zitadel-login`
+(`docker compose --env-file deploy/.env -f deploy/docker-compose.yml restart zitadel-login`)
+to apply a change at once.
+
 Back up `deploy/.env` in a secret manager: `ZITADEL_MASTERKEY` encrypts data in
 the database, and the database is useless without it. Back up the
 `postgres-data` volume as well.

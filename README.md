@@ -210,6 +210,25 @@ them. Change them at the level you need:
    the project). To deploy your login, publish an image from your fork (see its
    README) and set `ZITADEL_LOGIN_IMAGE` to that tag.
 
+## Who can sign up
+
+A new project has no "Sign up" link on the sign-in page: an administrator
+creates the accounts, locally from `seed-users.json` and in production in the
+Console or from your product. A visitor who registered on their own would get an
+account with no roles, which is harmless but not what an admin screen promises.
+`ZITADEL_ALLOW_REGISTER` in `apps/auth-server/.env` (and `deploy/.env`) holds
+the choice, `false` unless you set it to `true`.
+
+ZITADEL reads the variable only when it creates its database, like the initial
+colors above. `bun run setup` (and `bun run setup -- --deploy`) applies the value
+in `.env` to an instance that already exists and changes nothing else in its
+login policy. With no value in `.env` it changes nothing, and says so when
+sign-up is open. An organization that overrides the login policy in the Console
+keeps its own. The Login App caches ZITADEL's settings for 15 minutes, so the
+sign-in pages follow a change within that time; restart the `zitadel-login`
+container to apply it at once. `bun run project:doctor` shows the current
+choice.
+
 ## Building with a coding agent
 
 [`AGENTS.md`](AGENTS.md) tells a coding agent (Claude Code, Codex, Cursor, and

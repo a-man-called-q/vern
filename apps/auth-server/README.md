@@ -34,12 +34,14 @@ The admin account comes from `ZITADEL_ADMIN_USERNAME` and
 (`zitadel-admin@vern.localhost` by default).
 
 The `FIRSTINSTANCE` and `DEFAULTINSTANCE` settings in `docker-compose.yml`
-(admin account, organization name, initial branding colors, Login V2 URLs, and
-the `vern-setup` service account that `bun run setup` signs in as) are applied
-only when ZITADEL creates its database. To change them later, use the
-Console, or reset the data. If you change the domain or port after the first
-start, update **Default settings → Features → Login V2 → Base URI** in the
-Console.
+(admin account, organization name, initial branding colors, whether the sign-in
+page offers "Sign up", Login V2 URLs, and the `vern-setup` service account that
+`bun run setup` signs in as) are applied only when ZITADEL creates its database.
+To change them later, use the Console, or reset the data. The exception is
+`ZITADEL_ALLOW_REGISTER`: `bun run setup` applies it to an existing instance
+(see [Who can sign up](../../README.md#who-can-sign-up)). If you change the
+domain or port after the first start, update **Default settings → Features →
+Login V2 → Base URI** in the Console.
 
 ## Versions
 

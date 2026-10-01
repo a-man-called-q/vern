@@ -85,6 +85,11 @@ services:
       ZITADEL_DEFAULTINSTANCE_LABELPOLICY_FONTCOLORDARK: "#F6F7FB"
       ZITADEL_DEFAULTINSTANCE_LABELPOLICY_HIDELOGINNAMESUFFIX: "true"
       ZITADEL_DEFAULTINSTANCE_LABELPOLICY_DISABLEWATERMARK: "true"
+
+      # Whether the sign-in page offers "Sign up". Applies only when ZITADEL
+      # creates its database; `bun run setup -- --deploy` brings an existing
+      # instance in line.
+      ZITADEL_DEFAULTINSTANCE_LOGINPOLICY_ALLOWREGISTER: "${ZITADEL_ALLOW_REGISTER:-false}"
     healthcheck:
       test: ["CMD", "/app/zitadel", "ready"]
       interval: 10s

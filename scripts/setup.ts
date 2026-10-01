@@ -23,6 +23,7 @@ import {
 	setEnvValue,
 	ZitadelApiError,
 } from "./zitadel-app";
+import { ALLOW_REGISTER_KEY, ensureSelfRegistration, parseAllowRegister } from "./zitadel-login-policy";
 import { ensureProjectRoles, readProjectRoles, ROLES_FILE } from "./zitadel-roles";
 import { isLocalIssuer, readSeedUsers, SEED_FILE, SEED_PASSWORD_KEY, type SeedUsers, seedUsers } from "./zitadel-seed";
 
@@ -213,6 +214,26 @@ async function ensureRoles(root: string, api: ApiOptions, projectId: string, log
 	if (existing.length > 0) log(`Project roles already there: ${existing.join(", ")}`);
 }
 
+/**
+ * Makes ZITADEL's sign-up page match ZITADEL_ALLOW_REGISTER. Without a value
+ * nothing changes, but an open sign-up page is said out loud: the Console is
+ * the only other place it shows, and nobody opens that.
+ */
+async function applySelfRegistration(api: ApiOptions, wanted: boolean | undefined, envFile: string, log: Log): Promise<void> {
+	const { allowed, changed } = await ensureSelfRegistration(api, wanted);
+	if (changed) {
+		log(`Turned self-registration ${allowed ? "on" : "off"} in ZITADEL (${ALLOW_REGISTER_KEY}=${allowed} in ${envFile})`);
+		// The Login App keeps ZITADEL's settings for 15 minutes (API_CACHE_CONFIG).
+		log("The sign-in pages follow within 15 minutes; restart the zitadel-login container to apply it now.");
+	} else if (wanted !== undefined) {
+		log(`Self-registration is ${allowed ? "on" : "off"} (${ALLOW_REGISTER_KEY}=${allowed} in ${envFile})`);
+	} else if (allowed) {
+		log(
+			`Anyone can create an account from the sign-in page. Set ${ALLOW_REGISTER_KEY}=false in ${envFile} and run this again to close it, or =true to keep it open and silence this.`,
+		);
+	}
+}
+
 /** Whether ZITADEL still has the key in this file, e.g. after a database reset. */
 async function keyIsKnown(api: ApiOptions, projectId: string, keyFile: string): Promise<boolean> {
 	let key: { appId?: string; keyId?: string };
@@ -369,6 +390,8 @@ async function setupLocal(
 		: readSeedUsers(root, readProjectRoles(root).map((role) => role.key));
 	const apps = findApps(root);
 	for (const dir of ["", AUTH, ...apps.map((app) => app.path)]) copyIfMissing(root, dir, log);
+	const authEnvFile = `${AUTH}/.env`;
+	const allowRegister = parseAllowRegister(parseEnv(resolve(root, authEnvFile)).get(ALLOW_REGISTER_KEY), authEnvFile);
 
 	if (!values["skip-start"]) (deps.startAuthStack ?? startAuthStack)(root);
 
@@ -386,6 +409,7 @@ async function setupLocal(
 	const api: ApiOptions = { issuer, token, fetcher: deps.fetcher };
 	const secret = deps.randomSecret ?? randomSecret;
 	await waitForIssuer(issuer, deps, log, "Check ZITADEL_ISSUER in .env and the auth stack (moon run auth-server:dev).");
+	await applySelfRegistration(api, allowRegister, authEnvFile, log);
 
 	const authEnv = readEffectiveEnv(root, AUTH);
 	const project = await ensureProject(api, rootEnv.get("ZITADEL_PROJECT_ID"), authEnv.get("ZITADEL_ORG_NAME") || "Vern", log);
@@ -490,6 +514,7 @@ async function setupDeploy(
 		log(`Generated ${key} in ${DEPLOY}/.env`);
 	}
 	env = parseEnv(envPath);
+	const allowRegister = parseAllowRegister(env.get(ALLOW_REGISTER_KEY), `${DEPLOY}/.env`);
 
 	// COMPOSE_FILE adds overrides, such as deploy/docker-compose.local.yml.
 	const files = processEnv.COMPOSE_FILE?.split(":").filter(Boolean) ?? [`${DEPLOY}/docker-compose.yml`];
@@ -511,6 +536,8 @@ async function setupDeploy(
 		log,
 		`Check that DNS for ${authDomain} points at this server and that ports 80 and 443 are open, so Let's Encrypt can issue its certificate.`,
 	);
+
+	await applySelfRegistration(api, allowRegister, `${DEPLOY}/.env`, log);
 
 	const project = await ensureProject(api, env.get("ZITADEL_PROJECT_ID"), env.get("ZITADEL_ORG_NAME") || "Vern", log);
 	if (project.changed) set("ZITADEL_PROJECT_ID", project.id);
