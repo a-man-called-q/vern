@@ -10,12 +10,37 @@ verified `sub` to a protected handler.
 
 - `GET /healthz` is public and returns `{"status":"ok"}`.
 - `GET /api/me` requires an active ZITADEL access token with this project's
-  audience and returns only the verified subject: `{"sub":"..."}`.
+  audience and returns the verified subject, the user's display name when
+  ZITADEL has one, and their roles: `{"sub":"...","name":"...","roles":["..."]}`.
 
 An absent, malformed, inactive, wrong-issuer, wrong-audience, or subject-less
 token receives `401 Unauthorized`. A ZITADEL discovery/introspection failure
 receives `503 Service Unavailable`; the API does not accept a token when it
 cannot verify it.
+
+Every error is JSON, `{"error":{"code":"forbidden","message":"..."}}`. Handlers
+return `ApiError` (`src/error.rs`), which has a variant for each status you are
+likely to need.
+
+## Roles
+
+Introspection tells the API the user's roles in this project, and
+`AuthenticatedUser` carries them as `roles`; no scope beyond the project audience
+that the web apps already request is needed. A handler requires one with
+`require_role`, which answers `403` otherwise:
+
+```rust
+async fn publish(Extension(user): Extension<AuthenticatedUser>) -> Result<(), ApiError> {
+    user.require_role("publisher")?;
+    // ...
+    Ok(())
+}
+```
+
+Create the roles on the ZITADEL project (Console, **Roles**) and grant them to
+users there; `has_role` is the non-failing check. Both claim forms ZITADEL uses
+(`urn:zitadel:iam:org:project:roles` and the one scoped to this project's ID)
+are read.
 
 ## Local ZITADEL setup
 

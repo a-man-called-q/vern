@@ -6,6 +6,7 @@ use tracing_subscriber::EnvFilter;
 mod app;
 mod auth;
 mod config;
+mod error;
 
 #[derive(Debug, Error)]
 enum StartupError {

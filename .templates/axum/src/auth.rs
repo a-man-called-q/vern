@@ -1,18 +1,28 @@
-use std::sync::Arc;
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+};
 
 use async_trait::async_trait;
 use axum::{
     body::Body,
     extract::{Request, State},
-    http::{HeaderMap, HeaderValue, StatusCode, header},
+    http::{HeaderMap, header},
     middleware::Next,
     response::{IntoResponse, Response},
 };
 use jsonwebtoken::errors::Error as JwtError;
 use serde::Deserialize;
+use serde_json::Value;
 use thiserror::Error;
 
-use crate::config::Config;
+use crate::{config::Config, error::ApiError};
+
+// ZITADEL puts the user's roles in the introspection response under these
+// claims when the web app asked for the `urn:zitadel:iam:org:projects:roles`
+// scope (the web templates do): an object keyed by role key. The second form
+// is scoped to one project.
+const ROLES_CLAIM: &str = "urn:zitadel:iam:org:project:roles";
 
 const PRIVATE_KEY_JWT_ASSERTION_TYPE: &str =
     "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
@@ -74,17 +84,53 @@ impl Audience {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct IntrospectionClaims {
     pub active: bool,
     pub sub: Option<String>,
     pub iss: Option<String>,
     pub aud: Option<Audience>,
+    pub name: Option<String>,
+    pub preferred_username: Option<String>,
+    /// Every other claim, such as the roles.
+    #[serde(flatten)]
+    pub extra: HashMap<String, Value>,
 }
 
 #[derive(Clone, Debug)]
 pub struct AuthenticatedUser {
     pub sub: String,
+    pub display_name: Option<String>,
+    /// Role keys granted to the user in this project.
+    pub roles: BTreeSet<String>,
+}
+
+// Not every API checks roles; the template keeps both for the handlers you add.
+#[allow(dead_code)]
+impl AuthenticatedUser {
+    pub fn has_role(&self, role: &str) -> bool {
+        self.roles.contains(role)
+    }
+
+    /// Answers 403 unless the user holds `role`:
+    /// `user.require_role("publisher")?;` at the top of a handler.
+    pub fn require_role(&self, role: &str) -> Result<(), ApiError> {
+        if self.has_role(role) {
+            Ok(())
+        } else {
+            Err(ApiError::Forbidden(format!("The {role} role is required")))
+        }
+    }
+}
+
+/// The role keys in the introspection response's extra claims.
+fn roles_from_claims(extra: &HashMap<String, Value>, project_id: &str) -> BTreeSet<String> {
+    let project_claim = format!("urn:zitadel:iam:org:project:{project_id}:roles");
+    [ROLES_CLAIM, project_claim.as_str()]
+        .into_iter()
+        .filter_map(|claim| extra.get(claim)?.as_object())
+        .flat_map(|roles| roles.keys().cloned())
+        .collect()
 }
 
 struct ZitadelIntrospector {
@@ -133,16 +179,13 @@ pub async fn require_bearer(
     next: Next,
 ) -> Response {
     let Some(token) = bearer_token(request.headers()) else {
-        return unauthorized();
+        return ApiError::Unauthorized.into_response();
     };
 
     let claims = match state.0.introspector.introspect(token).await {
         Ok(claims) => claims,
         Err(IntrospectionError::Unavailable) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "Token verification is unavailable",
-            )
+            return ApiError::Unavailable("Token verification is unavailable".to_owned())
                 .into_response();
         }
     };
@@ -158,13 +201,18 @@ pub async fn require_bearer(
             .as_ref()
             .is_some_and(|subject| !subject.trim().is_empty());
     if !valid_claims {
-        return unauthorized();
+        return ApiError::Unauthorized.into_response();
     }
 
     let Some(sub) = claims.sub else {
-        return unauthorized();
+        return ApiError::Unauthorized.into_response();
     };
-    request.extensions_mut().insert(AuthenticatedUser { sub });
+    let roles = roles_from_claims(&claims.extra, &state.0.project_id);
+    request.extensions_mut().insert(AuthenticatedUser {
+        sub,
+        display_name: claims.name.or(claims.preferred_username),
+        roles,
+    });
     next.run(request).await
 }
 
@@ -180,27 +228,25 @@ fn bearer_token(headers: &HeaderMap) -> Option<&str> {
     Some(token)
 }
 
-fn unauthorized() -> Response {
-    let mut response = (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
-    response
-        .headers_mut()
-        .insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
-    response
-}
-
 #[cfg(test)]
 mod tests {
     use std::{collections::HashMap, sync::Arc};
 
     use axum::{
+        Extension, Router,
         body::{Body, to_bytes},
         http::{Request, StatusCode, header},
+        middleware,
+        routing::get,
     };
-    use serde_json::Value;
+    use serde_json::{Value, json};
     use tower::ServiceExt;
 
-    use super::{AppState, Audience, IntrospectionClaims, IntrospectionError, TokenIntrospector};
-    use crate::app::router;
+    use super::{
+        AppState, Audience, AuthenticatedUser, IntrospectionClaims, IntrospectionError,
+        TokenIntrospector, require_bearer, roles_from_claims,
+    };
+    use crate::{app::router, error::ApiError};
 
     const ISSUER: &str = "http://zitadel.test";
     const PROJECT: &str = "shared-project-id";
@@ -216,12 +262,7 @@ mod tests {
             self.replies
                 .get(token)
                 .cloned()
-                .unwrap_or(Ok(IntrospectionClaims {
-                    active: false,
-                    sub: None,
-                    iss: None,
-                    aud: None,
-                }))
+                .unwrap_or(Ok(IntrospectionClaims::default()))
         }
     }
 
@@ -234,7 +275,14 @@ mod tests {
                 PROJECT.to_owned(),
                 "api-client-id".to_owned(),
             ])),
+            ..IntrospectionClaims::default()
         }
+    }
+
+    fn claims_with(extra: serde_json::Value) -> IntrospectionClaims {
+        let mut claims = active_claims("user");
+        claims.extra = serde_json::from_value(extra).expect("claims are an object");
+        claims
     }
 
     fn make_state(
@@ -349,5 +397,122 @@ mod tests {
         );
         let response = request_me(make_state(replies), Some("zitadel-down")).await;
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    fn extra(value: Value) -> HashMap<String, Value> {
+        serde_json::from_value(value).expect("claims are an object")
+    }
+
+    #[test]
+    fn roles_are_the_keys_of_both_role_claims() {
+        let claims = extra(json!({
+            "urn:zitadel:iam:org:project:roles": {
+                "publisher": { "org-1": "acme.localhost" }
+            },
+            "urn:zitadel:iam:org:project:shared-project-id:roles": {
+                "admin": { "org-1": "acme.localhost" },
+                "publisher": { "org-1": "acme.localhost" }
+            },
+            "urn:zitadel:iam:org:project:another-project:roles": {
+                "owner": { "org-1": "acme.localhost" }
+            }
+        }));
+        let roles: Vec<_> = roles_from_claims(&claims, PROJECT).into_iter().collect();
+        assert_eq!(roles, ["admin", "publisher"]);
+    }
+
+    #[test]
+    fn missing_or_malformed_role_claims_mean_no_roles() {
+        assert!(roles_from_claims(&HashMap::new(), PROJECT).is_empty());
+        let malformed = extra(json!({
+            "urn:zitadel:iam:org:project:roles": ["publisher"],
+            "urn:zitadel:iam:org:project:shared-project-id:roles": "admin"
+        }));
+        assert!(roles_from_claims(&malformed, PROJECT).is_empty());
+    }
+
+    async fn publisher_only(
+        Extension(user): Extension<AuthenticatedUser>,
+    ) -> Result<String, ApiError> {
+        user.require_role("publisher")?;
+        Ok(format!("hello {}", user.sub))
+    }
+
+    async fn call_publisher_route(claims: IntrospectionClaims) -> axum::response::Response {
+        let mut replies = HashMap::new();
+        replies.insert("token".to_owned(), Ok(claims));
+        let state = make_state(replies);
+        let app = Router::new()
+            .route("/publish", get(publisher_only))
+            .route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                require_bearer,
+            ))
+            .with_state(state);
+        let request = Request::builder()
+            .uri("/publish")
+            .header(header::AUTHORIZATION, "Bearer token")
+            .body(Body::empty())
+            .expect("request is valid");
+        app.oneshot(request).await.expect("router responds")
+    }
+
+    #[tokio::test]
+    async fn require_role_lets_a_user_with_the_role_through() {
+        let claims = claims_with(json!({
+            "urn:zitadel:iam:org:project:roles": { "publisher": {} }
+        }));
+        let response = call_publisher_route(claims).await;
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn require_role_answers_403_with_a_json_error() {
+        let claims = claims_with(json!({
+            "urn:zitadel:iam:org:project:roles": { "advertiser": {} }
+        }));
+        let response = call_publisher_route(claims).await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body is readable");
+        let json: Value = serde_json::from_slice(&body).expect("body is JSON");
+        assert_eq!(json["error"]["code"], "forbidden");
+        assert_eq!(json["error"]["message"], "The publisher role is required");
+    }
+
+    #[tokio::test]
+    async fn a_user_without_any_role_claim_has_no_roles() {
+        let response = call_publisher_route(active_claims("user")).await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn me_reports_the_name_and_roles() {
+        let mut claims = claims_with(json!({
+            "urn:zitadel:iam:org:project:roles": { "publisher": {}, "admin": {} }
+        }));
+        claims.name = Some("Ada Lovelace".to_owned());
+        let mut replies = HashMap::new();
+        replies.insert("token".to_owned(), Ok(claims));
+        let response = request_me(make_state(replies), Some("token")).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body is readable");
+        let json: Value = serde_json::from_slice(&body).expect("body is JSON");
+        assert_eq!(json["name"], "Ada Lovelace");
+        assert_eq!(json["roles"], json!(["admin", "publisher"]));
+    }
+
+    #[tokio::test]
+    async fn rejected_tokens_get_the_json_error_body() {
+        let response = request_me(make_state(HashMap::new()), None).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body is readable");
+        let json: Value = serde_json::from_slice(&body).expect("body is JSON");
+        assert_eq!(json["error"]["code"], "unauthorized");
     }
 }

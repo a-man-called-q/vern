@@ -12,6 +12,9 @@ struct HealthResponse {
 #[derive(Serialize)]
 struct MeResponse {
     sub: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    roles: Vec<String>,
 }
 
 async fn healthz() -> Json<HealthResponse> {
@@ -19,7 +22,11 @@ async fn healthz() -> Json<HealthResponse> {
 }
 
 async fn api_me(Extension(user): Extension<AuthenticatedUser>) -> Json<MeResponse> {
-    Json(MeResponse { sub: user.sub })
+    Json(MeResponse {
+        sub: user.sub,
+        name: user.display_name,
+        roles: user.roles.into_iter().collect(),
+    })
 }
 
 pub fn router(state: AppState) -> Router {
