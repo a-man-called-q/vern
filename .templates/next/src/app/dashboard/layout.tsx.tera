@@ -1,0 +1,45 @@
+---
+skip: {{ include_demos }}
+---
+import { SidebarInset, SidebarProvider } from "@vern/ui/components/sidebar";
+import type { CSSProperties } from "react";
+import { AppSidebar } from "@/components/app-sidebar";
+import { SiteHeader } from "@/components/site-header";
+import { SITE_NAME } from "@/lib/site";
+import { getDashboardData } from "@/server/dashboard.server";
+
+// The sidebar and header wrap every page under /dashboard. A layout does not
+// render again when you move between those pages, so each page that needs a
+// user still calls requireUser().
+export default async function DashboardLayout({
+	children,
+}: LayoutProps<"/dashboard">) {
+	const { user, apiStatus } = await getDashboardData();
+
+	return (
+		<SidebarProvider
+			className="dashboard-theme"
+			style={
+				{
+					"--sidebar-width": "calc(var(--spacing) * 72)",
+					"--header-height": "calc(var(--spacing) * 12)",
+				} as CSSProperties
+			}
+		>
+			<AppSidebar
+				variant="inset"
+				brandName={SITE_NAME}
+				user={% raw %}{{{% endraw %}
+					name: user.name || user.email || `${SITE_NAME} user`,
+					email: user.email || "",
+					subject: user.sub,
+				}}
+				apiStatus={apiStatus}
+			/>
+			<SidebarInset>
+				<SiteHeader />
+				{children}
+			</SidebarInset>
+		</SidebarProvider>
+	);
+}

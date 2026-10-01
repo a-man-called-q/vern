@@ -30,6 +30,10 @@ calling an API, read
   already there; for a form, use `form-rhf` (React Hook Form).
 {% if include_demos %}- **Demo files** (`src/app/(site)/demo`, files named `demo-*`) are samples and
   can be deleted.
+{% else %}- **The dashboard shell** is `src/app/dashboard/layout.tsx` (sidebar and header).
+  A new page goes in `src/app/dashboard/<name>/page.tsx`, starts with
+  `await requireUser()`, and gets an item in `navItems` in
+  `src/components/app-sidebar.tsx`.
 {% endif %}
 Check your work from the repository root:
 

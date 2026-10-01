@@ -1,3 +1,4 @@
+{% if include_demos -%}
 import { Button } from "@vern/ui/components/button";
 import {
 	Card,
@@ -95,3 +96,20 @@ export default function Home() {
 		</main>
 	);
 }
+{%- else -%}
+import { Button } from "@vern/ui/components/button";
+import { SITE_NAME } from "@/lib/site";
+
+export default function Home() {
+	return (
+		<main className="page-wrap flex flex-col items-start gap-4 px-4 py-16 sm:py-24">
+			<h1 className="m-0 text-4xl font-bold tracking-tight sm:text-6xl">
+				{SITE_NAME}
+			</h1>
+			<Button asChild>
+				<a href="/dashboard">Open the dashboard</a>
+			</Button>
+		</main>
+	);
+}
+{%- endif %}

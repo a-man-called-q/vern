@@ -9,7 +9,9 @@ import {
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import Footer from "../components/Footer";
 import Header from "../components/Header";
+{%- if include_demos %}
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
+{%- endif %}
 import appCss from "../styles.css?url";
 
 interface MyRouterContext {
@@ -66,7 +68,9 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 							name: "Tanstack Router",
 							render: <TanStackRouterDevtoolsPanel />,
 						},
+{%- if include_demos %}
 						TanStackQueryDevtools,
+{%- endif %}
 					]}
 				/>
 				<Scripts />

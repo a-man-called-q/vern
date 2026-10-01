@@ -1,3 +1,4 @@
+{% if include_demos -%}
 import {
 	IconCreditCard,
 	IconDotsVertical,
@@ -5,6 +6,9 @@ import {
 	IconNotification,
 	IconUserCircle,
 } from "@tabler/icons-react";
+{%- else -%}
+import { IconDotsVertical, IconLogout } from "@tabler/icons-react";
+{%- endif %}
 
 import {
 	Avatar,
@@ -97,6 +101,7 @@ export function NavUser({
 						</DropdownMenuLabel>
 						<DropdownMenuSeparator />
 						<DropdownMenuGroup>
+{%- if include_demos %}
 							<DropdownMenuItem>
 								<IconUserCircle />
 								Account
@@ -109,6 +114,7 @@ export function NavUser({
 								<IconNotification />
 								Notifications
 							</DropdownMenuItem>
+{%- endif %}
 							{user.subject && (
 								<DropdownMenuItem disabled className="max-w-56 truncate">
 									ID: {user.subject}

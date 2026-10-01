@@ -134,10 +134,16 @@ through PostCSS (`postcss.config.mjs`) and the shared design tokens in
 
 If you prefer not to use Tailwind CSS:
 
+{% if include_demos -%}
 1. Remove the demo pages in `src/app/(site)/demo/`
 2. Replace the Tailwind import in `src/app/globals.css` with your own styles
 3. Delete `postcss.config.mjs`
 4. Remove `@tailwindcss/postcss` and `tailwindcss` from `package.json`
+{%- else -%}
+1. Replace the Tailwind import in `src/app/globals.css` with your own styles
+2. Delete `postcss.config.mjs`
+3. Remove `@tailwindcss/postcss` and `tailwindcss` from `package.json`
+{%- endif %}
 
 ## Linting & Formatting
 
@@ -261,9 +267,21 @@ export default async function People() {
 ```
 
 
+{% if include_demos -%}
 # Demo files
 
 Files prefixed with `demo` and the `src/app/(site)/demo` routes can be safely deleted. They are there to provide a starting point for you to play around with the features you've installed.
+{%- else -%}
+# The dashboard shell
+
+`src/app/dashboard/layout.tsx` wraps every page under `/dashboard` in a sidebar
+and a header, and signs the user in first. The page at `/dashboard` is empty.
+To add a page, create `src/app/dashboard/<name>/page.tsx` (start it with
+`await requireUser()`) and add an item to `navItems` in
+`src/components/app-sidebar.tsx`. The items live in that client component
+because icons are functions, which a Server Component cannot pass down as props.
+The sidebar marks the item whose path matches the current page.
+{%- endif %}
 
 
 # Learn More

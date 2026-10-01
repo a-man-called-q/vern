@@ -20,8 +20,10 @@ example). A new screen for the same people is a route in an app that exists.
    ```
 
    The name is kebab-case and becomes `apps/<name>` and the Moon project name.
-   The demo routes are sample code; add `--no-include_demos` for an app that is
-   going to ship.
+   The demo routes and the sample dashboard are sample code; add
+   `--no-include_demos` for an app that is going to ship. It starts from an empty
+   dashboard in a working sidebar shell: add a page under `dashboard` and an item
+   to `navItems` in `src/components/app-sidebar.tsx`.
 4. **Choose its API**, only when the workspace has more than one Axum API: set
    `API_APP=<api name>` in the new app's `.env.example`. With a single API,
    `setup` wires it by itself.

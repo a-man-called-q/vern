@@ -1,3 +1,4 @@
+{% if include_demos -%}
 import {
 	IconCamera,
 	IconChartBar,
@@ -15,6 +16,10 @@ import {
 	IconSettings,
 	IconUsers,
 } from "@tabler/icons-react";
+{%- else -%}
+import { IconDashboard, IconInnerShadowTop } from "@tabler/icons-react";
+import { Link } from "@tanstack/react-router";
+{%- endif %}
 import {
 	Sidebar,
 	SidebarContent,
@@ -25,11 +30,15 @@ import {
 	SidebarMenuItem,
 } from "@vern/ui/components/sidebar";
 import type * as React from "react";
+{%- if include_demos %}
 import { NavDocuments } from "#/components/nav-documents.tsx";
 import { NavMain } from "#/components/nav-main.tsx";
 import { NavSecondary } from "#/components/nav-secondary.tsx";
+{%- else %}
+import { type NavItem, NavMain } from "#/components/nav-main.tsx";
+{%- endif %}
 import { NavUser } from "#/components/nav-user.tsx";
-
+{% if include_demos %}
 const data = {
 	navMain: [
 		{
@@ -141,6 +150,13 @@ const data = {
 		},
 	],
 };
+{%- else %}
+// To add a page, create its route under src/routes/dashboard and add an item
+// here.
+const navItems: NavItem[] = [
+	{ title: "Dashboard", to: "/dashboard", icon: IconDashboard },
+];
+{%- endif %}
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
 	brandName: string;
@@ -173,18 +189,29 @@ export function AppSidebar({
 							asChild
 							className="data-[slot=sidebar-menu-button]:p-1.5!"
 						>
+{%- if include_demos %}
 							<a href="#dashboard">
 								<IconInnerShadowTop className="size-5!" />
 								<span className="text-base font-semibold">{brandName}</span>
 							</a>
+{%- else %}
+							<Link to="/dashboard">
+								<IconInnerShadowTop className="size-5!" />
+								<span className="text-base font-semibold">{brandName}</span>
+							</Link>
+{%- endif %}
 						</SidebarMenuButton>
 					</SidebarMenuItem>
 				</SidebarMenu>
 			</SidebarHeader>
 			<SidebarContent>
+{%- if include_demos %}
 				<NavMain items={data.navMain} />
 				<NavDocuments items={data.documents} />
 				<NavSecondary items={data.navSecondary} className="mt-auto" />
+{%- else %}
+				<NavMain items={navItems} />
+{%- endif %}
 			</SidebarContent>
 			<SidebarFooter>
 				<div className="mx-2 rounded-lg border border-sidebar-border bg-sidebar-accent/40 px-3 py-2.5">

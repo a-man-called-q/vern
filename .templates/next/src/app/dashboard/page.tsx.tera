@@ -1,3 +1,4 @@
+{% if include_demos -%}
 import { SidebarInset, SidebarProvider } from "@vern/ui/components/sidebar";
 import type { CSSProperties } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -25,7 +26,7 @@ export default async function DashboardPage() {
 			<AppSidebar
 				variant="inset"
 				brandName={SITE_NAME}
-				user={{
+				user={% raw %}{{{% endraw %}
 					name: user.name || user.email || `${SITE_NAME} user`,
 					email: user.email || "",
 					subject: user.sub,
@@ -49,3 +50,19 @@ export default async function DashboardPage() {
 		</SidebarProvider>
 	);
 }
+{%- else -%}
+import { requireUser } from "@/server/auth.server";
+
+export default async function DashboardPage() {
+	await requireUser();
+
+	return (
+		<div className="flex flex-1 flex-col gap-2 p-4 lg:p-6">
+			<h2 className="text-lg font-semibold">Dashboard</h2>
+			<p className="text-sm text-muted-foreground">
+				Nothing here yet. Add pages under <code>src/app/dashboard</code>.
+			</p>
+		</div>
+	);
+}
+{%- endif %}

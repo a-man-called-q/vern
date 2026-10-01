@@ -1,3 +1,7 @@
+---
+skip: {{ not include_demos }}
+---
+{% raw %}
 import {
 	closestCenter,
 	DndContext,
@@ -811,3 +815,4 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
 		</Drawer>
 	);
 }
+{% endraw %}

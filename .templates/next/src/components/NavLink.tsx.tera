@@ -1,3 +1,6 @@
+---
+skip: {{ not include_demos }}
+---
 "use client";
 
 import { cn } from "@vern/ui/lib/utils";

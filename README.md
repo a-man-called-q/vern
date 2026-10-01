@@ -73,7 +73,8 @@ moon run :dev
 - `moon generate` creates each app under `apps/`. Use
   `moon generate next -- --name web --port 3001` for a Next.js app instead of (or
   next to) the TanStack one, and add `--no-include_demos` to leave out the demo
-  routes.
+  routes and the sample dashboard: you get a signed-in shell with a working
+  sidebar and an empty dashboard page to build on.
 - `bun run setup` creates the `.env` files from their examples, starts ZITADEL
   with its Login App, PostgreSQL, and Redis, and creates in ZITADEL the project,
   an OIDC application for each web app (Authorization Code with PKCE, no client

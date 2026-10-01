@@ -1,3 +1,7 @@
+---
+skip: {{ not include_demos }}
+---
+{% raw %}
 "use client";
 
 import {
@@ -813,3 +817,4 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
 		</Drawer>
 	);
 }
+{% endraw %}

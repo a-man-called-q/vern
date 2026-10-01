@@ -1,0 +1,19 @@
+---
+skip: {{ include_demos }}
+---
+import { createFileRoute } from "@tanstack/react-router";
+
+export const Route = createFileRoute("/dashboard/")({
+	component: Dashboard,
+});
+
+function Dashboard() {
+	return (
+		<div className="flex flex-1 flex-col gap-2 p-4 lg:p-6">
+			<h2 className="text-lg font-semibold">Dashboard</h2>
+			<p className="text-sm text-muted-foreground">
+				Nothing here yet. Add routes under <code>src/routes/dashboard</code>.
+			</p>
+		</div>
+	);
+}

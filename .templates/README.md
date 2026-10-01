@@ -10,7 +10,9 @@ moon generate tanstack -- --name dashboard --port 3000
 ```
 
 Demo routes and examples are included by default. Omit them with
-`--no-include_demos`.
+`--no-include_demos` and the app starts from a minimal signed-in shell: a
+sidebar with working links, a header with the app name, a menu with only "Sign
+out", and an empty dashboard page, with no sample data.
 
 ## Next.js
 
@@ -20,7 +22,8 @@ moon generate next -- --name web --port 3001
 
 The same OIDC login, Redis-backed sessions, and server-side API calls as the
 TanStack template, built on the Next.js App Router. Demo routes and examples
-are included by default; omit them with `--no-include_demos`.
+are included by default; omit them with `--no-include_demos` for the same
+minimal shell.
 
 ## Axum
 

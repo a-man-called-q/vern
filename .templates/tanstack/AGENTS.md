@@ -21,6 +21,10 @@ calling an API, read
   already there; for a form, use `form-tanstack` (TanStack Form).
 {% if include_demos %}- **Demo files** (`src/routes/demo`, files named `demo-*`) are samples and can
   be deleted.
+{% else %}- **The dashboard shell** is `src/routes/dashboard.tsx` (sidebar and header).
+  A new page goes in `src/routes/dashboard.<name>.tsx`, loads its data through a
+  server function, and gets an item in `navItems` in
+  `src/components/app-sidebar.tsx`.
 {% endif %}
 Check your work from the repository root:
 
