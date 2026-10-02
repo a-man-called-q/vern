@@ -56,8 +56,12 @@ jobs:
         template: [tanstack, next]
         demos: [true, false]
     steps:
+      # The whole history: on a pull request moon compares with the base branch,
+      # which a shallow checkout does not have.
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install the pinned toolchain
         uses: moonrepo/setup-toolchain@v0
@@ -78,6 +82,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install the pinned toolchain
         uses: moonrepo/setup-toolchain@v0
@@ -100,6 +106,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install the pinned toolchain
         uses: moonrepo/setup-toolchain@v0
@@ -125,6 +133,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install the pinned toolchain
         uses: moonrepo/setup-toolchain@v0
@@ -150,6 +160,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install the pinned toolchain
         uses: moonrepo/setup-toolchain@v0
