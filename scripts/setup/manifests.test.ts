@@ -78,10 +78,10 @@ describe("Kubernetes manifests", () => {
 	test("run the images the Compose stacks run", () => {
 		const image = (path: string) => readFileSync(resolve(ROOT, path), "utf8").match(/image: (\S+)/)?.[1];
 		for (const [manifest, template] of [
-			["deploy/k8s/overlays/local/backing/zitadel-db/postgres.yaml", ".templates/postgres/docker-compose.yml"],
-			["deploy/k8s/overlays/local/backing/data/postgres.yaml", ".templates/postgres/docker-compose.yml"],
-			["deploy/k8s/overlays/local/backing/bus/nats.yaml", ".templates/bus/docker-compose.yml"],
-			["deploy/k8s/overlays/local/backing/storage/seaweedfs.yaml", ".templates/storage/docker-compose.yml"],
+			["deploy/local/backing/zitadel-db/postgres.yaml", ".templates/postgres/docker-compose.yml"],
+			["deploy/local/backing/data/postgres.yaml", ".templates/postgres/docker-compose.yml"],
+			["deploy/local/backing/bus/nats.yaml", ".templates/bus/docker-compose.yml"],
+			["deploy/local/backing/storage/seaweedfs.yaml", ".templates/storage/docker-compose.yml"],
 		]) {
 			expect(image(manifest as string), manifest).toBe(image(template as string));
 		}

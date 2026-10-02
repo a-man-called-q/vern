@@ -3,17 +3,20 @@ import { resolve } from "node:path";
 import { parseEnv } from "./env";
 
 /**
- * The three folders `moon generate` writes to, one per kind of project, each
- * one level deep: web apps (and Storybook), Axum APIs, and the Compose stacks
- * they run on (the auth stack, PostgreSQL, the bus, storage). A name is unique
- * across all three: the Moon project ID, the ZITADEL application, and the port
- * all key on it.
+ * The three folders `moon generate` writes to, one per kind of project: web
+ * apps (and Storybook), Axum APIs, and the Compose stacks they run on while
+ * developing (the auth stack, PostgreSQL, the bus, storage). A project is a
+ * folder directly under one of them. A name is unique across all three: the
+ * Moon project ID, the ZITADEL application, and the port all key on it.
  */
-export const PROJECT_ROOTS = ["apps", "services", "infra"] as const;
+export const PROJECT_ROOTS = ["apps", "services", "deploy/dev"] as const;
 export type ProjectRoot = (typeof PROJECT_ROOTS)[number];
 
+/** Where the Compose stacks of the development environment live. */
+export const DEV_STACKS: ProjectRoot = "deploy/dev";
+
 /** The local ZITADEL, Redis, and Mailpit stack. */
-export const AUTH_SERVER = "infra/auth-server";
+export const AUTH_SERVER = `${DEV_STACKS}/auth-server`;
 
 export type Project = { name: string; path: string; root: ProjectRoot };
 
@@ -43,7 +46,7 @@ export function rootFor(root: string, path: string): ProjectRoot | undefined {
 	const has = (file: string) => existsSync(resolve(root, path, file));
 	if (has("Cargo.toml")) return "services";
 	if (has("package.json")) return "apps";
-	if (has("docker-compose.yml")) return "infra";
+	if (has("docker-compose.yml")) return DEV_STACKS;
 	return undefined;
 }
 

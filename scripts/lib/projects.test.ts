@@ -25,15 +25,15 @@ describe("projects", () => {
 		"apps/web/.env.example": "PORT=3000\nZITADEL_CLIENT_ID=\n",
 		"services/api/Cargo.toml": "",
 		"services/api/.env.example": "PORT=4000\nZITADEL_API_KEY_FILE=./secrets/key.json\n",
-		"infra/auth-server/docker-compose.yml": "",
-		"infra/data/docker-compose.yml": "",
+		"deploy/dev/auth-server/docker-compose.yml": "",
+		"deploy/dev/data/docker-compose.yml": "",
 	};
 
 	test("lists every folder of the three roots by name", () => {
 		expect(listProjects(workspace(files))).toEqual([
 			{ name: "api", path: "services/api", root: "services" },
-			{ name: "auth-server", path: "infra/auth-server", root: "infra" },
-			{ name: "data", path: "infra/data", root: "infra" },
+			{ name: "auth-server", path: "deploy/dev/auth-server", root: "deploy/dev" },
+			{ name: "data", path: "deploy/dev/data", root: "deploy/dev" },
 			{ name: "web", path: "apps/web", root: "apps" },
 		]);
 	});
@@ -51,7 +51,7 @@ describe("projects", () => {
 		const root = workspace({ ...files, "apps/empty/README.md": "" });
 		expect(rootFor(root, "services/api")).toBe("services");
 		expect(rootFor(root, "apps/web")).toBe("apps");
-		expect(rootFor(root, "infra/data")).toBe("infra");
+		expect(rootFor(root, "deploy/dev/data")).toBe("deploy/dev");
 		expect(rootFor(root, "apps/empty")).toBeUndefined();
 	});
 

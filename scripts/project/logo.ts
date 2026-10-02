@@ -1,6 +1,6 @@
 /** Brand logos carry the project name as SVG text, in a fixed 250 wide box. */
 export function isLogoSvg(path: string): boolean {
-	return /^(?:apps|infra)\/auth-server\/brand\/logo-[^/]+\.svg$/.test(path);
+	return /^(?:apps|infra|deploy\/dev)\/auth-server\/brand\/logo-[^/]+\.svg$/.test(path);
 }
 
 const LOGO_FONT_SIZE = 38;

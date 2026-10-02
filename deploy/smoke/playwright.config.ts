@@ -5,7 +5,7 @@ export default defineConfig({
 	reporter: "line",
 	timeout: 90_000,
 	use: {
-		// deploy/docker-compose.local.yml serves certificates from a local authority.
+		// The local environment serves certificates from a local authority.
 		ignoreHTTPSErrors: true,
 		headless: true,
 		screenshot: "only-on-failure",

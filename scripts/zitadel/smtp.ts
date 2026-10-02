@@ -1,6 +1,7 @@
 import { type ApiOptions, callApi, isNoChanges } from "./client";
 
-// What a deployment sets in deploy/.env so ZITADEL can send mail: the invitation,
+// What a deployment sets in its settings (deploy/<environment>/.env, or
+// settings.env on Kubernetes) so ZITADEL can send mail: the invitation,
 // email-verification, and password-reset messages all go through it.
 export const SMTP_HOST_KEY = "SMTP_HOST";
 const SMTP_KEYS = {
@@ -47,7 +48,7 @@ type SmtpConfig = {
 };
 
 /**
- * Reads the SMTP_* variables of deploy/.env. Nothing set means no mail from
+ * Reads the SMTP_* variables of a deployment's settings. Nothing set means no mail from
  * this deployment (`undefined`); a half-filled set is a mistake and stops setup
  * before it starts a container.
  */

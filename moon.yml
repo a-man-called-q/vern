@@ -17,8 +17,8 @@ tasks:
       - 'apps/*/.env.example'
       - 'services/*/.env'
       - 'services/*/.env.example'
-      - 'infra/*/.env'
-      - 'infra/*/.env.example'
+      - 'deploy/dev/*/.env'
+      - 'deploy/dev/*/.env.example'
       - '.env'
       - '.env.example'
     options:

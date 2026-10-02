@@ -196,12 +196,12 @@ describe("rename-project", () => {
 		const base = initRepo(root, {
 			".gitignore": ".env\n",
 			"README.md": "# Vern\n",
-			"infra/auth-server/docker-compose.yml":
+			"deploy/dev/auth-server/docker-compose.yml":
 				"name: vern-auth\nvolumes:\n  postgres-data:\n",
 		});
 		git(root, "update-ref", "refs/vern/upstream-main", base);
 		// The checkout has started its stack: it has an .env, so the volumes are its own.
-		write(root, "infra/auth-server/.env", "ZITADEL_VERSION=v1\n");
+		write(root, "deploy/dev/auth-server/.env", "ZITADEL_VERSION=v1\n");
 		installFakeDocker("vern-auth_postgres-data");
 		expect(() =>
 			renameProject(root, { name: "Acme", slug: "acme", apply: true, base }),
@@ -214,11 +214,11 @@ describe("rename-project", () => {
 		const root = tempRoot("vern-fresh-copy-rename-test-");
 		const base = initRepo(root, {
 			"README.md": "# Vern\n",
-			"infra/auth-server/docker-compose.yml":
+			"deploy/dev/auth-server/docker-compose.yml":
 				"name: vern-auth\nvolumes:\n  postgres-data:\n",
 		});
 		git(root, "update-ref", "refs/vern/upstream-main", base);
-		// No infra/auth-server/.env: this copy never started anything. The fake Docker
+		// No deploy/dev/auth-server/.env: this copy never started anything. The fake Docker
 		// reports another checkout's volume and a running container, and logs any call.
 		const log = installFakeDocker("vern-auth_postgres-data", "abc123");
 		renameProject(root, { name: "Acme", slug: "acme", apply: true, base });
@@ -234,10 +234,10 @@ describe("rename-project", () => {
 		const base = initRepo(root, {
 			".gitignore": ".env\n",
 			"README.md": "# Vern\n",
-			"infra/auth-server/docker-compose.yml": "name: vern-auth\n",
+			"deploy/dev/auth-server/docker-compose.yml": "name: vern-auth\n",
 		});
 		git(root, "update-ref", "refs/vern/upstream-main", base);
-		write(root, "infra/auth-server/.env", "ZITADEL_VERSION=v1\n");
+		write(root, "deploy/dev/auth-server/.env", "ZITADEL_VERSION=v1\n");
 		installFakeDocker("", "abc123");
 		expect(() =>
 			renameProject(root, { name: "Acme", slug: "acme", apply: true, base }),
@@ -274,7 +274,7 @@ describe("rename-project", () => {
 			"README.md": "# Vern\n\nUse @vern/ui in vern-auth.\n",
 			"package.json": '{"name":"vern","private":true}\n',
 			"packages/ui/package.json": '{"name":"@vern/ui"}\n',
-			"infra/auth-server/docker-compose.yml":
+			"deploy/dev/auth-server/docker-compose.yml":
 				"name: vern-auth\nnetworks:\n  auth:\n    name: ${AUTH_NETWORK_NAME:-vern-auth}\n",
 		});
 		git(root, "update-ref", "refs/vern/upstream-main", base);
@@ -295,7 +295,7 @@ describe("rename-project", () => {
 				.name,
 		).toBe("@testing-vern-aja/ui");
 		const compose = readFileSync(
-			resolve(root, "infra/auth-server/docker-compose.yml"),
+			resolve(root, "deploy/dev/auth-server/docker-compose.yml"),
 			"utf8",
 		);
 		expect(compose).toContain("name: testing-vern-aja-auth\n");
@@ -312,7 +312,7 @@ describe("rename-project", () => {
 	});
 
 	describe("logo text", () => {
-		const logoPath = "infra/auth-server/brand/logo-light.svg";
+		const logoPath = "deploy/dev/auth-server/brand/logo-light.svg";
 		const shipped = readFileSync(resolve(ROOT, logoPath), "utf8");
 		// The template's logo, written out here: the shipped one carries the
 		// project's own name once the project is renamed.
@@ -382,9 +382,9 @@ describe("update-project", () => {
 		const base = initRepo(upstream, {
 			".gitignore": ".vern/update-state.json\n",
 			"README.md": "Project: Vern\nFeature: one\n",
-			"infra/auth-server/moon.yml": "tasks: {}\n",
-			"infra/auth-server/brand.txt": "Product Vern\nVariant baseline\n",
-			"infra/auth-server/conflict.txt": "shared line\n",
+			"deploy/dev/auth-server/moon.yml": "tasks: {}\n",
+			"deploy/dev/auth-server/brand.txt": "Product Vern\nVariant baseline\n",
+			"deploy/dev/auth-server/conflict.txt": "shared line\n",
 			"packages/ui/token.txt": "color: violet\n",
 			".templates/tanstack/package.json.tera":
 				'{\n  "name": "{{ name | kebab_case }}",\n  "dependencies": {\n{% if include_demos %}    "chart": "^1.0.0",\n{% endif %}    "@acme/ui": "workspace:*",\n    "demo": "^1.0.0"\n  }\n}\n',
@@ -399,10 +399,10 @@ describe("update-project", () => {
 		write(consumer, "README.md", "Project: Acme\nFeature: one\n");
 		write(
 			consumer,
-			"infra/auth-server/brand.txt",
+			"deploy/dev/auth-server/brand.txt",
 			"Product Acme\nVariant baseline\n",
 		);
-		write(consumer, "infra/auth-server/conflict.txt", "local line\n");
+		write(consumer, "deploy/dev/auth-server/conflict.txt", "local line\n");
 		write(consumer, "apps/dashboard/moon.yml", "tasks: {}\n");
 		write(
 			consumer,
@@ -443,10 +443,10 @@ describe("update-project", () => {
 		write(upstream, "README.md", "Project: Vern\nFeature: two\n");
 		write(
 			upstream,
-			"infra/auth-server/brand.txt",
+			"deploy/dev/auth-server/brand.txt",
 			"Product Vern\nVariant updated upstream\n",
 		);
-		write(upstream, "infra/auth-server/conflict.txt", "upstream line\n");
+		write(upstream, "deploy/dev/auth-server/conflict.txt", "upstream line\n");
 		write(upstream, "docs/upstream.md", "Added by Vern\n");
 		const target = commitAll(upstream, "update template");
 		installFakeCommands();
@@ -460,7 +460,7 @@ describe("update-project", () => {
 			"vern/update-" + target.slice(0, 8),
 		);
 		expect(
-			readFileSync(resolve(consumer, "infra/auth-server/brand.txt"), "utf8"),
+			readFileSync(resolve(consumer, "deploy/dev/auth-server/brand.txt"), "utf8"),
 		).toBe("Product Acme\nVariant updated upstream\n");
 		expect(readFileSync(resolve(consumer, "README.md"), "utf8")).toBe(
 			"Project: Acme\nFeature: two\n",
@@ -469,7 +469,7 @@ describe("update-project", () => {
 			"Added by Acme\n",
 		);
 		expect(
-			readFileSync(resolve(consumer, "infra/auth-server/conflict.txt"), "utf8"),
+			readFileSync(resolve(consumer, "deploy/dev/auth-server/conflict.txt"), "utf8"),
 		).toContain("<<<<<<<");
 		expect(
 			readFileSync(resolve(consumer, "apps/dashboard/src/main.ts"), "utf8"),
@@ -478,7 +478,7 @@ describe("update-project", () => {
 
 		write(
 			consumer,
-			"infra/auth-server/conflict.txt",
+			"deploy/dev/auth-server/conflict.txt",
 			"manually resolved line\n",
 		);
 		updateProject(consumer, { apply: false, continueUpdate: true });

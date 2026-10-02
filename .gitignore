@@ -10,5 +10,11 @@
 !**/.env.example.tera
 **/*.local
 .DS_Store
-deploy/secrets/
-deploy/.local/
+# What `bun run setup` writes for an environment under deploy/: the settings
+# and Secrets of a Kubernetes overlay (ZITADEL's master key among them), and
+# the API's key and the local certificates of the Docker Compose stack. Back
+# them up in a secret manager; deploy/README.md says which ones matter.
+deploy/*/settings.env
+deploy/*/generated/
+deploy/*/secrets/
+deploy/local/certs/

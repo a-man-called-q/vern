@@ -14,7 +14,7 @@ needs a screen for it, manages users through ZITADEL's API.
    ```
 
 2. Run `bun run setup`. It creates the roles that are missing on the ZITADEL
-   project, locally and with `--deploy`. It never changes or deletes a role;
+   project, locally and in every deployment. It never changes or deletes a role;
    rename or remove one in the ZITADEL Console.
 3. Check it in the API: `user.require_role("accountant")?` at the top of a
    handler ([service-engineering.md](service-engineering.md)).
@@ -39,7 +39,7 @@ Local test users are listed in `seed-users.json`, next to `roles.json`:
 
 `bun run setup` grants `adminRoles` to the admin (`zitadel-admin@vern.localhost`)
 and creates each user as `<name>@vern.localhost`. They share the password in
-`ZITADEL_SEED_PASSWORD` in `infra/auth-server/.env`, which `setup` generates; the
+`ZITADEL_SEED_PASSWORD` in `deploy/dev/auth-server/.env`, which `setup` generates; the
 admin's is `ZITADEL_ADMIN_PASSWORD` in the same file.
 
 - Add one user per role, plus one without any role, so every access rule can be
@@ -54,7 +54,7 @@ admin's is `ZITADEL_ADMIN_PASSWORD` in the same file.
 - Every role named here must be in `roles.json`; `setup` and
   `bun run project:doctor` stop on a mistake.
 - It is additive: an existing user only gets the roles it lacks.
-- It is local only. It never runs with `--deploy` or against a ZITADEL that is
+- It is local only. It never runs for a deployment (`--compose`, `--kubernetes`) or against a ZITADEL that is
   not on this machine. Do not work around that, and never put a password in a
   committed file.
 - A role granted to someone who is signed in may not show until they sign out
@@ -81,7 +81,7 @@ It writes `ZITADEL_USER_ADMIN_TOKEN` to that app's `.env`.
 - In production, users and roles are managed in the Console or through this
   service account; test users are never seeded there.
 - Visitors cannot register themselves: `ZITADEL_ALLOW_REGISTER` is `false` in
-  `infra/auth-server/.env` and `deploy/.env`. Leave it that way for a screen that
+  `deploy/dev/auth-server/.env` and a deployment's settings. Leave it that way for a screen that
   manages users; a self-registered account has no roles.
 
 ## A service that creates organizations

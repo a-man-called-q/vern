@@ -16,5 +16,5 @@
 **/.env
 **/.env.*
 !**/.env.example
-infra
+deploy
 services

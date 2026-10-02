@@ -1,6 +1,6 @@
 title: NATS JetStream message bus
 description: Generate a local NATS server with JetStream, the event bus between the APIs.
-destination: '/infra/[name | kebab_case]'
+destination: '/deploy/dev/[name | kebab_case]'
 variables:
   name:
     type: string

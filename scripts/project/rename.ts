@@ -61,7 +61,7 @@ function checkComposeData(root: string, oldName: string, newName: string): void 
 	if (oldName === newName) return;
 	const compose = resolve(root, `${AUTH_SERVER}/docker-compose.yml`);
 	if (!existsSync(compose)) return;
-	// The stack cannot start without infra/auth-server/.env (the compose file requires
+	// The stack cannot start without deploy/dev/auth-server/.env (the compose file requires
 	// ZITADEL_VERSION from it), so a tree without one owns no containers or volumes.
 	// Any `<oldName>` project Docker knows about then belongs to another checkout.
 	if (!existsSync(resolve(root, `${AUTH_SERVER}/.env`))) return;

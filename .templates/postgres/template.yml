@@ -1,6 +1,6 @@
 title: PostgreSQL data tier
 description: Generate a local PostgreSQL for the APIs' own data, with one database per Axum API.
-destination: '/infra/[name | kebab_case]'
+destination: '/deploy/dev/[name | kebab_case]'
 variables:
   name:
     type: string

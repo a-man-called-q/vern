@@ -1,0 +1,24 @@
+# The product on a staging cluster, or in its own namespace of the production
+# cluster: what deploy/prod runs, with its own hostnames, Secrets, and one
+# replica of each app. Nothing is copied from deploy/prod, so the two cannot
+# drift: both are deploy/base. Create the Secrets deploy/base/README.md lists in
+# this namespace first. `bun run setup -- --kubernetes staging` writes
+# `generated/` and applies it.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: vern-staging
+resources:
+  - ../base
+  - namespace.yaml
+components:
+  # The hostnames, images, settings, and Secrets of this project.
+  - generated
+patches:
+  # One replica of each app is enough to try a change.
+  - target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/component in (web,api)
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1

@@ -1,9 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { errorMessage } from "../lib/errors";
-import { AUTH_SERVER, listProjects, PROJECT_ROOTS, rootFor } from "../lib/projects";
+import { AUTH_SERVER, listProjects, PROJECT_ROOTS } from "../lib/projects";
 import { stripCargoConditions } from "../project/cargo-template";
 import { readConfig } from "../project/config";
+import { deployLeftovers, OLD_AUTH_SERVERS, planLayoutMigration } from "../project/layout";
 import { renderPackageTemplate } from "../project/package-template";
 import { WEB_TEMPLATES } from "../project/templates";
 import type { Report } from "./report";
@@ -13,25 +14,21 @@ import type { Report } from "./report";
  * Moon project ID, the ZITADEL application, and the port all key on it.
  */
 export function checkLayout(root: string, report: Report): void {
-	let projects = listProjects(root);
+	const projects = listProjects(root).filter((project) => !OLD_AUTH_SERVERS.includes(project.path));
 	let problems = 0;
-	if (projects.some((project) => project.path === "apps/auth-server")) {
+	const migrate = "`bun run project:update -- --migrate`";
+	// What a layout from before deploy/dev/ still has in the old places.
+	for (const move of planLayoutMigration(root)) {
 		problems += 1;
-		report(
-			"FAIL",
-			`apps/auth-server is left from before the auth stack moved to ${AUTH_SERVER}. Run \`bun run project:update -- --migrate\`.`,
-		);
-		projects = projects.filter((project) => project.path !== "apps/auth-server");
-	}
-	for (const project of projects) {
-		const expected = rootFor(root, project.path);
-		if (expected && expected !== project.root) {
-			problems += 1;
-			report(
-				"FAIL",
-				`${project.path} belongs in ${expected}/. Move it with \`bun run project:update -- --migrate\`.`,
-			);
+		if (OLD_AUTH_SERVERS.includes(move.from)) {
+			report("FAIL", `${move.from} is left from before the auth stack moved to ${AUTH_SERVER}. Run ${migrate}.`);
+		} else {
+			report("FAIL", `${move.from} belongs in ${dirname(move.to)}/. Move it with ${migrate}.`);
 		}
+	}
+	for (const path of deployLeftovers(root)) {
+		problems += 1;
+		report("FAIL", `${path} is left from the old deploy/ layout. Carry your changes over to its new place (deploy/README.md), then delete it.`);
 	}
 	const seen = new Map<string, string>();
 	for (const project of projects) {

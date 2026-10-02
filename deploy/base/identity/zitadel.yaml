@@ -1,0 +1,154 @@
+# ZITADEL and its Login App in one pod: ZITADEL writes the Login App's token to
+# the bootstrap volume when it creates its database, and the Login App reads it
+# there. One replica, so the volume can be ReadWriteOnce.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zitadel-bootstrap
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 16Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zitadel
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: zitadel
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: zitadel
+    spec:
+      containers:
+        - name: zitadel
+          image: zitadel
+          args: ["start-from-init", "--masterkeyFromEnv"]
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: zitadel-static
+            # The hostname, the first organization, and sign-up.
+            - configMapRef:
+                name: zitadel
+            # ZITADEL_MASTERKEY and the first admin's password.
+            - secretRef:
+                name: zitadel
+          env:
+            - name: ZITADEL_DATABASE_POSTGRES_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: zitadel-database
+                  key: dsn
+          volumeMounts:
+            - name: bootstrap
+              mountPath: /zitadel/bootstrap
+          # Writes the bootstrap tokens to the volume, as root, as
+          # deploy/compose/docker-compose.yml runs it.
+          securityContext:
+            runAsUser: 0
+          # The first start creates the database, which takes a while.
+          startupProbe:
+            exec:
+              command: ["/app/zitadel", "ready"]
+            periodSeconds: 10
+            timeoutSeconds: 30
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command: ["/app/zitadel", "ready"]
+            periodSeconds: 10
+            timeoutSeconds: 30
+          livenessProbe:
+            exec:
+              command: ["/app/zitadel", "ready"]
+            periodSeconds: 30
+            timeoutSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+        # Waits for the token file before it starts (its entrypoint does).
+        - name: login
+          image: zitadel-login
+          ports:
+            - name: login
+              containerPort: 3000
+          envFrom:
+            # CUSTOM_REQUEST_HEADERS, with the hostname.
+            - configMapRef:
+                name: zitadel-login
+          env:
+            - name: ZITADEL_API_URL
+              value: http://127.0.0.1:8080
+            - name: NEXT_PUBLIC_BASE_PATH
+              value: /ui/v2/login
+            - name: ZITADEL_SERVICE_USER_TOKEN_FILE
+              value: /zitadel/bootstrap/login-client.pat
+            - name: VERN_BRAND_FILE
+              value: /brand/brand.json
+          volumeMounts:
+            - name: bootstrap
+              mountPath: /zitadel/bootstrap
+              readOnly: true
+            - name: brand
+              mountPath: /brand
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /ui/v2/login/ready
+              port: login
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+      volumes:
+        - name: bootstrap
+          persistentVolumeClaim:
+            claimName: zitadel-bootstrap
+        - name: brand
+          configMap:
+            name: brand
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zitadel-api
+  annotations:
+    # ZITADEL serves its APIs and gRPC over HTTP/2 without TLS (h2c).
+    traefik.ingress.kubernetes.io/service.serversscheme: h2c
+spec:
+  selector:
+    app.kubernetes.io/name: zitadel
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      appProtocol: kubernetes.io/h2c
+---
+# What auth-pages' nginx.conf proxies the sign-in pages to.
+apiVersion: v1
+kind: Service
+metadata:
+  name: zitadel-login
+spec:
+  selector:
+    app.kubernetes.io/name: zitadel
+  ports:
+    - name: login
+      port: 3000
+      targetPort: login

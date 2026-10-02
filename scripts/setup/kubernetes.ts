@@ -15,7 +15,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { type EnvFiles, parseEnv, readEffectiveEnv, setEnvValue } from "../lib/env";
-import { AUTH_SERVER, type App, findApps } from "../lib/projects";
+import { AUTH_SERVER, type App, DEV_STACKS, findApps } from "../lib/projects";
 import { run } from "../lib/run";
 import { ALLOW_REGISTER_KEY, parseAllowRegister } from "../zitadel/login-policy";
 import { readSmtpSettings } from "../zitadel/smtp";
@@ -35,14 +35,11 @@ import {
 } from "./manifests";
 import { provisionOrgAdmin, wantsOrgAdmin } from "./org-admin";
 import { randomSecret } from "./secrets";
-import { resolveToken } from "./stack";
+import { ensureLocalCertificates, trustingFetch } from "./local-ca";
+import { BASE, DEPLOY, resolveToken } from "./stack";
 import { applySelfRegistration, applySmtp, connect, ensureApiKey, ensureProjectWithRoles, ensureWebApplication } from "./steps";
 
-export const K8S = "deploy/k8s";
-const OVERLAYS: Overlay[] = ["local", "production"];
-
 type KubeValues = {
-	kubernetes?: string;
 	"pat-file"?: string;
 	"skip-start"?: boolean;
 	"manifests-only"?: boolean;
@@ -63,11 +60,6 @@ export function readKubeToken(root: string, namespace: string): string | undefin
 	return result.status === 0 ? result.stdout.trim() || undefined : undefined;
 }
 
-function overlayOf(value: string | undefined): Overlay {
-	if (value === "local" || value === "production") return value;
-	throw new Error(`--kubernetes takes ${OVERLAYS.join(" or ")}, the overlay under ${K8S}/overlays/`);
-}
-
 function writePrivate(path: string, content: string): void {
 	mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
 	writeFileSync(path, content, { mode: 0o600 });
@@ -85,11 +77,11 @@ function readSettings(
 	overlay: Overlay,
 	processEnv: Record<string, string | undefined>,
 ): { settings: KubeSettings; env: Map<string, string>; file: string } {
-	const dir = `${K8S}/overlays/${overlay}`;
+	const dir = `${DEPLOY}/${overlay}`;
 	const file = `${dir}/settings.env`;
 	if (!existsSync(resolve(root, file))) {
 		copyFileSync(resolve(root, dir, "settings.env.example"), resolve(root, file));
-		if (overlay === "production") {
+		if (overlay !== "local") {
 			throw new Error(`Created ${file}. Set DOMAIN and IMAGE_REGISTRY in it, then run this again.`);
 		}
 	}
@@ -97,7 +89,7 @@ function readSettings(
 	const domain = env.get("DOMAIN")?.trim() ?? "";
 	if (!domain || domain.endsWith("example.com")) throw new Error(`Set DOMAIN in ${file}`);
 	const imageRegistry = (env.get("IMAGE_REGISTRY") ?? "").trim().replace(/\/+$/, "");
-	if (overlay === "production" && (!imageRegistry || imageRegistry.includes("your-org"))) {
+	if (overlay !== "local" && (!imageRegistry || imageRegistry.includes("your-org"))) {
 		throw new Error(`Set IMAGE_REGISTRY in ${file}: the images are <IMAGE_REGISTRY>/<app>:<IMAGE_TAG>`);
 	}
 	// The workflow that pushes the images tags them with the commit.
@@ -124,14 +116,14 @@ function readSettings(
 	};
 }
 
-/** The stacks under infra/ that the local overlay runs: the names `moon generate` docs use. */
+/** The stacks under deploy/dev/ that the local overlay runs: the names `moon generate` docs use. */
 function readBacking(root: string): Backing {
-	const has = (name: string) => existsSync(resolve(root, "infra", name, "docker-compose.yml"));
+	const has = (name: string) => existsSync(resolve(root, DEV_STACKS, name, "docker-compose.yml"));
 	let storage: Backing["storage"];
 	if (has("storage")) {
-		const up = readFileSync(resolve(root, "infra/storage/up.sh"), "utf8");
+		const up = readFileSync(resolve(root, DEV_STACKS, "storage/up.sh"), "utf8");
 		const bucket = up.match(/-X PUT "http:\/\/127\.0\.0\.1:\$\{port\}\/([^"/]+)"/)?.[1];
-		if (!bucket) throw new Error("Cannot find the bucket name in infra/storage/up.sh");
+		if (!bucket) throw new Error(`Cannot find the bucket name in ${DEV_STACKS}/storage/up.sh`);
 		storage = { bucket };
 	}
 	return { data: has("data"), bus: has("bus"), storage };
@@ -220,30 +212,18 @@ function ensureSecrets(
 	}
 	if (backing.bus) setSecret(join(secrets, "bus.env"), "url", "nats://bus:4222");
 	if (backing.storage) {
-		writePrivate(join(secrets, "storage-s3.json"), readFileSync(resolve(root, "infra/storage/s3.json"), "utf8"));
+		writePrivate(join(secrets, "storage-s3.json"), readFileSync(resolve(root, DEV_STACKS, "storage/s3.json"), "utf8"));
 	}
 }
 
 /** A local certificate authority and one certificate for every hostname under DOMAIN. */
-function ensureLocalCertificates(root: string, dir: string, settings: KubeSettings, log: Log): void {
-	const tls = resolve(root, dir, "generated/tls");
-	if (existsSync(join(tls, "cert.pem"))) return;
-	mkdirSync(tls, { recursive: true, mode: 0o700 });
-	const openssl = (...args: string[]) => run("openssl", args, { cwd: tls });
-	openssl("req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "365", "-subj", "/CN=Vern local CA",
-		"-addext", "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign,cRLSign",
-		"-keyout", "ca-key.pem", "-out", "ca.pem");
-	openssl("req", "-newkey", "rsa:2048", "-nodes", "-subj", `/CN=${settings.domain}`, "-keyout", "key.pem", "-out", "cert.csr");
-	writeFileSync(
-		join(tls, "cert.ext"),
-		`subjectAltName=DNS:${settings.domain},DNS:*.${settings.domain},DNS:${settings.authHost}\nextendedKeyUsage=serverAuth\n`,
-	);
-	openssl("x509", "-req", "-in", "cert.csr", "-CA", "ca.pem", "-CAkey", "ca-key.pem", "-CAcreateserial", "-days", "365",
-		"-extfile", "cert.ext", "-out", "cert.pem");
+function ensureOverlayCertificates(root: string, dir: string, settings: KubeSettings, log: Log): void {
+	const names = [settings.domain, `*.${settings.domain}`, settings.authHost];
+	if (!ensureLocalCertificates(resolve(root, dir, "generated/tls"), names)) return;
 	log(`Created a local certificate authority in ${dir}/generated/tls (import ca.pem in a browser to trust it)`);
 }
 
-/** Writes deploy/k8s/base/kustomization.yaml and the overlay's `generated/`. */
+/** Writes deploy/base/kustomization.yaml and the overlay's `generated/`. */
 function writeManifests(
 	root: string,
 	dir: string,
@@ -252,7 +232,7 @@ function writeManifests(
 	backing: Backing,
 	projectId: string,
 ): void {
-	writeFileSync(resolve(root, K8S, "base/kustomization.yaml"), baseKustomization(apps));
+	writeFileSync(resolve(root, BASE, "kustomization.yaml"), baseKustomization(apps));
 	const generated = resolve(root, dir, "generated");
 	mkdirSync(join(generated, "brand"), { recursive: true });
 	const brandFiles = readdirSync(resolve(root, AUTH_SERVER, "brand")).sort();
@@ -310,26 +290,20 @@ function readNamespace(root: string, dir: string): string {
 	return match[1];
 }
 
-/** fetch that trusts the local certificate authority (Bun's `tls.ca`). */
-function trustingFetch(caFile: string): typeof fetch {
-	const ca = readFileSync(caFile, "utf8");
-	return ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, { ...init, tls: { ca } } as RequestInit)) as typeof fetch;
-}
-
 /**
- * The Kubernetes flow: settings, Secrets, and manifests for an overlay of
- * deploy/k8s; then the cluster, ZITADEL's project, an application per web app
+ * The Kubernetes flow: settings, Secrets, and manifests for the overlay in
+ * deploy/<environment>; then the cluster, ZITADEL's project, an application per web app
  * and a key per API; then the manifests again with what ZITADEL created.
  */
 export async function setupKubernetes(
+	overlay: Overlay,
 	values: KubeValues,
 	root: string,
 	log: Log,
 	processEnv: Record<string, string | undefined>,
 	deps: SetupDeps,
 ): Promise<number> {
-	const overlay = overlayOf(values.kubernetes);
-	const dir = `${K8S}/overlays/${overlay}`;
+	const dir = `${DEPLOY}/${overlay}`;
 	const { settings, env, file } = readSettings(root, overlay, processEnv);
 	// A half-filled mail setup stops here, before anything reaches the cluster.
 	const smtp = readSmtpSettings(env, file, settings.orgName);
@@ -347,11 +321,11 @@ export async function setupKubernetes(
 	}
 	const secret = deps.randomSecret ?? randomSecret;
 	ensureSecrets(root, dir, settings, apps, backing, secret, log);
-	if (overlay === "local") ensureLocalCertificates(root, dir, settings, log);
+	if (overlay === "local") ensureOverlayCertificates(root, dir, settings, log);
 	const statePath = resolve(root, dir, "generated/state.env");
 	let projectId = parseEnv(statePath).get("ZITADEL_PROJECT_ID") ?? "";
 	writeManifests(root, dir, settings, apps, backing, projectId);
-	log(`Wrote ${K8S}/base/kustomization.yaml and ${dir}/generated/`);
+	log(`Wrote ${BASE}/kustomization.yaml and ${dir}/generated/`);
 	if (values["manifests-only"]) return 0;
 
 	const kubectl = deps.runKubectl ?? runKubectl;

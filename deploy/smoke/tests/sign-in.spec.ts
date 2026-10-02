@@ -27,7 +27,7 @@ test("signs in to the web app and reaches the API", async ({ page }) => {
 		await page.getByTestId("password-change-text-input").fill(env("NEW_PASSWORD"));
 		await page.getByTestId("password-change-confirm-text-input").fill(env("NEW_PASSWORD"));
 		await page.getByTestId("submit-button").click();
-		// Tells deploy/smoke-test.sh to record the new password.
+		// Tells the smoke-test.sh that runs this to record the new password.
 		writeFileSync("/out/password-changed", "");
 	}
 

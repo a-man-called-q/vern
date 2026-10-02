@@ -11,7 +11,7 @@ example). A new screen for the same people is a route in an app that exists.
    Router). Both have the same sign-in, sessions, and API calls. Use the one the
    project already uses unless the user asks for the other.
 2. **Choose a free port.** Every app has its own. Look at `PORT` in
-   `apps/*/.env.example`, `services/*/.env.example`, and `infra/*/.env.example`. Taken by the stack: 8081 (ZITADEL), 6379 (Redis), 6006
+   `apps/*/.env.example`, `services/*/.env.example`, and `deploy/dev/*/.env.example`. Taken by the stack: 8081 (ZITADEL), 6379 (Redis), 6006
    (Storybook), and 5433 (the data PostgreSQL, when there is one).
 3. **Generate it** from the repository root:
 
@@ -20,7 +20,7 @@ example). A new screen for the same people is a route in an app that exists.
    ```
 
    The name is kebab-case and becomes `apps/<name>` and the Moon project name,
-   so no API in `services/` or stack in `infra/` may have it too.
+   so no API in `services/` or stack in `deploy/dev/` may have it too.
    The demo routes and the sample dashboard are sample code; add
    `--no-include_demos` for an app that is going to ship. It starts from an empty
    dashboard in a working sidebar shell: add a page under `dashboard` and an item
@@ -39,7 +39,7 @@ example). A new screen for the same people is a route in an app that exists.
    already exists, so run it after every `moon generate`.
 6. **Run it:** `moon run <name>:dev`, then sign in at `http://localhost:<port>`
    as `zitadel-admin@vern.localhost` with `ZITADEL_ADMIN_PASSWORD` from
-   `infra/auth-server/.env`, or as a seeded user (see
+   `deploy/dev/auth-server/.env`, or as a seeded user (see
    [roles-and-users.md](roles-and-users.md)).
 7. **Check it:** `moon run <name>:check` and `moon run <name>:test`.
 
@@ -65,8 +65,9 @@ example). A new screen for the same people is a route in an app that exists.
   outside Moon, so the root `.env` was not loaded. Use `moon run <name>:dev`.
 - **Signing out of one app signs out the others.** That is single sign-on: they
   share one ZITADEL session. To try another user, sign out first.
-- **Deploying a second web app.** `deploy/` runs one web app and one API; its
-  README ("More apps") shows how to add another.
+- **Deploying a second web app.** `deploy/compose` runs one web app and one
+  API; its README ("More apps") shows how to add another. On Kubernetes every
+  app is deployed.
 
 ## Changing a generator
 

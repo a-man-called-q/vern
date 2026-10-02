@@ -1,8 +1,8 @@
 name: Images
 
 # Builds the production image of every web app (apps/*) and API (services/*)
-# and pushes it as <registry>/<app>:<commit>, what
-# deploy/k8s/overlays/production runs. The registry is the IMAGE_REGISTRY
+# and pushes it as <registry>/<app>:<commit>, what the Kubernetes overlays of
+# deploy/staging and deploy/prod run. The registry is the IMAGE_REGISTRY
 # repository variable, or ghcr.io/<owner>/<repository> without it; set
 # REGISTRY_USERNAME and REGISTRY_PASSWORD secrets for a registry other than
 # GHCR.

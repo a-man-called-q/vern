@@ -3,18 +3,22 @@ import { ROOT } from "../lib/paths";
 import { ROLES_FILE } from "../zitadel/roles";
 import { SEED_FILE } from "../zitadel/seed";
 import type { SetupDeps } from "./context";
-import { setupDeploy } from "./deploy";
+import { setupCompose } from "./compose";
 import { setupKubernetes } from "./kubernetes";
 import { setupLocal } from "./local";
+import { type Environment, environmentOf, type Method, methodOf } from "./stack";
 
 const USAGE = `Configure ZITADEL for the generated apps.
 
 Usage: bun run setup [-- options]
 
-  --deploy           Set up the production stack in deploy/ instead of the
-                     local one (see deploy/README.md)
-  --kubernetes <o>   Set up the deploy/k8s overlay <o> (local or production)
-                     on the cluster kubectl points at (see deploy/k8s/README.md)
+  --compose <env>    Set up the environment <env> (local, staging, or prod) with
+                     the Docker Compose stack of deploy/compose, on this
+                     machine (see deploy/compose/README.md)
+  --kubernetes <env> Set up the environment <env> with its Kustomize overlay
+                     in deploy/<env>, on the cluster kubectl points at (see
+                     deploy/base/README.md)
+  --env <env>        Set up the environment <env> the way it was set up before
   --manifests-only   With --kubernetes: write the manifests and Secrets only,
                      without the cluster or ZITADEL
   --pat-file <path>  Token of a service user with the IAM Owner role
@@ -30,8 +34,8 @@ API application with a key for each Axum API. A web app gets its API_BASE_URL
 from API_APP in its .env (the name of an Axum app), or from the only API there
 is. It also creates the project roles listed in ${ROLES_FILE}, and, on a local
 ZITADEL only, the users and the admin's roles listed in ${SEED_FILE}. With
---deploy, it also generates the missing secrets in deploy/.env and starts the
-whole production stack. With --kubernetes, it writes the overlay's manifests
+--compose, it also generates the missing secrets in deploy/<env>/.env and
+starts the whole stack. With --kubernetes, it writes the overlay's manifests
 for every web app and API, applies them, and creates the same in ZITADEL.
 Safe to run again: existing settings are kept.`;
 
@@ -42,8 +46,11 @@ export async function setup(argv: string[], deps: SetupDeps = {}): Promise<numbe
 	const { values } = parseArgs({
 		args: argv,
 		options: {
-			deploy: { type: "boolean", default: false },
+			compose: { type: "string" },
 			kubernetes: { type: "string" },
+			env: { type: "string" },
+			// The name --compose prod had before there were environments.
+			deploy: { type: "boolean", default: false },
 			"manifests-only": { type: "boolean", default: false },
 			"pat-file": { type: "string" },
 			"skip-start": { type: "boolean", default: false },
@@ -55,9 +62,25 @@ export async function setup(argv: string[], deps: SetupDeps = {}): Promise<numbe
 		log(USAGE);
 		return 0;
 	}
-	if (values.kubernetes !== undefined) return setupKubernetes(values, root, log, processEnv, deps);
-	if (values["manifests-only"]) throw new Error("--manifests-only goes with --kubernetes");
-	return values.deploy
-		? setupDeploy(values, root, log, processEnv, deps)
-		: setupLocal(values, root, log, processEnv, deps);
+	const chosen = [
+		values.compose !== undefined && "--compose",
+		values.kubernetes !== undefined && "--kubernetes",
+		values.env !== undefined && "--env",
+		values.deploy && "--deploy",
+	].filter(Boolean);
+	if (chosen.length > 1) throw new Error(`Use one of ${chosen.join(", ")}.`);
+	let method: Method | undefined;
+	let environment: Environment | undefined;
+	if (values.kubernetes !== undefined) [method, environment] = ["kubernetes", environmentOf("--kubernetes", values.kubernetes)];
+	else if (values.compose !== undefined) [method, environment] = ["compose", environmentOf("--compose", values.compose)];
+	else if (values.deploy) [method, environment] = ["compose", "prod"];
+	else if (values.env !== undefined) {
+		environment = environmentOf("--env", values.env);
+		method = methodOf(root, environment);
+	}
+	if (values["manifests-only"] && method !== "kubernetes") throw new Error("--manifests-only goes with --kubernetes");
+	if (!method || !environment) return setupLocal(values, root, log, processEnv, deps);
+	return method === "kubernetes"
+		? setupKubernetes(environment, values, root, log, processEnv, deps)
+		: setupCompose(environment, values, root, log, processEnv, deps);
 }

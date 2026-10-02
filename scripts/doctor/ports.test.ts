@@ -14,7 +14,7 @@ function workspace(files: Record<string, string>): string {
 	roots.push(root);
 	for (const [path, content] of Object.entries({
 		".env.example": "ZITADEL_ISSUER=http://localhost:8081\nREDIS_URL=redis://localhost:6379\n",
-		"infra/auth-server/.env.example": "AUTH_HTTP_PORT=8081\nREDIS_PORT=6379\n",
+		"deploy/dev/auth-server/.env.example": "AUTH_HTTP_PORT=8081\nREDIS_PORT=6379\n",
 		...files,
 	})) {
 		mkdirSync(dirname(resolve(root, path)), { recursive: true });

@@ -63,7 +63,7 @@ callbacks or sessions.
 - `GET /healthz` answers `{"status":"ok"}` with no session and no call to
   ZITADEL or Redis: point load balancers and probes at it.
 - On Kubernetes, `k8s/` holds this app's Deployment and Service, which
-  `deploy/k8s` lists and configures; see `deploy/k8s/README.md`.
+  `deploy/base` lists and configures; see `deploy/base/README.md`.
 - Register a separate ZITADEL Web application for each environment: Authorization
   Code with PKCE (no client secret), the **Refresh Token** grant, and HTTPS
   redirect and post-logout URLs. Leave **Development Mode** off; it exists only
@@ -127,7 +127,7 @@ The image builds with `NEXT_OUTPUT=standalone` and runs the standalone server on
 port 3000. It keeps only the Alpine build of `sharp`, which `next/image` uses
 to optimize images. It reads the settings from `.env.example` plus the shared
 `ZITADEL_ISSUER`, `ZITADEL_PROJECT_ID`, and `REDIS_URL`. The repository's
-`deploy/` folder runs it behind HTTPS.
+`deploy/compose` folder runs it behind HTTPS.
 
 ## Styling
 

@@ -23,7 +23,7 @@ function workspace(): string {
 	const root = mkdtempSync(join(tmpdir(), "vern-setup-"));
 	tempDirs.push(root);
 	write(root, ".env.example", "ZITADEL_ISSUER=http://localhost:8081\nZITADEL_PROJECT_ID=replace-with-your-zitadel-project-id\n");
-	write(root, "infra/auth-server/.env.example", "ZITADEL_ORG_NAME=Vern\nZITADEL_ADMIN_USERNAME=zitadel-admin\n");
+	write(root, "deploy/dev/auth-server/.env.example", "ZITADEL_ORG_NAME=Vern\nZITADEL_ADMIN_USERNAME=zitadel-admin\n");
 	write(
 		root,
 		"apps/dashboard/.env.example",
@@ -246,7 +246,7 @@ describe("setup", () => {
 		const rootEnv = parseEnv(resolve(root, ".env"));
 		expect(rootEnv.get("ZITADEL_PROJECT_ID")).toBe("100");
 		expect(zitadel.projects).toEqual([{ id: "100", name: "Vern" }]);
-		expect(existsSync(resolve(root, "infra/auth-server/.env"))).toBe(true);
+		expect(existsSync(resolve(root, "deploy/dev/auth-server/.env"))).toBe(true);
 
 		const web = parseEnv(resolve(root, "apps/dashboard/.env"));
 		expect(web.get("ZITADEL_CLIENT_ID")).toBe("client-dashboard");
@@ -452,16 +452,16 @@ describe("setup", () => {
 			expect(zitadel.roles).toHaveLength(0);
 		});
 
-		test("also creates them with --deploy", async () => {
+		test("also creates them with --compose", async () => {
 			const root = workspace();
 			write(root, "roles.json", JSON.stringify(["publisher"]));
 			write(
 				root,
-				"deploy/.env",
+				"deploy/prod/.env",
 				"AUTH_DOMAIN=auth.acme.test\nAPP_DOMAIN=app.acme.test\nAPI_DOMAIN=api.acme.test\nACME_EMAIL=ops@acme.test\nWEB_APP=dashboard\nAPI_APP=api\n",
 			);
 			const zitadel = fakeZitadel();
-			await setup(["--deploy"], { ...deps(root, zitadel), runCompose: () => {} });
+			await setup(["--compose", "prod"], { ...deps(root, zitadel), runCompose: () => {} });
 			expect(zitadel.roles.map((role) => role.roleKey)).toEqual(["publisher"]);
 		});
 	});
@@ -477,7 +477,7 @@ describe("setup", () => {
 			write(root, "seed-users.json", JSON.stringify(seed));
 			return root;
 		}
-		const passwordOf = (root: string) => parseEnv(resolve(root, "infra/auth-server/.env")).get("ZITADEL_SEED_PASSWORD");
+		const passwordOf = (root: string) => parseEnv(resolve(root, "deploy/dev/auth-server/.env")).get("ZITADEL_SEED_PASSWORD");
 
 		test("grants the admin and creates the users with a generated password, once", async () => {
 			const root = seeded();
@@ -495,8 +495,8 @@ describe("setup", () => {
 				{ userId: zitadel.users[1].id, projectId: "100", roleKeys: ["publisher"] },
 			]);
 			expect(passwordOf(root)).toBe("generated-secret");
-			expect(logs).toContain("Generated ZITADEL_SEED_PASSWORD in infra/auth-server/.env");
-			expect(logs).toContain("Seeded users: publisher@vern.localhost (password: ZITADEL_SEED_PASSWORD in infra/auth-server/.env)");
+			expect(logs).toContain("Generated ZITADEL_SEED_PASSWORD in deploy/dev/auth-server/.env");
+			expect(logs).toContain("Seeded users: publisher@vern.localhost (password: ZITADEL_SEED_PASSWORD in deploy/dev/auth-server/.env)");
 			expect(logs.join("\n")).not.toContain("generated-secret");
 
 			zitadel.calls.length = 0;
@@ -508,7 +508,7 @@ describe("setup", () => {
 
 		test("keeps a password that is already set", async () => {
 			const root = seeded();
-			write(root, "infra/auth-server/.env", "ZITADEL_SEED_PASSWORD=my-own-Passw0rd!\n");
+			write(root, "deploy/dev/auth-server/.env", "ZITADEL_SEED_PASSWORD=my-own-Passw0rd!\n");
 			const zitadel = fakeZitadel();
 			const logs: string[] = [];
 			await setup([], deps(root, zitadel, logs));
@@ -539,15 +539,15 @@ describe("setup", () => {
 			expect(zitadel.grants).toHaveLength(0);
 		});
 
-		test("--deploy never seeds", async () => {
+		test("--compose never seeds", async () => {
 			const root = seeded();
 			write(
 				root,
-				"deploy/.env",
+				"deploy/prod/.env",
 				"AUTH_DOMAIN=auth.acme.test\nAPP_DOMAIN=app.acme.test\nAPI_DOMAIN=api.acme.test\nACME_EMAIL=ops@acme.test\nWEB_APP=dashboard\nAPI_APP=api\n",
 			);
 			const zitadel = fakeZitadel();
-			await setup(["--deploy"], { ...deps(root, zitadel), runCompose: () => {} });
+			await setup(["--compose", "prod"], { ...deps(root, zitadel), runCompose: () => {} });
 			expect(zitadel.users).toHaveLength(1);
 			expect(zitadel.grants).toHaveLength(0);
 		});
@@ -584,7 +584,7 @@ describe("setup", () => {
 
 		test("turns sign-up off on an instance that has it on, keeping the other settings", async () => {
 			const root = workspace();
-			write(root, "infra/auth-server/.env", "ZITADEL_ALLOW_REGISTER=false\n");
+			write(root, "deploy/dev/auth-server/.env", "ZITADEL_ALLOW_REGISTER=false\n");
 			const zitadel = fakeZitadel();
 			zitadel.loginPolicy.settings.allowRegister = true;
 			const logs: string[] = [];
@@ -607,13 +607,13 @@ describe("setup", () => {
 				"passwordCheckLifetime",
 				"passwordlessType",
 			]);
-			expect(logs).toContain("Turned self-registration off in ZITADEL (ZITADEL_ALLOW_REGISTER=false in infra/auth-server/.env)");
+			expect(logs).toContain("Turned self-registration off in ZITADEL (ZITADEL_ALLOW_REGISTER=false in deploy/dev/auth-server/.env)");
 			expect(logs.some((line) => line.startsWith("The sign-in pages follow within 15 minutes"))).toBe(true);
 		});
 
 		test("turns sign-up on when asked to", async () => {
 			const root = workspace();
-			write(root, "infra/auth-server/.env", "ZITADEL_ALLOW_REGISTER=true\n");
+			write(root, "deploy/dev/auth-server/.env", "ZITADEL_ALLOW_REGISTER=true\n");
 			const zitadel = fakeZitadel();
 			await setup([], deps(root, zitadel));
 			expect(zitadel.loginPolicy.settings.allowRegister).toBe(true);
@@ -622,18 +622,18 @@ describe("setup", () => {
 
 		test("leaves the policy alone when it already matches", async () => {
 			const root = workspace();
-			write(root, "infra/auth-server/.env", "ZITADEL_ALLOW_REGISTER=false\n");
+			write(root, "deploy/dev/auth-server/.env", "ZITADEL_ALLOW_REGISTER=false\n");
 			const zitadel = fakeZitadel();
 			const logs: string[] = [];
 			await setup([], deps(root, zitadel, logs));
 			expect(policyCalls(zitadel, "PUT")).toHaveLength(0);
-			expect(logs).toContain("Self-registration is off (ZITADEL_ALLOW_REGISTER=false in infra/auth-server/.env)");
+			expect(logs).toContain("Self-registration is off (ZITADEL_ALLOW_REGISTER=false in deploy/dev/auth-server/.env)");
 			expect(logs.some((line) => line.startsWith("The sign-in pages follow"))).toBe(false);
 		});
 
 		test("takes a new project's choice from the copied .env.example", async () => {
 			const root = workspace();
-			write(root, "infra/auth-server/.env.example", "ZITADEL_ORG_NAME=Vern\nZITADEL_ALLOW_REGISTER=false\n");
+			write(root, "deploy/dev/auth-server/.env.example", "ZITADEL_ORG_NAME=Vern\nZITADEL_ALLOW_REGISTER=false\n");
 			const zitadel = fakeZitadel();
 			zitadel.loginPolicy.settings.allowRegister = true;
 			await setup([], deps(root, zitadel));
@@ -649,7 +649,7 @@ describe("setup", () => {
 			expect(policyCalls(zitadel, "PUT")).toHaveLength(0);
 			expect(zitadel.loginPolicy.settings.allowRegister).toBe(true);
 			expect(logs.find((line) => line.startsWith("Anyone can create an account"))).toContain(
-				"Set ZITADEL_ALLOW_REGISTER=false in infra/auth-server/.env",
+				"Set ZITADEL_ALLOW_REGISTER=false in deploy/dev/auth-server/.env",
 			);
 		});
 
@@ -662,7 +662,7 @@ describe("setup", () => {
 
 		test("treats ZITADEL's refusal of a no-op update as nothing to do", async () => {
 			const root = workspace();
-			write(root, "infra/auth-server/.env", "ZITADEL_ALLOW_REGISTER=false\n");
+			write(root, "deploy/dev/auth-server/.env", "ZITADEL_ALLOW_REGISTER=false\n");
 			const zitadel = fakeZitadel();
 			zitadel.loginPolicy.settings.allowRegister = true;
 			const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -678,7 +678,7 @@ describe("setup", () => {
 
 		test("stops before starting anything on a value that is not true or false", async () => {
 			const root = workspace();
-			write(root, "infra/auth-server/.env", "ZITADEL_ALLOW_REGISTER=nope\n");
+			write(root, "deploy/dev/auth-server/.env", "ZITADEL_ALLOW_REGISTER=nope\n");
 			let started = false;
 			await expect(
 				setup([], {
@@ -687,20 +687,20 @@ describe("setup", () => {
 						started = true;
 					},
 				}),
-			).rejects.toThrow('ZITADEL_ALLOW_REGISTER must be true or false in infra/auth-server/.env, not "nope"');
+			).rejects.toThrow('ZITADEL_ALLOW_REGISTER must be true or false in deploy/dev/auth-server/.env, not "nope"');
 			expect(started).toBe(false);
 		});
 
-		test("applies deploy/.env with --deploy", async () => {
+		test("applies deploy/prod/.env with --compose", async () => {
 			const root = workspace();
 			write(
 				root,
-				"deploy/.env",
+				"deploy/prod/.env",
 				"AUTH_DOMAIN=auth.acme.test\nAPP_DOMAIN=app.acme.test\nAPI_DOMAIN=api.acme.test\nACME_EMAIL=ops@acme.test\nWEB_APP=dashboard\nAPI_APP=api\nZITADEL_ALLOW_REGISTER=false\n",
 			);
 			const zitadel = fakeZitadel();
 			zitadel.loginPolicy.settings.allowRegister = true;
-			await setup(["--deploy"], { ...deps(root, zitadel), runCompose: () => {} });
+			await setup(["--compose", "prod"], { ...deps(root, zitadel), runCompose: () => {} });
 			expect(zitadel.loginPolicy.settings.allowRegister).toBeUndefined();
 		});
 	});
@@ -713,7 +713,7 @@ describe("setup", () => {
 
 		test("points ZITADEL at Mailpit locally, and says where to read the mail", async () => {
 			const root = workspace();
-			write(root, "infra/auth-server/.env", "ZITADEL_ORG_NAME=Vern\nMAIL_UI_PORT=8030\n");
+			write(root, "deploy/dev/auth-server/.env", "ZITADEL_ORG_NAME=Vern\nMAIL_UI_PORT=8030\n");
 			const zitadel = fakeZitadel();
 			const logs: string[] = [];
 			await setup([], deps(root, zitadel, logs));
@@ -754,16 +754,16 @@ describe("setup", () => {
 			expect(logs).toContain("ZITADEL sends mail through smtp.gmail.com:587, set up in the Console; leaving it as it is.");
 		});
 
-		test("--deploy applies the SMTP_* of deploy/.env, password included", async () => {
+		test("--compose applies the SMTP_* of deploy/prod/.env, password included", async () => {
 			const root = workspace();
 			write(
 				root,
-				"deploy/.env",
+				"deploy/prod/.env",
 				`${deployEnv}SMTP_HOST=smtp.acme.test:587\nSMTP_FROM_ADDRESS=hello@acme.test\nSMTP_FROM_NAME=Acme\nSMTP_USER=apikey\nSMTP_PASSWORD=s3cret\nSMTP_TLS=true\n`,
 			);
 			const zitadel = fakeZitadel();
 			const logs: string[] = [];
-			await setup(["--deploy"], { ...deps(root, zitadel, logs), runCompose: () => {} });
+			await setup(["--compose", "prod"], { ...deps(root, zitadel, logs), runCompose: () => {} });
 
 			expect(zitadel.smtp).toEqual([
 				{
@@ -782,32 +782,32 @@ describe("setup", () => {
 			expect(logs.join("\n")).not.toContain("s3cret");
 		});
 
-		test("--deploy replaces a Console configuration when SMTP_HOST is set", async () => {
+		test("--compose replaces a Console configuration when SMTP_HOST is set", async () => {
 			const root = workspace();
-			write(root, "deploy/.env", `${deployEnv}SMTP_HOST=smtp.acme.test:25\nSMTP_FROM_ADDRESS=hello@acme.test\nSMTP_TLS=false\n`);
+			write(root, "deploy/prod/.env", `${deployEnv}SMTP_HOST=smtp.acme.test:25\nSMTP_FROM_ADDRESS=hello@acme.test\nSMTP_TLS=false\n`);
 			const zitadel = fakeZitadel();
 			zitadel.smtp.push({ id: "console1", state: "SMTP_CONFIG_ACTIVE", host: "smtp.gmail.com:587", description: "Gmail" });
-			await setup(["--deploy"], { ...deps(root, zitadel), runCompose: () => {} });
+			await setup(["--compose", "prod"], { ...deps(root, zitadel), runCompose: () => {} });
 			expect(zitadel.smtp.find((config) => config.state === "SMTP_CONFIG_ACTIVE")).toMatchObject({ host: "smtp.acme.test:25", description: "Vern" });
 		});
 
-		test("--deploy says out loud that there is no mail server", async () => {
+		test("--compose says out loud that there is no mail server", async () => {
 			const root = workspace();
-			write(root, "deploy/.env", deployEnv);
+			write(root, "deploy/prod/.env", deployEnv);
 			const zitadel = fakeZitadel();
 			const logs: string[] = [];
-			await setup(["--deploy"], { ...deps(root, zitadel, logs), runCompose: () => {} });
+			await setup(["--compose", "prod"], { ...deps(root, zitadel, logs), runCompose: () => {} });
 			expect(zitadel.smtp).toEqual([]);
-			expect(logs.some((line) => line.startsWith("ZITADEL has no SMTP server") && line.includes("deploy/.env"))).toBe(true);
+			expect(logs.some((line) => line.startsWith("ZITADEL has no SMTP server") && line.includes("deploy/prod/.env"))).toBe(true);
 		});
 
-		test("--deploy stops on a half-filled mail setup before starting anything", async () => {
+		test("--compose stops on a half-filled mail setup before starting anything", async () => {
 			const root = workspace();
-			write(root, "deploy/.env", `${deployEnv}SMTP_FROM_ADDRESS=hello@acme.test\n`);
+			write(root, "deploy/prod/.env", `${deployEnv}SMTP_FROM_ADDRESS=hello@acme.test\n`);
 			let started = false;
 			await expect(
-				setup(["--deploy"], { ...deps(root, fakeZitadel()), runCompose: () => (started = true) as never }),
-			).rejects.toThrow("SMTP_FROM_ADDRESS set in deploy/.env without SMTP_HOST");
+				setup(["--compose", "prod"], { ...deps(root, fakeZitadel()), runCompose: () => (started = true) as never }),
+			).rejects.toThrow("SMTP_FROM_ADDRESS set in deploy/prod/.env without SMTP_HOST");
 			expect(started).toBe(false);
 		});
 	});
@@ -857,29 +857,29 @@ describe("setup", () => {
 		expect(new Set(tokens)).toEqual(new Set(["Bearer user-token"]));
 	});
 
-	test("fills in the production settings with --deploy", async () => {
+	test("fills in the production settings with --compose", async () => {
 		const root = workspace();
 		write(
 			root,
-			"deploy/.env.example",
+			"deploy/compose/.env.example",
 			"AUTH_DOMAIN=auth.example.com\nAPP_DOMAIN=app.example.com\nAPI_DOMAIN=api.example.com\nACME_EMAIL=admin@example.com\nWEB_APP=dashboard\nAPI_APP=api\nZITADEL_ORG_NAME=Vern\nZITADEL_MASTERKEY=\nZITADEL_ADMIN_PASSWORD=\nPOSTGRES_PASSWORD=\nREDIS_PASSWORD=\nWEB_SESSION_SECRET=\nZITADEL_PROJECT_ID=\nWEB_CLIENT_ID=\n",
 		);
 		const zitadel = fakeZitadel();
 		const composeCalls: string[][] = [];
 		const run = () =>
-			setup(["--deploy"], {
+			setup(["--compose", "prod"], {
 				...deps(root, zitadel),
 				runCompose: (_root, args) => composeCalls.push(args),
 				randomSecret: (kind, bytes) => `${kind}-${bytes}`,
 			});
 
 		await expect(run()).rejects.toThrow("Set AUTH_DOMAIN");
-		expect(existsSync(resolve(root, "deploy/.env"))).toBe(true);
+		expect(existsSync(resolve(root, "deploy/prod/.env"))).toBe(true);
 
 		write(
 			root,
-			"deploy/.env",
-			readFileSync(resolve(root, "deploy/.env"), "utf8")
+			"deploy/prod/.env",
+			readFileSync(resolve(root, "deploy/prod/.env"), "utf8")
 				.replace("auth.example.com", "auth.acme.test")
 				.replace("app.example.com", "app.acme.test")
 				.replace("api.example.com", "api.acme.test")
@@ -887,7 +887,7 @@ describe("setup", () => {
 		);
 		expect(await run()).toBe(0);
 
-		const env = parseEnv(resolve(root, "deploy/.env"));
+		const env = parseEnv(resolve(root, "deploy/prod/.env"));
 		expect(env.get("ZITADEL_MASTERKEY")).toBe("hex-16");
 		expect(env.get("ZITADEL_ADMIN_PASSWORD")).toBe("password-18");
 		expect(env.get("WEB_SESSION_SECRET")).toBe("base64-32");
@@ -897,7 +897,7 @@ describe("setup", () => {
 		const created = zitadel.calls.find((call) => call.path.endsWith("/apps/oidc"));
 		expect(created?.body).toMatchObject({ redirectUris: ["https://app.acme.test/auth/callback"], devMode: false });
 
-		const keyFile = resolve(root, "deploy/secrets/api-key.json");
+		const keyFile = resolve(root, "deploy/prod/secrets/api-key.json");
 		expect(JSON.parse(readFileSync(keyFile, "utf8")).keyId).toBe("k1");
 		expect(statSync(keyFile).mode & 0o777).toBe(0o644);
 		expect(statSync(dirname(keyFile)).mode & 0o777).toBe(0o700);
@@ -908,14 +908,88 @@ describe("setup", () => {
 		]);
 	});
 
-	test("refuses --deploy for an app that does not exist", async () => {
+	test("refuses --compose for an app that does not exist", async () => {
 		const root = workspace();
 		write(
 			root,
-			"deploy/.env",
+			"deploy/prod/.env",
 			"AUTH_DOMAIN=auth.acme.test\nAPP_DOMAIN=app.acme.test\nAPI_DOMAIN=api.acme.test\nACME_EMAIL=ops@acme.test\nWEB_APP=shop\nAPI_APP=api\n",
 		);
-		await expect(setup(["--deploy"], deps(root, fakeZitadel()))).rejects.toThrow("WEB_APP=shop");
+		await expect(setup(["--compose", "prod"], deps(root, fakeZitadel()))).rejects.toThrow("WEB_APP=shop");
+	});
+
+	const COMPOSE_EXAMPLE =
+		"DEPLOY_ENV=prod\nAUTH_DOMAIN=auth.example.com\nAPP_DOMAIN=app.example.com\nAPI_DOMAIN=api.example.com\nACME_EMAIL=admin@example.com\nWEB_APP=web\nAPI_APP=backend\nZITADEL_PROJECT_ID=\nWEB_CLIENT_ID=\n";
+	const composeEnv = (environment: string) =>
+		`DEPLOY_ENV=${environment}\nAUTH_DOMAIN=auth.acme.test\nAPP_DOMAIN=app.acme.test\nAPI_DOMAIN=api.acme.test\nACME_EMAIL=ops@acme.test\nWEB_APP=dashboard\nAPI_APP=api\n`;
+
+	test("--compose staging keeps its settings and the API's key in deploy/staging", async () => {
+		const root = workspace();
+		write(root, "deploy/compose/.env.example", COMPOSE_EXAMPLE);
+		const run = () => setup(["--compose", "staging"], { ...deps(root, fakeZitadel()), runCompose: () => {} });
+		await expect(run()).rejects.toThrow("Created deploy/staging/.env");
+		expect(parseEnv(resolve(root, "deploy/staging/.env")).get("DEPLOY_ENV")).toBe("staging");
+
+		// A file from before DEPLOY_ENV existed gets it, so the Compose file finds secrets/.
+		write(root, "deploy/staging/.env", composeEnv("staging").replace("DEPLOY_ENV=staging\n", ""));
+		expect(await run()).toBe(0);
+		expect(parseEnv(resolve(root, "deploy/staging/.env")).get("DEPLOY_ENV")).toBe("staging");
+		expect(existsSync(resolve(root, "deploy/staging/secrets/api-key.json"))).toBe(true);
+		expect(existsSync(resolve(root, "deploy/prod"))).toBe(false);
+	});
+
+	test("--compose local needs no settings: hostnames under localtest.me, and a local certificate authority", async () => {
+		const root = workspace();
+		write(root, "deploy/compose/.env.example", COMPOSE_EXAMPLE);
+		const composeCalls: string[][] = [];
+		const logs: string[] = [];
+		const zitadel = fakeZitadel();
+		expect(
+			await setup(["--compose", "local"], { ...deps(root, zitadel, logs), runCompose: (_root, args) => composeCalls.push(args) }),
+		).toBe(0);
+
+		const env = parseEnv(resolve(root, "deploy/local/.env"));
+		expect(env.get("DEPLOY_ENV")).toBe("local");
+		expect(env.get("AUTH_DOMAIN")).toBe("auth.localtest.me");
+		// The only web app and the only API of the project.
+		expect(env.get("WEB_APP")).toBe("dashboard");
+		expect(env.get("API_APP")).toBe("api");
+		for (const file of ["ca.pem", "cert.pem", "key.pem", "traefik-tls.yml"]) {
+			expect(existsSync(resolve(root, "deploy/local/certs", file))).toBe(true);
+		}
+		expect(composeCalls[0]?.filter((arg) => arg.endsWith(".yml"))).toEqual([
+			resolve(root, "deploy/compose/docker-compose.yml"),
+			resolve(root, "deploy/compose/docker-compose.local.yml"),
+		]);
+		const created = zitadel.calls.find((call) => call.path.endsWith("/apps/oidc"));
+		expect(created?.body).toMatchObject({ redirectUris: ["https://app.localtest.me/auth/callback"] });
+	});
+
+	test("--deploy is still --compose prod", async () => {
+		const root = workspace();
+		write(root, "deploy/prod/.env", composeEnv("prod"));
+		expect(await setup(["--deploy"], { ...deps(root, fakeZitadel()), runCompose: () => {} })).toBe(0);
+		expect(existsSync(resolve(root, "deploy/prod/secrets/api-key.json"))).toBe(true);
+	});
+
+	test("--env runs an environment the way it was set up, and asks when it cannot tell", async () => {
+		const root = workspace();
+		const run = (environment: string) =>
+			setup(["--env", environment], { ...deps(root, fakeZitadel()), runCompose: () => {} });
+		await expect(run("staging")).rejects.toThrow(
+			"deploy/staging is not set up yet. Start with --compose staging (one server with Docker) or --kubernetes staging.",
+		);
+		await expect(run("production")).rejects.toThrow("--env takes local, staging, or prod");
+
+		write(root, "deploy/staging/.env", composeEnv("staging"));
+		expect(await run("staging")).toBe(0);
+		expect(existsSync(resolve(root, "deploy/staging/secrets/api-key.json"))).toBe(true);
+
+		write(root, "deploy/staging/settings.env", "DOMAIN=acme.test\n");
+		await expect(run("staging")).rejects.toThrow("Say which one: --compose staging or --kubernetes staging.");
+		await expect(setup(["--env", "prod", "--compose", "prod"], deps(root, fakeZitadel()))).rejects.toThrow(
+			"Use one of --compose, --env.",
+		);
 	});
 
 	test("waits for the issuer to answer before calling it", async () => {
@@ -956,14 +1030,16 @@ describe("setup --kubernetes", () => {
 	function kubeWorkspace(): string {
 		const root = workspace();
 		for (const path of [
-			"deploy/k8s/base/kustomization.yaml",
-			"deploy/k8s/overlays/local/kustomization.yaml",
-			"deploy/k8s/overlays/local/settings.env.example",
-			"deploy/k8s/overlays/production/kustomization.yaml",
-			"deploy/k8s/overlays/production/settings.env.example",
-			"infra/auth-server/nginx.conf",
-			"infra/auth-server/brand/brand.json",
-			"infra/auth-server/brand/favicon.svg",
+			"deploy/base/kustomization.yaml",
+			"deploy/local/kustomization.yaml",
+			"deploy/local/settings.env.example",
+			"deploy/prod/kustomization.yaml",
+			"deploy/prod/settings.env.example",
+			"deploy/staging/kustomization.yaml",
+			"deploy/staging/settings.env.example",
+			"deploy/dev/auth-server/nginx.conf",
+			"deploy/dev/auth-server/brand/brand.json",
+			"deploy/dev/auth-server/brand/favicon.svg",
 		]) {
 			write(root, path, templateIdentity(readFileSync(resolve(ROOT, path), "utf8")));
 		}
@@ -975,11 +1051,11 @@ describe("setup --kubernetes", () => {
 	 * once it is renamed. The tests expect the template's, so it is put back.
 	 */
 	function templateIdentity(text: string): string {
-		return text.replace(/^namespace:.*$/m, "namespace: vern").replace(/^ZITADEL_ORG_NAME=.*$/m, "ZITADEL_ORG_NAME=Vern");
+		return text.replace(/^namespace: \S+?(-staging)?$/m, "namespace: vern$1").replace(/^ZITADEL_ORG_NAME=.*$/m, "ZITADEL_ORG_NAME=Vern");
 	}
 
 	const generated = (root: string, overlay: string, path: string) =>
-		readFileSync(resolve(root, `deploy/k8s/overlays/${overlay}/generated`, path), "utf8");
+		readFileSync(resolve(root, `deploy/${overlay}/generated`, path), "utf8");
 
 	test("--manifests-only lists the apps and writes the overlay's settings and private Secrets", async () => {
 		const root = kubeWorkspace();
@@ -987,8 +1063,8 @@ describe("setup --kubernetes", () => {
 		expect(await setup(["--kubernetes", "local", "--manifests-only"], deps(root, zitadel))).toBe(0);
 		expect(zitadel.calls).toEqual([]);
 
-		const base = readFileSync(resolve(root, "deploy/k8s/base/kustomization.yaml"), "utf8");
-		expect(base).toContain("  - identity\n  - ../../../services/api/k8s\n  - ../../../apps/dashboard/k8s\n");
+		const base = readFileSync(resolve(root, "deploy/base/kustomization.yaml"), "utf8");
+		expect(base).toContain("  - identity\n  - ../../services/api/k8s\n  - ../../apps/dashboard/k8s\n");
 		const component = generated(root, "local", "kustomization.yaml");
 		expect(component).toContain('"ZITADEL_ISSUER=https://auth.localtest.me"');
 		expect(component).toContain('"APP_URL=https://dashboard.localtest.me"');
@@ -998,11 +1074,11 @@ describe("setup --kubernetes", () => {
 		expect(generated(root, "local", "ingress.yaml")).toContain("host: api.localtest.me");
 		expect(generated(root, "local", "brand/favicon.svg")).toContain("<svg");
 
-		const secrets = resolve(root, "deploy/k8s/overlays/local/generated/secrets");
+		const secrets = resolve(root, "deploy/local/generated/secrets");
 		expect(parseEnv(resolve(secrets, "zitadel.env")).get("ZITADEL_MASTERKEY")).toBe("generated-secret");
 		expect(parseEnv(resolve(secrets, "redis.env")).get("url")).toBe("redis://:generated-secret@redis:6379");
 		expect(statSync(resolve(secrets, "zitadel.env")).mode & 0o777).toBe(0o600);
-		expect(existsSync(resolve(root, "deploy/k8s/overlays/local/generated/tls/cert.pem"))).toBe(true);
+		expect(existsSync(resolve(root, "deploy/local/generated/tls/cert.pem"))).toBe(true);
 
 		// A second run keeps every secret it made.
 		await setup(["--kubernetes", "local", "--manifests-only"], { ...deps(root, zitadel), randomSecret: () => "other" });
@@ -1012,10 +1088,10 @@ describe("setup --kubernetes", () => {
 
 	test("production needs its hostnames and a registry, and runs no database", async () => {
 		const root = kubeWorkspace();
-		const run = () => setup(["--kubernetes", "production", "--manifests-only"], deps(root, fakeZitadel()));
-		await expect(run()).rejects.toThrow("Created deploy/k8s/overlays/production/settings.env");
-		const settings = resolve(root, "deploy/k8s/overlays/production/settings.env");
-		await expect(run()).rejects.toThrow("Set DOMAIN in deploy/k8s/overlays/production/settings.env");
+		const run = () => setup(["--kubernetes", "prod", "--manifests-only"], deps(root, fakeZitadel()));
+		await expect(run()).rejects.toThrow("Created deploy/prod/settings.env");
+		const settings = resolve(root, "deploy/prod/settings.env");
+		await expect(run()).rejects.toThrow("Set DOMAIN in deploy/prod/settings.env");
 		writeFileSync(settings, readFileSync(settings, "utf8").replace("DOMAIN=example.com", "DOMAIN=acme.test"));
 		await expect(run()).rejects.toThrow("Set IMAGE_REGISTRY");
 		writeFileSync(
@@ -1026,14 +1102,39 @@ describe("setup --kubernetes", () => {
 		);
 		expect(await run()).toBe(0);
 
-		const component = generated(root, "production", "kustomization.yaml");
+		const component = generated(root, "prod", "kustomization.yaml");
 		expect(component).toContain("newName: ghcr.io/acme/product/api\n    newTag: \"0123abc\"");
 		expect(component).not.toContain("redis");
 		expect(component).not.toContain("local-tls");
-		const ingress = generated(root, "production", "ingress.yaml");
+		const ingress = generated(root, "prod", "ingress.yaml");
 		expect(ingress).toContain("cert-manager.io/cluster-issuer: letsencrypt");
 		expect(ingress).toContain("secretName: dashboard-tls");
-		expect(existsSync(resolve(root, "deploy/k8s/overlays/production/generated/secrets/redis.env"))).toBe(false);
+		expect(existsSync(resolve(root, "deploy/prod/generated/secrets/redis.env"))).toBe(false);
+	});
+
+	test("staging is production with its own settings, namespace, and Secrets", async () => {
+		const root = kubeWorkspace();
+		write(
+			root,
+			"deploy/staging/settings.env",
+			"DOMAIN=staging.acme.test\nIMAGE_REGISTRY=ghcr.io/acme/product\nIMAGE_TAG=0123abc\n",
+		);
+		const kubectl: string[] = [];
+		expect(
+			await setup(["--env", "staging"], {
+				...deps(root, fakeZitadel()),
+				runKubectl: (_root, args) => kubectl.push(args.join(" ")),
+				readKubeToken: () => "kube-token",
+			}),
+		).toBe(0);
+		expect(kubectl[0]).toBe("apply -k deploy/staging");
+		expect(kubectl[1]).toBe("-n vern-staging rollout status deployment/zitadel --timeout=15m");
+		const ingress = generated(root, "staging", "ingress.yaml");
+		expect(ingress).toContain("host: dashboard.staging.acme.test");
+		expect(ingress).toContain("cert-manager.io/cluster-issuer: letsencrypt");
+		expect(generated(root, "staging", "kustomization.yaml")).toContain("# Written by `bun run setup -- --kubernetes staging`.");
+		expect(existsSync(resolve(root, "deploy/staging/generated/secrets/redis.env"))).toBe(false);
+		expect(existsSync(resolve(root, "deploy/prod/generated"))).toBe(false);
 	});
 
 	test("applies the overlay, creates the applications and keys in ZITADEL, and applies them", async () => {
@@ -1050,9 +1151,9 @@ describe("setup --kubernetes", () => {
 		).toBe(0);
 
 		expect(kubectl).toEqual([
-			"apply -k deploy/k8s/overlays/local",
+			"apply -k deploy/local",
 			"-n vern rollout status deployment/zitadel --timeout=15m",
-			"apply -k deploy/k8s/overlays/local",
+			"apply -k deploy/local",
 			"-n vern rollout status deployment/api --timeout=10m",
 			"-n vern rollout status deployment/dashboard --timeout=10m",
 		]);
@@ -1060,7 +1161,7 @@ describe("setup --kubernetes", () => {
 		const oidc = zitadel.calls.find((call) => call.path.endsWith("/apps/oidc"));
 		expect(oidc?.body).toMatchObject({ redirectUris: ["https://dashboard.localtest.me/auth/callback"], devMode: false });
 
-		const secrets = resolve(root, "deploy/k8s/overlays/local/generated/secrets");
+		const secrets = resolve(root, "deploy/local/generated/secrets");
 		expect(parseEnv(resolve(secrets, "dashboard.env")).get("ZITADEL_CLIENT_ID")).toBeTruthy();
 		expect(JSON.parse(readFileSync(resolve(secrets, "api-key.json"), "utf8")).keyId).toBeTruthy();
 		expect(generated(root, "local", "kustomization.yaml")).toContain('"ZITADEL_PROJECT_ID=100"');

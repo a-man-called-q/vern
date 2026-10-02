@@ -56,7 +56,7 @@ export async function applySelfRegistration(
 /**
  * Points ZITADEL's outgoing mail at `wanted` and says where mail goes. Locally
  * that is Mailpit, and a mail setup someone made in the Console stays; in a
- * deployment it is the SMTP_* of deploy/.env, and without them nothing is
+ * deployment it is the SMTP_* of its settings file, and without them nothing is
  * changed but the missing mail server is said out loud, because invitations and
  * password resets silently never arrive.
  */

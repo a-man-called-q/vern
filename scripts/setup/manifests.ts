@@ -1,12 +1,14 @@
 import { toYaml } from "../lib/yaml";
+import type { Environment } from "./stack";
 
 // What `bun run setup -- --kubernetes` writes: the list of apps in
-// deploy/k8s/base, and an overlay's `generated/` Component with everything
+// deploy/base, and an overlay's `generated/` Component with everything
 // that depends on this project and this cluster (hostnames, images, settings,
 // and the Secrets read from files next to it). Pure functions of the input, so
 // a test can check the YAML.
 
-export type Overlay = "local" | "production";
+/** The overlay of an environment: `local` runs everything in the cluster, the others keep the databases outside. */
+export type Overlay = Environment;
 
 export type KubeSettings = {
 	overlay: Overlay;
@@ -14,9 +16,9 @@ export type KubeSettings = {
 	domain: string;
 	authHost: string;
 	ingressClass: string;
-	/** production: the cert-manager ClusterIssuer of the hostnames' certificates. */
+	/** staging and prod: the cert-manager ClusterIssuer of the hostnames' certificates. */
 	clusterIssuer: string;
-	/** production: images are `<imageRegistry>/<app>:<imageTag>`. */
+	/** staging and prod: images are `<imageRegistry>/<app>:<imageTag>`. */
 	imageRegistry: string;
 	imageTag: string;
 	orgName: string;
@@ -39,7 +41,7 @@ export type KubeApp = {
 	apiUrls: [key: string, url: string][];
 };
 
-/** The stacks under infra/ that the local overlay runs in the cluster. */
+/** The stacks under deploy/dev/ that the local overlay runs in the cluster. */
 export type Backing = { data: boolean; bus: boolean; storage?: { bucket: string } };
 
 export type ComponentInput = {
@@ -47,14 +49,14 @@ export type ComponentInput = {
 	apps: KubeApp[];
 	backing: Backing;
 	projectId: string;
-	/** The files of infra/auth-server/brand, copied to `generated/brand/`. */
+	/** The files of deploy/dev/auth-server/brand, copied to `generated/brand/`. */
 	brandFiles: string[];
 };
 
 const HEADER = (overlay: Overlay) =>
 	`# Written by \`bun run setup -- --kubernetes ${overlay}\`. Do not edit it: change\n# the project or settings.env and run that again.\n`;
 
-/** deploy/k8s/base/kustomization.yaml: the identity stack, then every app. */
+/** deploy/base/kustomization.yaml: the identity stack, then every app. */
 export function baseKustomization(apps: { path: string }[]): string {
 	return (
 		"# Written by `bun run setup -- --kubernetes`: the identity stack, then every web\n" +
@@ -62,7 +64,7 @@ export function baseKustomization(apps: { path: string }[]): string {
 		toYaml({
 			apiVersion: "kustomize.config.k8s.io/v1beta1",
 			kind: "Kustomization",
-			resources: ["identity", ...apps.map((app) => `../../../${app.path}/k8s`)],
+			resources: ["identity", ...apps.map((app) => `../../${app.path}/k8s`)],
 		})
 	);
 }
@@ -135,7 +137,7 @@ export function componentKustomization(input: ComponentInput): string {
 		...apis.filter((app) => app.secretEnv).map((app) => ({ name: app.name, envs: [`secrets/${app.name}.env`] })),
 	];
 	if (local) {
-		// What production keeps outside the cluster; see deploy/k8s/README.md.
+		// What staging and prod keep outside the cluster; see deploy/base/README.md.
 		secretGenerator.push(
 			{ name: "zitadel-db", envs: ["secrets/zitadel-db.env"] },
 			{ name: "zitadel-database", envs: ["secrets/zitadel-database.env"] },
@@ -183,7 +185,7 @@ function ingress(
 	options: { tlsName: string; issue: boolean; annotations?: Record<string, string> },
 ) {
 	const annotations: Record<string, string> = { ...options.annotations };
-	if (settings.overlay === "production" && options.issue) annotations["cert-manager.io/cluster-issuer"] = settings.clusterIssuer;
+	if (settings.overlay !== "local" && options.issue) annotations["cert-manager.io/cluster-issuer"] = settings.clusterIssuer;
 	return {
 		apiVersion: "networking.k8s.io/v1",
 		kind: "Ingress",
@@ -270,7 +272,7 @@ export function dbInitPatch(app: { name: string }): string {
 	);
 }
 
-/** local: creates the bucket of infra/storage, as its up.sh does. */
+/** local: creates the bucket of deploy/dev/storage, as its up.sh does. */
 export function storageBucketJob(bucket: string): string {
 	return (
 		HEADER("local") +
