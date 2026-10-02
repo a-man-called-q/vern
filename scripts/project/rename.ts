@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { writeJson } from "../lib/files";
+import { AUTH_SERVER } from "../lib/projects";
 import { git, gitTry, run } from "../lib/run";
 import {
 	CONFIG_PATH,
@@ -74,12 +75,12 @@ function resolveBase(root: string, url: string, branch: string, explicit?: strin
 
 function checkComposeData(root: string, oldName: string, newName: string): void {
 	if (oldName === newName) return;
-	const compose = resolve(root, "apps/auth-server/docker-compose.yml");
+	const compose = resolve(root, `${AUTH_SERVER}/docker-compose.yml`);
 	if (!existsSync(compose)) return;
-	// The stack cannot start without apps/auth-server/.env (the compose file requires
+	// The stack cannot start without infra/auth-server/.env (the compose file requires
 	// ZITADEL_VERSION from it), so a tree without one owns no containers or volumes.
 	// Any `<oldName>` project Docker knows about then belongs to another checkout.
-	if (!existsSync(resolve(root, "apps/auth-server/.env"))) return;
+	if (!existsSync(resolve(root, `${AUTH_SERVER}/.env`))) return;
 	const volumeList = run("docker", ["volume", "ls", "--format", "{{.Name}}"], {
 		cwd: root,
 		allowFailure: true,
@@ -106,7 +107,7 @@ function checkComposeData(root: string, oldName: string, newName: string): void 
 }
 
 function composeProjectName(root: string): string | undefined {
-	const path = resolve(root, "apps/auth-server/docker-compose.yml");
+	const path = resolve(root, `${AUTH_SERVER}/docker-compose.yml`);
 	if (!existsSync(path)) return undefined;
 	const match = readFileSync(path, "utf8").match(/^name:\s*([^\s#]+)/m);
 	return match?.[1];

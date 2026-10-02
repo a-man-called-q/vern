@@ -1,6 +1,6 @@
 title: Axum API
 description: Generate a Rust Axum API that validates ZITADEL access tokens.
-destination: '/apps/[name | kebab_case]'
+destination: '/services/[name | kebab_case]'
 variables:
   name:
     type: string

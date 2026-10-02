@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { appPath as resolveAppPath } from "./lib/apps";
+import { projectPath } from "./lib/projects";
 import { runCommand } from "./lib/cli";
 import { envFiles, readEffectiveEnv, setEnvValue } from "./lib/env";
 import { ROOT } from "./lib/paths";
@@ -9,9 +9,10 @@ import { buildOidcConfig, provisionApplication } from "./zitadel/oidc";
 
 const USAGE = `Create or update the ZITADEL application for a generated app.
 
-Usage: bun run zitadel:app -- --app <apps folder> [options]
+Usage: bun run zitadel:app -- --app <name> [options]
 
-  --app <name>           Folder under apps/ (reads its .env and .env.example)
+  --app <name>           The app (its folder under apps/; reads its .env and
+                         .env.example)
   --name <text>          ZITADEL application name (default: the folder name)
   --issuer <url>         ZITADEL origin (default: ZITADEL_ISSUER)
   --project <id>         ZITADEL project ID (default: ZITADEL_PROJECT_ID)
@@ -19,7 +20,7 @@ Usage: bun run zitadel:app -- --app <apps folder> [options]
   --pat-file <path>      File holding a service user's personal access token
   --org <id>             Organization ID, when the token spans several
   --profile-in-id-token  Also include profile claims in the ID token
-  --write-env            Store ZITADEL_CLIENT_ID in apps/<name>/.env
+  --write-env            Store ZITADEL_CLIENT_ID in the app's .env
   --dry-run              Print the configuration and exit without calling ZITADEL
 
 The token is read from ZITADEL_PAT or --pat-file. Give the service user the
@@ -59,13 +60,13 @@ export async function main(argv: string[], deps: CliDeps = {}): Promise<number> 
 		return 0;
 	}
 	if (!values.app && !values.name) {
-		throw new Error("Pass --app <apps folder> (or --name with --app-url)");
+		throw new Error("Pass --app <name> (or --name with --app-url)");
 	}
 	if (values["write-env"] && !values.app) {
 		throw new Error("--write-env needs --app");
 	}
 
-	const appPath = values.app ? resolveAppPath(root, values.app) : "";
+	const appPath = values.app ? projectPath(root, values.app) : "";
 	const fileEnv = readEffectiveEnv(root, appPath);
 	const setting = (flag: string | undefined, key: string) =>
 		flag ?? processEnv[key] ?? fileEnv.get(key);

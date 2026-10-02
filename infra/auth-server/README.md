@@ -18,7 +18,7 @@ containers from `docker-compose.yml`:
 From the repository root:
 
 ```sh
-cp apps/auth-server/.env.example apps/auth-server/.env
+cp infra/auth-server/.env.example infra/auth-server/.env
 moon run auth-server:dev    # start in the background and wait until healthy
 moon run auth-server:down   # stop, keeping the data
 ```
@@ -67,7 +67,7 @@ and the root README's
 This deletes the database and the Login App's bootstrap token:
 
 ```sh
-docker compose --env-file apps/auth-server/.env -f apps/auth-server/docker-compose.yml down -v
+docker compose --env-file infra/auth-server/.env -f infra/auth-server/docker-compose.yml down -v
 ```
 
 Run `bun run setup` again afterwards: it creates a new project, applications,

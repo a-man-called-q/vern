@@ -1,7 +1,6 @@
 import {
 	existsSync,
 	mkdtempSync,
-	readdirSync,
 	readFileSync,
 	rmSync,
 	statSync,
@@ -11,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { isTextBuffer, sha256, writeFileSafely } from "../lib/files";
+import { listProjects } from "../lib/projects";
 import { git, run } from "../lib/run";
 import { CONFIG_PATH, type ProjectConfig, UPDATE_STATE_PATH } from "./config";
 import { readGitFile } from "./files";
@@ -27,14 +27,12 @@ function upstreamPaths(root: string, revision: string): Set<string> {
 	);
 }
 
-function generatedAppDirs(root: string, baseFiles: Set<string>): Set<string> {
-	const apps = resolve(root, "apps");
-	if (!existsSync(apps)) return new Set();
+/** Folders `moon generate` made in this project: Vern itself ships no moon.yml there. */
+function generatedProjectDirs(root: string, baseFiles: Set<string>): Set<string> {
 	return new Set(
-		readdirSync(apps, { withFileTypes: true })
-			.filter((entry) => entry.isDirectory())
-			.map((entry) => entry.name)
-			.filter((name) => !baseFiles.has("apps/" + name + "/moon.yml")),
+		listProjects(root)
+			.map((project) => project.path)
+			.filter((path) => !baseFiles.has(path + "/moon.yml")),
 	);
 }
 
@@ -51,8 +49,8 @@ function shouldSkipUpstreamPath(
 	)
 		return true;
 	if (path === ".env" || path.endsWith("/.env")) return true;
-	const appMatch = path.match(/^apps\/([^/]+)\//);
-	return Boolean(appMatch && generatedDirs.has(appMatch[1]));
+	const projectDir = path.match(/^(?:apps|services|infra)\/[^/]+(?=\/)/)?.[0];
+	return Boolean(projectDir && generatedDirs.has(projectDir));
 }
 
 function rebrandSnapshot(
@@ -138,7 +136,7 @@ export function mergeUpstreamFiles(
 	to: string,
 ): { updated: string[]; conflicts: Conflict[] } {
 	const baseFiles = upstreamPaths(root, from);
-	const generatedDirs = generatedAppDirs(root, baseFiles);
+	const generatedDirs = generatedProjectDirs(root, baseFiles);
 	const updated: string[] = [];
 	const conflicts: Conflict[] = [];
 	for (const path of allChangedUpstreamPaths(root, from, to)) {

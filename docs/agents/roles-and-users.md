@@ -39,7 +39,7 @@ Local test users are listed in `seed-users.json`, next to `roles.json`:
 
 `bun run setup` grants `adminRoles` to the admin (`zitadel-admin@vern.localhost`)
 and creates each user as `<name>@vern.localhost`. They share the password in
-`ZITADEL_SEED_PASSWORD` in `apps/auth-server/.env`, which `setup` generates; the
+`ZITADEL_SEED_PASSWORD` in `infra/auth-server/.env`, which `setup` generates; the
 admin's is `ZITADEL_ADMIN_PASSWORD` in the same file.
 
 - Add one user per role, plus one without any role, so every access rule can be
@@ -81,7 +81,7 @@ It writes `ZITADEL_USER_ADMIN_TOKEN` to that app's `.env`.
 - In production, users and roles are managed in the Console or through this
   service account; test users are never seeded there.
 - Visitors cannot register themselves: `ZITADEL_ALLOW_REGISTER` is `false` in
-  `apps/auth-server/.env` and `deploy/.env`. Leave it that way for a screen that
+  `infra/auth-server/.env` and `deploy/.env`. Leave it that way for a screen that
   manages users; a self-registered account has no roles.
 
 ## A service that creates organizations

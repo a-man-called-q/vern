@@ -9,7 +9,7 @@ import { assertPerson, findUser } from "./users";
 
 /** Where a project lists the users and grants that `bun run setup` seeds locally. */
 export const SEED_FILE = "seed-users.json";
-/** The variable in apps/auth-server/.env that holds the password of the seeded users. */
+/** The variable in infra/auth-server/.env that holds the password of the seeded users. */
 export const SEED_PASSWORD_KEY = "ZITADEL_SEED_PASSWORD";
 
 export type SeedUser = { name: string; givenName: string; familyName: string; roles: string[] };

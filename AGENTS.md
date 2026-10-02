@@ -9,8 +9,9 @@ the product on top of them; do not rebuild them.
 
 | Path | What it is |
 | --- | --- |
-| `apps/<name>` | One web app or API each, generated from `.templates/`. Product code lives here |
-| `apps/auth-server` | The local ZITADEL and Redis stack. Configuration only |
+| `apps/<name>` | One web app each (TanStack Start or Next.js), generated from `.templates/`, and Storybook. Product code lives here |
+| `services/<name>` | One Axum API each, generated from `.templates/axum`. Product code lives here |
+| `infra/<name>` | The Compose stacks: `auth-server` (the local ZITADEL and Redis), and the generated `postgres`, `bus`, and `storage`. Configuration only |
 | `packages/ui` | Shared shadcn components and design tokens (`@vern/ui`) |
 | `.templates/` | The generators behind `moon generate` |
 | `scripts/` | Setup, provisioning, doctor, rename, and update |
@@ -64,7 +65,7 @@ code and its production checklist.
 
 | Command | What it does |
 | --- | --- |
-| `moon generate <tanstack\|next\|axum\|postgres> -- --name <name> --port <port>` | Create `apps/<name>` |
+| `moon generate <tanstack\|next\|axum\|postgres> -- --name <name> --port <port>` | Create `apps/<name>` (a web app), `services/<name>` (an API), or `infra/<name>` |
 | `bun run setup` | Create the `.env` files, ZITADEL applications, keys, roles, and local test users. Safe to run again; needs Docker running |
 | `moon run :dev` | Run everything. `moon run <app>:dev` runs one app and what it needs |
 | `moon run <app>:check` | Type-check one app (and lint it, for a web app) |

@@ -7,7 +7,7 @@
 | `traefik` | HTTPS for all three hostnames, with Let's Encrypt certificates |
 | `zitadel-api`, `zitadel-login`, `auth-server` | ZITADEL and the Vern sign-in pages on `AUTH_DOMAIN` |
 | `web` | The web app `apps/$WEB_APP` on `APP_DOMAIN` |
-| `api` | The Axum API `apps/$API_APP` on `API_DOMAIN` |
+| `api` | The Axum API `services/$API_APP` on `API_DOMAIN` |
 | `postgres`, `redis` | ZITADEL's database and the web app's sessions, on an internal network |
 
 The web app sends users' access tokens to the API only over HTTPS, so the API
@@ -74,7 +74,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build
 ```
 
 To move to a new ZITADEL release, set `ZITADEL_VERSION` and
-`ZITADEL_LOGIN_IMAGE` together (see `apps/auth-server/.env.example`), then run
+`ZITADEL_LOGIN_IMAGE` together (see `infra/auth-server/.env.example`), then run
 the same command without service names.
 
 ## More apps

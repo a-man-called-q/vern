@@ -2,10 +2,11 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { AUTH_SERVER } from "../lib/projects";
 import type { Log, SetupDeps } from "./context";
 
 /** The local ZITADEL, Redis, and Mailpit stack. */
-export const AUTH = "apps/auth-server";
+export const AUTH = AUTH_SERVER;
 /** The production Docker Compose stack. */
 export const DEPLOY = "deploy";
 const ADMIN_PAT_PATH = "/zitadel/bootstrap/admin.pat";

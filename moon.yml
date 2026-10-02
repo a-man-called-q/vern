@@ -15,6 +15,10 @@ tasks:
     inputs:
       - 'apps/*/.env'
       - 'apps/*/.env.example'
+      - 'services/*/.env'
+      - 'services/*/.env.example'
+      - 'infra/*/.env'
+      - 'infra/*/.env.example'
       - '.env'
       - '.env.example'
     options:

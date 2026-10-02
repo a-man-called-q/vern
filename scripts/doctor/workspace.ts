@@ -1,18 +1,62 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { errorMessage } from "../lib/errors";
+import { AUTH_SERVER, listProjects, PROJECT_ROOTS, rootFor } from "../lib/projects";
 import { stripCargoConditions } from "../project/cargo-template";
 import { readConfig } from "../project/config";
 import { renderPackageTemplate } from "../project/package-template";
 import { WEB_TEMPLATES } from "../project/templates";
 import type { Report } from "./report";
 
+/**
+ * Each project sits in the folder for its kind, and no two share a name: the
+ * Moon project ID, the ZITADEL application, and the port all key on it.
+ */
+export function checkLayout(root: string, report: Report): void {
+	let projects = listProjects(root);
+	let problems = 0;
+	if (projects.some((project) => project.path === "apps/auth-server")) {
+		problems += 1;
+		report(
+			"FAIL",
+			`apps/auth-server is left from before the auth stack moved to ${AUTH_SERVER}. Run \`bun run project:update -- --migrate\`.`,
+		);
+		projects = projects.filter((project) => project.path !== "apps/auth-server");
+	}
+	for (const project of projects) {
+		const expected = rootFor(root, project.path);
+		if (expected && expected !== project.root) {
+			problems += 1;
+			report(
+				"FAIL",
+				`${project.path} belongs in ${expected}/. Move it with \`bun run project:update -- --migrate\`.`,
+			);
+		}
+	}
+	const seen = new Map<string, string>();
+	for (const project of projects) {
+		const other = seen.get(project.name);
+		if (other) {
+			problems += 1;
+			report("FAIL", `${other} and ${project.path} share a name; rename one of them.`);
+		}
+		seen.set(project.name, project.path);
+	}
+	if (problems === 0)
+		report(
+			"OK",
+			`Projects are in ${PROJECT_ROOTS.map((dir) => dir + "/").join(", ")} by kind, with unique names.`,
+		);
+}
+
 /** The files the workspace needs, its package manifests, and the templates' manifests. */
 export function checkWorkspace(root: string, report: Report): void {
+	checkLayout(root, report);
+
 	for (const path of [
 		".env.example",
-		"apps/auth-server/.env.example",
-		"apps/auth-server/docker-compose.yml",
+		`${AUTH_SERVER}/.env.example`,
+		`${AUTH_SERVER}/docker-compose.yml`,
 	]) {
 		if (existsSync(resolve(root, path))) report("OK", path + " exists.");
 		else report("FAIL", path + " is missing.");
@@ -39,14 +83,10 @@ export function checkWorkspace(root: string, report: Report): void {
 			"packages/ui/package.json",
 			"apps/storybook/package.json",
 			// The Login App falls back to its default brand when this is invalid.
-			"apps/auth-server/brand/brand.json",
+			`${AUTH_SERVER}/brand/brand.json`,
 		]);
-		for (const entry of readdirSync(resolve(root, "apps"), {
-			withFileTypes: true,
-		})) {
-			if (entry.isDirectory())
-				jsonPaths.add("apps/" + entry.name + "/package.json");
-		}
+		for (const project of listProjects(root))
+			jsonPaths.add(project.path + "/package.json");
 		for (const path of jsonPaths) {
 			const absolute = resolve(root, path);
 			if (!existsSync(absolute)) continue;

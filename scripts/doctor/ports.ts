@@ -1,6 +1,7 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { readEffectiveEnv } from "../lib/env";
+import { AUTH_SERVER, listProjects } from "../lib/projects";
 
 /**
  * What is wrong with the local ports: a project without a valid PORT, two
@@ -29,7 +30,7 @@ export function checkPorts(root: string): string[] {
 	};
 
 	const rootEnv = readEffectiveEnv(root, "");
-	const authEnv = readEffectiveEnv(root, "apps/auth-server");
+	const authEnv = readEffectiveEnv(root, AUTH_SERVER);
 	const authPort = authEnv.get("AUTH_HTTP_PORT") ?? "8081";
 	const redisPort = authEnv.get("REDIS_PORT") ?? "6379";
 	addPort("auth-server (ZITADEL)", authPort);
@@ -62,12 +63,11 @@ export function checkPorts(root: string): string[] {
 		}
 	}
 
-	const entries = readdirSync(resolve(root, "apps"), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
-	for (const entry of entries) {
-		if (!entry.isDirectory() || ["auth-server", "storybook"].includes(entry.name)) continue;
-		if (!existsSync(resolve(root, "apps", entry.name, "moon.yml"))) continue;
+	for (const entry of listProjects(root)) {
+		if (["auth-server", "storybook"].includes(entry.name)) continue;
+		if (!existsSync(resolve(root, entry.path, "moon.yml"))) continue;
 
-		const appEnv = readEffectiveEnv(root, `apps/${entry.name}`);
+		const appEnv = readEffectiveEnv(root, entry.path);
 		const appPort = appEnv.get("PORT");
 		addPort(`${entry.name} (${appPort ?? "missing PORT"})`, appPort);
 

@@ -2,13 +2,13 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
-	readdirSync,
 	readFileSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { listProjects } from "../lib/projects";
 import { run } from "../lib/run";
 import {
 	cargoConditions,
@@ -70,12 +70,10 @@ export function alignRouterWithStart(
 }
 
 function alignWorkspaceRouters(root: string): void {
-	const apps = resolve(root, "apps");
-	if (!existsSync(apps)) return;
-	for (const entry of readdirSync(apps, { withFileTypes: true })) {
-		const manifest = resolve(apps, entry.name, "package.json");
-		if (!entry.isDirectory() || !existsSync(manifest)) continue;
-		alignRouterWithStart(manifest, [resolve(apps, entry.name), root]);
+	for (const project of listProjects(root)) {
+		const manifest = resolve(root, project.path, "package.json");
+		if (!existsSync(manifest)) continue;
+		alignRouterWithStart(manifest, [resolve(root, project.path), root]);
 	}
 }
 
@@ -195,27 +193,23 @@ export function updateDependencies(root: string): void {
 	for (const { template, label } of WEB_TEMPLATES)
 		updateBunTemplate(root, template, label);
 
-	const apps = resolve(root, "apps");
-	if (existsSync(apps)) {
-		for (const entry of readdirSync(apps, { withFileTypes: true })) {
-			if (!entry.isDirectory()) continue;
-			const manifest = resolve(apps, entry.name, "Cargo.toml");
-			if (!existsSync(manifest)) continue;
-			run(
-				"cargo",
-				[
-					"upgrade",
-					"--manifest-path",
-					manifest,
-					"--incompatible",
-					"allow",
-					"--pinned",
-					"allow",
-				],
-				{ cwd: root },
-			);
-			run("cargo", ["update", "--manifest-path", manifest], { cwd: root });
-		}
+	for (const project of listProjects(root)) {
+		const manifest = resolve(root, project.path, "Cargo.toml");
+		if (!existsSync(manifest)) continue;
+		run(
+			"cargo",
+			[
+				"upgrade",
+				"--manifest-path",
+				manifest,
+				"--incompatible",
+				"allow",
+				"--pinned",
+				"allow",
+			],
+			{ cwd: root },
+		);
+		run("cargo", ["update", "--manifest-path", manifest], { cwd: root });
 	}
 	updateRustTemplate(root);
 	if (existsSync(resolve(root, "bun.lock")))

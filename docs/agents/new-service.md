@@ -1,6 +1,6 @@
 # Add an API service
 
-A service is an Axum API under `apps/<name>`. It accepts the access token of a
+A service is an Axum API under `services/<name>`. It accepts the access token of a
 signed-in user, verifies it with ZITADEL, and gives each handler the verified
 user and their roles.
 
@@ -19,10 +19,12 @@ A service stores the user's ID (`sub`) next to the rows that user owns.
 
 ## Steps
 
-1. **Choose a free port.** See `PORT` in `apps/*/.env.example`; the convention
-   is 4000 and up for APIs.
+1. **Choose a free port and a new name.** See `PORT` in
+   `apps/*/.env.example`, `services/*/.env.example`, and `infra/*/.env.example`;
+   the convention is 4000 and up for APIs. The name must not be taken in any of
+   the three folders.
 2. **If it stores data**, the workspace needs the data project once. Check for
-   `apps/data`; when it is missing:
+   `infra/data`; when it is missing:
 
    ```sh
    moon generate postgres -- --name data --port 5433
@@ -55,7 +57,7 @@ A service stores the user's ID (`sub`) next to the rows that user owns.
    ```
 
    This creates the service's `.env`, its ZITADEL API application, and the key
-   in `apps/<name>/secrets/` that it uses to verify tokens.
+   in `services/<name>/secrets/` that it uses to verify tokens.
 5. **Point a web app at it.** With one API in the workspace, `setup` already
    did. With several, a web app keeps the API it had. To move one to the new
    service, set `API_APP=<name>` in that web app's `.env.example` (and its

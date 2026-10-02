@@ -1,4 +1,4 @@
-# Build context for the app images (apps/*/Dockerfile), which build from the
+# Build context for the web app images (apps/*/Dockerfile), which build from the
 # repository root. Dependencies and build output are recreated in the image;
 # environment files and secrets never enter it.
 .git
@@ -16,4 +16,5 @@
 **/.env
 **/.env.*
 !**/.env.example
-apps/auth-server
+infra
+services

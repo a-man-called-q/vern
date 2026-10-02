@@ -1,4 +1,4 @@
-import type { App } from "../lib/apps";
+import type { App } from "../lib/projects";
 import { envFiles, parseEnv, setEnvValue } from "../lib/env";
 import { readConfig } from "../project/config";
 import type { ApiOptions } from "../zitadel/client";

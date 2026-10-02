@@ -129,20 +129,20 @@ services:
       start_period: 20s
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap:ro
-      - ../apps/auth-server/brand:/brand:ro
+      - ../infra/auth-server/brand:/brand:ro
     networks:
       - internal
     depends_on:
       zitadel-api:
         condition: service_healthy
 
-  # Serves apps/auth-server/brand under /brand and sends / to the sign-in page.
+  # Serves infra/auth-server/brand under /brand and sends / to the sign-in page.
   auth-server:
     image: nginx:1.29-alpine
     restart: unless-stopped
     volumes:
-      - ../apps/auth-server/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ../apps/auth-server/brand:/usr/share/nginx/html/brand:ro
+      - ../infra/auth-server/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../infra/auth-server/brand:/usr/share/nginx/html/brand:ro
     networks:
       - edge
       - internal
@@ -223,11 +223,11 @@ services:
       - traefik.http.routers.web.entrypoints=websecure
       - traefik.http.routers.web.service=web
 
-  # The API from apps/${API_APP}. The web app calls it server-side with the
+  # The API from services/${API_APP}. The web app calls it server-side with the
   # signed-in user's access token; it accepts only tokens ZITADEL confirms.
   api:
     build:
-      context: ../apps/${API_APP:?Set API_APP in deploy/.env}
+      context: ../services/${API_APP:?Set API_APP in deploy/.env}
     restart: unless-stopped
     environment:
       <<: *issuer

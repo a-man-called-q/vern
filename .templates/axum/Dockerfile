@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Production image for {{ name | kebab_case }}:
 #   moon run {{ name | kebab_case }}:docker
-# or: docker build -t {{ name | kebab_case }} apps/{{ name | kebab_case }}
+# or: docker build -t {{ name | kebab_case }} services/{{ name | kebab_case }}
 # Configure it with ZITADEL_ISSUER and ZITADEL_PROJECT_ID, and mount the API
 # application's key file at /run/secrets/zitadel-api-key.json.
 
