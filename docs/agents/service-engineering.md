@@ -30,6 +30,10 @@ own SQL are easy to read, test, and change.
    the service starts.
    - Rows that belong to a user get `owner_sub text NOT NULL`, the ZITADEL user
      ID. There is no users table to reference.
+   - Rows that belong to a company, when several users share them (each company
+     is a ZITADEL organization), get `org_id text NOT NULL`, the caller's
+     organization from `user.org()?`. Add `created_by_sub text NOT NULL` when
+     the row should say who made it, but limit queries by `org_id` alone.
    - Put the rule in the database when the database can hold it: `NOT NULL`,
      `CHECK`, `UNIQUE`, foreign keys, an exclusion constraint for "no two
      overlapping". Two requests racing cannot both pass a constraint; they can
@@ -75,8 +79,11 @@ own SQL are easy to read, test, and change.
   ID, an owner, or a role from the request body, the path, or a header.
 - **Role, then ownership.** `user.require_role("x")?` answers 403.
   `user.has_role("x")` is the check that does not fail, for "admins see all,
-  others see their own". Then limit every query with `WHERE owner_sub = $1` or
-  the product's own ownership rule.
+  others see their own". Then limit every query with `WHERE owner_sub = $1`,
+  `WHERE org_id = $1` bound to `user.org()?` for a company's rows, or the
+  product's own ownership rule. The organization comes from the token and never
+  from the request: a company id in a path or a body is a caller choosing whose
+  data to read.
 - **Someone else's row is `NotFound`**, the same answer as a row that does not
   exist, so an ID cannot be probed.
 - **Handlers return `ApiError`.** It renders `{"error":{"code","message"}}` with
@@ -131,9 +138,20 @@ Cover, for each endpoint:
 - the happy path, asserting the status and the body;
 - invalid input (400);
 - a caller without the role (403);
-- a caller asking for another user's row (404, and the row is unchanged);
+- a caller asking for another user's row, or another company's (404, and the
+  row is unchanged): give the test two users in different organizations;
 - the rule the endpoint exists to enforce (the overlap, the limit, the state
   change that is not allowed).
+
+## Callers that are not signed-in users
+
+A device with its own token, or an event consumer, has no ZITADEL access token.
+Do not bend `auth.rs` for it: give it its own module (`src/device_auth.rs`) and
+its own router, next to `protected_routes` in `src/app.rs`, with the check in
+that module and limits on how often it can be called. Keep it away from the
+user routes, and let it write only what that kind of caller may write. Events
+(`--events`) are for services telling each other what changed; they are not
+a way in for an outside caller.
 
 ## Before calling it done
 

@@ -44,6 +44,10 @@ A service stores the user's ID (`sub`) next to the rows that user owns.
    from them. It sends events over NATS JetStream through an outbox table, and
    needs the bus project once (`moon generate bus -- --name bus --port 4222`).
    The service's README, section "Events", explains `src/events.rs`.
+   A service that keeps uploaded files needs the storage project once
+   (`moon generate storage -- --name storage --port 9000`): an S3-compatible
+   store with one bucket, whose settings the project's README lists for the
+   service's `.env`.
 4. **Provision it:**
 
    ```sh

@@ -45,8 +45,9 @@ code and its production checklist.
    API directly.
 4. **The API decides.** Every endpoint that is not deliberately public sits
    behind `require_bearer`, checks the role with `require_role`, and limits its
-   queries to the caller's own rows. Hiding a button in a web app is not access
-   control.
+   queries to the caller's own rows: `owner_sub` for a user's rows, or `org_id`
+   (`user.org()?`) when the users of one company share theirs. Hiding a button in
+   a web app is not access control.
 5. **Roles are declared, not invented.** A role an API checks is listed in
    `roles.json` and created by `bun run setup`.
 6. **`.env` files belong to `setup`.** They are ignored by Git and hold
