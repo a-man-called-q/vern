@@ -418,7 +418,23 @@ are upgraded. The TanStack packages are pinned in the templates, because
 updater moves them together and keeps the router on the version Start uses, so
 do the same when you bump them by hand. If a conflict or a failed check stops the update, fix it on the
 review branch and run `bun run project:update -- --continue`. Review the diff
-and merge it yourself.
+and merge it yourself. An update that fails before it has merged the files
+undoes its review branch, and can be applied again.
+
+The updater that runs is the project's own copy, from its last update. An older
+one stops with `git merge-file failed for <file>:`, and nothing after the colon,
+when one file conflicts in two or more places, and leaves a review branch that
+neither `--apply` nor `--continue` accepts. Discard it (replace `main` with the
+branch you were on):
+
+```sh
+git reset --hard && git clean -fd && git switch main && git branch -D vern/update-<sha>
+```
+
+Then, in `scripts/project/merge.ts` (`scripts/update-project.ts` in an older
+project), change `result.status > 1` to `result.status > 127` and
+`result.status === 1` to `result.status > 0`, commit, and apply the update
+again.
 
 ## Deploy
 

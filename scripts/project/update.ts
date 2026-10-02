@@ -146,6 +146,24 @@ function applyDependenciesAndValidation(
 	);
 }
 
+/**
+ * Leaves the review branch of an update that failed before its state was
+ * saved, and deletes it. The working tree was clean when the update began, so
+ * everything in it that Git does not ignore is the update's own.
+ */
+function undoReviewBranch(
+	root: string,
+	branch: string,
+	previousBranch: string,
+	previousHead: string,
+): void {
+	git(root, "reset", "--hard", "--quiet");
+	git(root, "clean", "-fd", "--quiet");
+	if (previousBranch) git(root, "switch", "--quiet", previousBranch);
+	else git(root, "switch", "--quiet", "--detach", previousHead);
+	git(root, "branch", "-D", "--quiet", branch);
+}
+
 export function updateProject(root: string, options: Options): void {
 	if (options.migrate) {
 		if (git(root, "status", "--porcelain").stdout.trim())
@@ -231,22 +249,53 @@ export function updateProject(root: string, options: Options): void {
 	) {
 		throw new Error("Review branch already exists: " + branch);
 	}
+	const previousBranch = git(root, "branch", "--show-current").stdout.trim();
+	const previousHead = git(root, "rev-parse", "HEAD").stdout.trim();
+	// Moved folders take files Git ignores with them, which Git cannot put back.
+	const movesFolders = planLayoutMigration(root).length > 0;
 	git(root, "switch", "-c", branch);
-	migrateAndReport(root);
-	const merged = mergeUpstreamFiles(
-		root,
-		config,
-		config.upstream.lastSyncedSha,
-		targetSha,
-	);
-	const state: UpdateState = {
-		schemaVersion: 1,
-		branch,
-		previousSha: config.upstream.lastSyncedSha,
-		targetSha,
-		phase: merged.conflicts.length > 0 ? "conflicts" : "dependencies",
-		conflicts: merged.conflicts,
-	};
+	let state: UpdateState;
+	let merged: ReturnType<typeof mergeUpstreamFiles>;
+	try {
+		migrateAndReport(root);
+		merged = mergeUpstreamFiles(
+			root,
+			config,
+			config.upstream.lastSyncedSha,
+			targetSha,
+		);
+		state = {
+			schemaVersion: 1,
+			branch,
+			previousSha: config.upstream.lastSyncedSha,
+			targetSha,
+			phase: merged.conflicts.length > 0 ? "conflicts" : "dependencies",
+			conflicts: merged.conflicts,
+		};
+		writeState(root, state);
+	} catch (error) {
+		// Without a saved state neither --apply nor --continue can go on from here.
+		const message = error instanceof Error ? error.message : String(error);
+		if (movesFolders) {
+			throw new Error(
+				message +
+					"\nThe update stopped on " +
+					branch +
+					", after it began to move folders to the current layout. Discard the changes there, go back to " +
+					(previousBranch || previousHead.slice(0, 12)) +
+					", and delete " +
+					branch +
+					" before applying again; the files Git ignores (.env, keys) stay in the moved folders.",
+			);
+		}
+		undoReviewBranch(root, branch, previousBranch, previousHead);
+		throw new Error(
+			message +
+				"\nThe update was undone: the project is back on " +
+				(previousBranch || previousHead.slice(0, 12)) +
+				" as it was.",
+		);
+	}
 	writeState(root, state);
 	if (merged.conflicts.length > 0) {
 		console.error(

@@ -122,14 +122,16 @@ function mergeText(
 			["merge-file", "-p", "--", localTemp, baseTemp, targetTemp],
 			{ cwd: root, allowFailure: true },
 		);
-		if (result.status > 1) {
+		// The exit status is the number of conflicts, capped at 127; an error is
+		// 255. `run` also answers 127, with no output, when git could not start.
+		if (result.status > 127 || (result.status === 127 && !result.stdout)) {
 			throw new Error(
 				"git merge-file failed for " + path + ": " + result.stderr.trim(),
 			);
 		}
 		return {
 			data: Buffer.from(result.stdout, "utf8"),
-			conflicted: result.status === 1,
+			conflicted: result.status > 0,
 		};
 	} finally {
 		rmSync(localTemp, { force: true });
@@ -207,14 +209,19 @@ export function mergeUpstreamFiles(
 	to: string,
 ): { updated: string[]; conflicts: Conflict[] } {
 	const generatedDirs = generatedProjectDirs(root, [upstreamPaths(root, from), upstreamPaths(root, to)]);
-	const updated: string[] = [];
-	const conflicts: Conflict[] = [];
+	// Every file is planned before the first is written, so a merge that fails
+	// leaves the working tree as it was.
+	const plans: { path: string; absolute: string; ours?: Buffer; plan: Plan }[] = [];
 	for (const path of allChangedUpstreamPaths(root, from, to)) {
 		if (shouldSkipUpstreamPath(path, generatedDirs)) continue;
 		const absolute = safeProjectPath(root, path);
 		const versions = snapshots(root, config, from, to, path);
 		const ours = readWorkingFile(absolute);
-		const plan = planMerge(root, path, ours, versions);
+		plans.push({ path, absolute, ours, plan: planMerge(root, path, ours, versions) });
+	}
+	const updated: string[] = [];
+	const conflicts: Conflict[] = [];
+	for (const { path, absolute, ours, plan } of plans) {
 		if (plan.kind === "keep") continue;
 		if (plan.kind === "delete") {
 			unlinkSync(absolute);

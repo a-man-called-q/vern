@@ -613,7 +613,79 @@ describe("update-project and scripts", () => {
 	});
 });
 
-function readStateForTest(root: string): { phase: string } {
+describe("update-project and a merge that goes wrong", () => {
+	/** An upstream with `files`, and a project cloned from it and renamed to Acme. */
+	function clonedConsumer(files: Record<string, string>) {
+		const upstream = tempRoot("vern-upstream-merge-");
+		const consumer = tempRoot("vern-consumer-merge-");
+		const base = initRepo(upstream, { ".gitignore": ".vern/update-state.json\n", ...files });
+		git(consumer, "clone", upstream, ".");
+		git(consumer, "config", "user.name", "Vern Script Tests");
+		git(consumer, "config", "user.email", "vern-tests@example.test");
+		write(
+			consumer,
+			".vern/config.json",
+			JSON.stringify(
+				{
+					schemaVersion: 1,
+					project: { name: "Acme", slug: "acme" },
+					upstream: { url: upstream, branch: "main", lastSyncedSha: base },
+				} satisfies ProjectConfig,
+				null,
+				2,
+			) + "\n",
+		);
+		return { upstream, consumer };
+	}
+
+	test("lists a file that conflicts in two places as one conflict", () => {
+		const lines = (first: string, last: string) =>
+			[first, "two", "three", "four", "five", "six", "seven", "eight", last].join("\n") + "\n";
+		const { upstream, consumer } = clonedConsumer({ "workflow.yml": lines("one", "nine") });
+		write(consumer, "workflow.yml", lines("local one", "local nine"));
+		commitAll(consumer, "local changes");
+		write(upstream, "workflow.yml", lines("upstream one", "upstream nine"));
+		commitAll(upstream, "update template");
+		installFakeCommands();
+
+		updateProject(consumer, { apply: true, continueUpdate: false });
+		const merged = readFileSync(resolve(consumer, "workflow.yml"), "utf8");
+		expect(merged.match(/^<<<<<<< /gm)).toHaveLength(2);
+		const state = readStateForTest(consumer);
+		expect(state.phase).toBe("conflicts");
+		expect(state.conflicts.map((conflict) => conflict.path)).toEqual(["workflow.yml"]);
+		expect(() => updateProject(consumer, { apply: false, continueUpdate: true })).toThrow(
+			"Resolve these conflicts, then rerun --continue: workflow.yml",
+		);
+
+		write(consumer, "workflow.yml", lines("resolved one", "resolved nine"));
+		updateProject(consumer, { apply: false, continueUpdate: true });
+		expect(existsState(consumer)).toBe(false);
+	});
+
+	test("undoes the review branch when the merge fails", () => {
+		const { upstream, consumer } = clonedConsumer({ "README.md": "Project: Vern\n" });
+		// Upstream adds a file where the project has a folder: it cannot be written.
+		write(consumer, "docs/guide.md/note.txt", "local\n");
+		const head = commitAll(consumer, "local changes");
+		write(upstream, "added.txt", "written before the failure\n");
+		write(upstream, "docs/guide.md", "Added by Vern\n");
+		const target = commitAll(upstream, "update template");
+		installFakeCommands();
+
+		expect(() => updateProject(consumer, { apply: true, continueUpdate: false })).toThrow(
+			"The update was undone: the project is back on main as it was.",
+		);
+		expect(git(consumer, "branch", "--show-current")).toBe("main");
+		expect(git(consumer, "rev-parse", "HEAD")).toBe(head);
+		expect(git(consumer, "status", "--porcelain")).toBe("");
+		expect(git(consumer, "branch", "--list", "vern/update-" + target.slice(0, 8))).toBe("");
+		expect(existsSync(resolve(consumer, "added.txt"))).toBe(false);
+		expect(existsState(consumer)).toBe(false);
+	});
+});
+
+function readStateForTest(root: string): { phase: string; conflicts: { path: string }[] } {
 	return JSON.parse(
 		readFileSync(resolve(root, ".vern/update-state.json"), "utf8"),
 	);
