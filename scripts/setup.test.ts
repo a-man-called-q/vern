@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, wri
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { parseEnv } from "./env-files";
-import { findApps, setup } from "./setup";
+import { apiUrlKey, findApps, setup } from "./setup";
 
 const tempDirs: string[] = [];
 afterEach(() => {
@@ -275,6 +275,51 @@ describe("setup", () => {
 			write(root, "apps/dashboard/.env", "API_APP=ads-api\nAPI_BASE_URL=https://api.acme.test\n");
 			await setup([], deps(root, fakeZitadel()));
 			expect(parseEnv(resolve(root, "apps/dashboard/.env")).get("API_BASE_URL")).toBe("https://api.acme.test");
+		});
+
+		test("gives every API in API_APPS a variable with its URL", async () => {
+			const root = twoApis();
+			write(root, "apps/dashboard/.env", "API_APPS=ads-api, api\n");
+			const logs: string[] = [];
+			expect(await setup([], deps(root, fakeZitadel(), logs))).toBe(0);
+			const env = parseEnv(resolve(root, "apps/dashboard/.env"));
+			expect(env.get("ADS_API_API_URL")).toBe("http://localhost:4001");
+			expect(env.get("API_API_URL")).toBe("http://localhost:4000");
+			// The app reaches its APIs by name, so it is not told that API_BASE_URL is missing.
+			expect(logs.some((line) => line.includes("API_BASE_URL is not set"))).toBe(false);
+		});
+
+		test("API_APPS comes from the example file too, and works next to API_APP", async () => {
+			const root = twoApis();
+			write(
+				root,
+				"apps/dashboard/.env.example",
+				"PORT=3000\nAPP_URL=http://localhost:3000\nZITADEL_CLIENT_ID=replace-with-your-zitadel-client-id\nSESSION_SECRET=\nAPI_APP=api\nAPI_BASE_URL=\nAPI_APPS=ads-api\n",
+			);
+			await setup([], deps(root, fakeZitadel()));
+			const env = parseEnv(resolve(root, "apps/dashboard/.env"));
+			expect(env.get("API_BASE_URL")).toBe("http://localhost:4000");
+			expect(env.get("ADS_API_API_URL")).toBe("http://localhost:4001");
+		});
+
+		test("keeps a variable that was set by hand, and fails on a name that is not an API", async () => {
+			const root = twoApis();
+			write(root, "apps/dashboard/.env", "API_APPS=ads-api\nADS_API_API_URL=https://ads.acme.test\n");
+			await setup([], deps(root, fakeZitadel()));
+			expect(parseEnv(resolve(root, "apps/dashboard/.env")).get("ADS_API_API_URL")).toBe("https://ads.acme.test");
+
+			write(root, "apps/dashboard/.env", "API_APPS=ads-api,billing\n");
+			await expect(setup([], deps(root, fakeZitadel()))).rejects.toThrow(
+				"apps/dashboard: API_APPS names billing, which is not an Axum API with a PORT under apps/ (found: ads-api, api)",
+			);
+		});
+	});
+
+	describe("apiUrlKey", () => {
+		test("makes a variable name from an app name", () => {
+			expect(apiUrlKey("inventory")).toBe("INVENTORY_API_URL");
+			expect(apiUrlKey("billing-api")).toBe("BILLING_API_API_URL");
+			expect(() => apiUrlKey("9lives")).toThrow("cannot be made into a variable name");
 		});
 	});
 

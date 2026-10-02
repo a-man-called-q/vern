@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createAuthenticatedApiFetcher } from "./api.server";
+import { createApiClient, createAuthenticatedApiFetcher } from "./api.server";
 import { AuthenticationRequiredError } from "./auth-error";
 
 /** Bun's types give `fetch` a `preconnect` member, so a bare function is not assignable. */
@@ -83,4 +83,24 @@ test("leaves other statuses to the caller", async () => {
 		})("/api/me");
 		assert.equal(response.status, status);
 	}
+});
+
+test("an API client reads the URL from its own variable and refuses a missing one", async () => {
+	delete process.env.BILLING_API_URL;
+	const fetchBillingApi = createApiClient("BILLING_API_URL");
+	await assert.rejects(
+		fetchBillingApi("/api/me"),
+		/BILLING_API_URL is required/,
+	);
+});
+
+test("an API client needs an upper-case variable name", () => {
+	assert.throws(
+		() => createApiClient("billing url"),
+		/upper-case variable name/,
+	);
+	assert.throws(
+		() => createApiClient("billing_api_url"),
+		/upper-case variable name/,
+	);
 });

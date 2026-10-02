@@ -83,7 +83,9 @@ moon run :dev
   secret), and an API application with a key for each Axum API. It fills in the
   project ID, client IDs, session secrets, key files, and each web app's
   `API_BASE_URL`: the only API there is, or the one named by `API_APP` in the
-  app's `.env` when there are several. It also creates the project roles listed
+  app's `.env` when there are several. An app that calls more lists them in
+  `API_APPS` (for example `API_APPS=billing,inventory`) and gets a variable with
+  each one's URL (`BILLING_API_URL`). It also creates the project roles listed
   in `roles.json`, and, locally, the test users in `seed-users.json` (see
   [Roles and users](#roles-and-users)). Run it again after generating another
   app; it keeps what already exists.

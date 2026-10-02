@@ -68,22 +68,33 @@ export function createAuthenticatedApiFetcher(options: {
 }
 
 /**
- * Server-only BFF helper. `path` must be a relative path, never a caller URL.
- * Throws `AuthenticationRequiredError` when the API refuses the user's token
- * (revoked upstream) and the app session was dropped: send the user to sign in.
+ * Server-only BFF helper for the API whose base URL is in the environment
+ * variable `envKey`. An app that calls a second API makes one client per API, in
+ * the server module of that API: `const fetchBillingApi =
+ * createApiClient("BILLING_API_URL")`. List the APIs in `API_APPS` in the app's
+ * `.env.example` and `bun run setup` fills the variables in.
+ *
+ * `path` must be a relative path, never a caller URL. The call throws
+ * `AuthenticationRequiredError` when the API refuses the user's token (revoked
+ * upstream) and the app session was dropped: send the user to sign in.
  */
-export async function fetchAuthenticatedApi(
-	path: string,
-	init: RequestInit = {},
-): Promise<Response> {
-	const baseUrl = env.API_BASE_URL;
-	if (!baseUrl) throw new Error("API_BASE_URL is required");
-	const { dropRevokedSession, getApiAccessToken } = await import(
-		"./auth.server"
-	);
-	return createAuthenticatedApiFetcher({
-		baseUrl,
-		getAccessToken: getApiAccessToken,
-		onUnauthorized: dropRevokedSession,
-	})(path, init);
+export function createApiClient(envKey: string) {
+	if (!/^[A-Z][A-Z0-9_]*$/.test(envKey)) {
+		throw new Error("envKey must be an upper-case variable name");
+	}
+	return async (path: string, init: RequestInit = {}): Promise<Response> => {
+		const baseUrl = env[envKey];
+		if (!baseUrl) throw new Error(`${envKey} is required`);
+		const { dropRevokedSession, getApiAccessToken } = await import(
+			"./auth.server"
+		);
+		return createAuthenticatedApiFetcher({
+			baseUrl,
+			getAccessToken: getApiAccessToken,
+			onUnauthorized: dropRevokedSession,
+		})(path, init);
+	};
 }
+
+/** The API in `API_BASE_URL`: the one `bun run setup` wires a web app to. */
+export const fetchAuthenticatedApi = createApiClient("API_BASE_URL");

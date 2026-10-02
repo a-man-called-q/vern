@@ -355,12 +355,48 @@ function chooseApiUrl(
 		);
 	}
 	if (names.length === 1) return { url: apiUrls.get(names[0]) };
-	if (names.length > 1) {
+	// An app that lists its APIs in API_APPS reaches them by their own variables.
+	if (names.length > 1 && !appEnv.get("API_APPS")) {
 		return {
 			message: `${app.path}: API_BASE_URL is not set (${names.length} APIs found: ${names.join(", ")}). Set API_APP=<api> in ${app.path}/.env and run this again.`,
 		};
 	}
 	return {};
+}
+
+/** The variable that holds the URL of an Axum app: `inventory` becomes `INVENTORY_API_URL`. */
+export function apiUrlKey(name: string): string {
+	const key = `${name.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_URL`;
+	if (!/^[A-Z][A-Z0-9_]*$/.test(key)) throw new Error(`"${name}" cannot be made into a variable name`);
+	return key;
+}
+
+/**
+ * The APIs a web app calls besides `API_BASE_URL`: `API_APPS=inventory,media`
+ * lists Axum apps, and each gets a variable with its URL (`INVENTORY_API_URL`)
+ * unless the app already set one.
+ */
+function chooseNamedApiUrls(
+	app: App,
+	appEnv: Map<string, string>,
+	apiUrls: Map<string, string>,
+): [key: string, url: string][] {
+	const wanted = (appEnv.get("API_APPS") ?? "")
+		.split(",")
+		.map((name) => name.trim())
+		.filter(Boolean);
+	const names = [...apiUrls.keys()].sort();
+	return wanted.flatMap((name) => {
+		const url = apiUrls.get(name);
+		if (!url) {
+			throw new Error(
+				`${app.path}: API_APPS names ${name}, which is not an Axum API with a PORT under apps/` +
+					(names.length > 0 ? ` (found: ${names.join(", ")})` : ""),
+			);
+		}
+		const key = apiUrlKey(name);
+		return appEnv.get(key) ? [] : [[key, url] as [string, string]];
+	});
 }
 
 /**
@@ -491,6 +527,7 @@ async function setupLocal(
 		const apiUrl = chooseApiUrl(app, appEnv, apiUrls);
 		if (apiUrl.url) setEnvValue(env, example, "API_BASE_URL", apiUrl.url);
 		if (apiUrl.message) log(apiUrl.message);
+		for (const [key, url] of chooseNamedApiUrls(app, appEnv, apiUrls)) setEnvValue(env, example, key, url);
 		const appUrl = appEnv.get("APP_URL");
 		if (!appUrl) throw new Error(`${app.path}: APP_URL is not set`);
 		const result = await provisionApplication({
