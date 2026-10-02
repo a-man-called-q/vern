@@ -19,7 +19,8 @@ The flow follows ZITADEL's
 [Authorization Code + PKCE guide](https://zitadel.com/docs/guides/integrate/login/oidc/login-users).
 
 The login, callback, and logout endpoints are Route Handlers under
-`src/app/auth`. The short-lived PKCE state between redirects lives in a sealed
+`src/app/auth` that call `src/server/auth-flow.server.ts`, where the flow is
+written. The short-lived PKCE state between redirects lives in a sealed
 cookie (`SESSION_SECRET`), and the session cookies are named after this app so
 several apps can run on `localhost` side by side.
 
@@ -74,7 +75,7 @@ callbacks or sessions.
   the short-lived sign-in cookie, so rotating it interrupts in-flight sign-ins
   but not signed-in users.
 - Signed-in sessions live in Redis for at most eight hours. They carry a schema
-  version (`SESSION_VERSION` in `src/server/session.server.ts`); after a release
+  version (`SESSION_VERSION` in `src/server/session-record.server.ts`); after a release
   changes the stored shape, bump it and users simply sign in again.
 - Name and email are read from the ID token, or from the userinfo endpoint when
   the ID token omits them. Enabling **Include user's profile info in the ID

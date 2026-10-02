@@ -1,21 +1,12 @@
 import { env } from "node:process";
 import { AuthenticationRequiredError } from "./auth-error";
+import { isProduction, parseHttpUrl } from "./config.server";
 
 function parseApiBaseUrl(value: string, requireHttps: boolean) {
-	const url = new URL(value);
-	if (
-		!["http:", "https:"].includes(url.protocol) ||
-		url.username ||
-		url.password ||
-		url.search ||
-		url.hash
-	) {
-		throw new Error("API_BASE_URL must be a valid http(s) URL");
-	}
-	if (requireHttps && url.protocol !== "https:") {
-		throw new Error("API_BASE_URL must use HTTPS in production");
-	}
-
+	const url = parseHttpUrl("API_BASE_URL", value, {
+		kind: "URL",
+		requireHttps,
+	});
 	url.pathname = `${url.pathname.replace(/\/+$/, "")}/`;
 	return url;
 }
@@ -34,7 +25,7 @@ export function createAuthenticatedApiFetcher(options: {
 }) {
 	const baseUrl = parseApiBaseUrl(
 		options.baseUrl,
-		options.requireHttps ?? env.NODE_ENV === "production",
+		options.requireHttps ?? isProduction(),
 	);
 	const fetcher = options.fetcher ?? fetch;
 
@@ -86,7 +77,7 @@ export function createApiClient(envKey: string) {
 		const baseUrl = env[envKey];
 		if (!baseUrl) throw new Error(`${envKey} is required`);
 		const { dropRevokedSession, getApiAccessToken } = await import(
-			"./auth.server"
+			"./auth-flow.server"
 		);
 		return createAuthenticatedApiFetcher({
 			baseUrl,

@@ -120,9 +120,11 @@ checks the role again on every request
   IDs (`encodeURIComponent`), never from a URL the browser sent.
 - When an API response changes, change the type, the check in `call`, and the
   pages that read it in the same change.
-- Do not edit `auth.server.ts`, `session.server.ts`, `oidc.server.ts`,
+- Do not edit `auth.server.ts`, `auth-flow.server.ts`, `config.server.ts`,
+  `session.server.ts`, `session-record.server.ts`, `oidc.server.ts`,
   `api.server.ts`, or the `/auth` routes to add product features. If the stored
-  session shape must change, bump `SESSION_VERSION` in `session.server.ts`.
+  session shape must change, bump `SESSION_VERSION` in
+  `session-record.server.ts`.
 
 ## Check
 

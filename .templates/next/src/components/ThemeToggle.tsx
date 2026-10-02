@@ -5,6 +5,19 @@ import { useEffect, useState } from "react";
 
 type ThemeMode = "light" | "dark" | "auto";
 
+/** Each click moves to the next mode: light, dark, then the system's. */
+const NEXT_MODE: Record<ThemeMode, ThemeMode> = {
+	light: "dark",
+	dark: "auto",
+	auto: "light",
+};
+
+const MODE_NAME: Record<ThemeMode, string> = {
+	light: "Light",
+	dark: "Dark",
+	auto: "Auto",
+};
+
 function getInitialMode(defaultMode: ThemeMode): ThemeMode {
 	if (typeof window === "undefined") {
 		return defaultMode;
@@ -19,8 +32,13 @@ function getInitialMode(defaultMode: ThemeMode): ThemeMode {
 }
 
 function applyThemeMode(mode: ThemeMode) {
-	const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-	const resolved = mode === "auto" ? (prefersDark ? "dark" : "light") : mode;
+	let resolved = mode;
+	if (mode === "auto") {
+		const prefersDark = window.matchMedia(
+			"(prefers-color-scheme: dark)",
+		).matches;
+		resolved = prefersDark ? "dark" : "light";
+	}
 
 	document.documentElement.classList.remove("light", "dark");
 	document.documentElement.classList.add(resolved);
@@ -62,8 +80,7 @@ export default function ThemeToggle({
 	}, [mode]);
 
 	function toggleMode() {
-		const nextMode: ThemeMode =
-			mode === "light" ? "dark" : mode === "dark" ? "auto" : "light";
+		const nextMode = NEXT_MODE[mode];
 		setMode(nextMode);
 		applyThemeMode(nextMode);
 		window.localStorage.setItem("theme", nextMode);
@@ -83,7 +100,7 @@ export default function ThemeToggle({
 			variant="outline"
 			size="sm"
 		>
-			{mode === "auto" ? "Auto" : mode === "dark" ? "Dark" : "Light"}
+			{MODE_NAME[mode]}
 		</Button>
 	);
 }

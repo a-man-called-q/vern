@@ -184,6 +184,11 @@ export function AppSidebar({
 		"not-configured": "Not configured",
 		unavailable: "Unavailable",
 	}[apiStatus];
+	const apiStatusColor = {
+		connected: "bg-emerald-500",
+		"not-configured": "bg-amber-500",
+		unavailable: "bg-rose-500",
+	}[apiStatus];
 
 	return (
 		<Sidebar collapsible="offcanvas" {...props}>
@@ -223,7 +228,7 @@ export function AppSidebar({
 					<div className="flex items-center gap-2 text-xs font-medium">
 						<span
 							aria-hidden="true"
-							className={`size-1.5 rounded-full ${apiStatus === "connected" ? "bg-emerald-500" : apiStatus === "not-configured" ? "bg-amber-500" : "bg-rose-500"}`}
+							className={`size-1.5 rounded-full ${apiStatusColor}`}
 						/>
 						API connection
 						<span className="ml-auto text-sidebar-foreground/60">

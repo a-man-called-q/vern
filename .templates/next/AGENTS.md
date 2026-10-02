@@ -15,10 +15,13 @@ calling an API, read
 [`../../docs/agents/web-to-api.md`](../../docs/agents/web-to-api.md).
 
 - **Sign-in is done.** The Route Handlers under `src/app/auth` and `auth`,
-  `session`, `oidc`, `api`, `http`, `log`, and `ttl-cache` under `src/server` are
-  its machinery. Build next to them, not in them.
-- **Server code is in `src/server`** and imports `server-only`, so a client
-  component that imports it fails the build. Keep it that way for new modules.
+  `auth-flow`, `config`, `session`, `session-record`, `oidc`, `api`, `http`,
+  `log`, and `ttl-cache` under `src/server` are its machinery. Build next to
+  them, not in them.
+- **Server code is in `src/server`.** A new module there imports `server-only`,
+  so a client component that imports it fails the build. The machinery that
+  does not depend on Next.js (`auth-flow`, `config`, `session-record`, `api`,
+  `http`, `log`, `ttl-cache`) leaves it out so `bun test` can load it.
 - **API calls** go through `fetchAuthenticatedApi`, wrapped in one module per
   API (`src/server/<api>.server.ts`). Browser code never calls an API and never
   sees a token.

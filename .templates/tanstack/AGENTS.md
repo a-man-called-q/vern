@@ -4,9 +4,9 @@ Read [`../../AGENTS.md`](../../AGENTS.md) first. Before protecting a page or
 calling an API, read
 [`../../docs/agents/web-to-api.md`](../../docs/agents/web-to-api.md).
 
-- **Sign-in is done.** The `/auth` routes and `auth`, `session`, `oidc`, `api`,
-  `http`, `log`, and `ttl-cache` under `src/server` are its machinery. Build next
-  to them, not in them.
+- **Sign-in is done.** The `/auth` routes and `auth`, `auth-flow`, `config`,
+  `session`, `session-record`, `oidc`, `api`, `http`, `log`, and `ttl-cache`
+  under `src/server` are its machinery. Build next to them, not in them.
 - **Server code is in `*.server.ts`.** A route reaches it through a server
   function (`createServerFn`) that imports the `.server` module inside its
   handler, as `src/server/auth.ts` does. A `loader` also runs in the browser, so
