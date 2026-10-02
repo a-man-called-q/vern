@@ -131,7 +131,12 @@ export function getSessionAgeMs(data: StoredAuthSession, now = Date.now()) {
 	return now - (data.sessionExpiresAt - APP_SESSION_MAX_AGE * 1000);
 }
 
-type RedisClient = ReturnType<typeof createClient>;
+// The type comes from the call that is made: `createClient` is generic over its
+// options, so the client of its default type parameters is a different type.
+function newRedisClient(url: string) {
+	return createClient({ url });
+}
+type RedisClient = ReturnType<typeof newRedisClient>;
 // Cached on globalThis so dev-server module reloads reuse one connection.
 const globalForRedis = globalThis as typeof globalThis & {
 	appRedisClient?: Promise<RedisClient>;
@@ -142,7 +147,7 @@ function getRedisClient() {
 		const url = env.REDIS_URL;
 		if (!url) throw new Error("REDIS_URL is required");
 
-		const client = createClient({ url });
+		const client = newRedisClient(url);
 		// Keep connection details and Redis command metadata out of application logs.
 		client.on("error", () => undefined);
 		globalForRedis.appRedisClient = client

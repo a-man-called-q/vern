@@ -128,7 +128,7 @@ describe("provisionApplication", () => {
 });
 
 // The request bodies must use field names and enum values that the ZITADEL
-// release in apps/auth-server/.env.example really defines. CI downloads that
+// release in deploy/dev/auth-server/.env.example really defines. CI downloads that
 // release's proto/zitadel files into ZITADEL_PROTO_DIR; without it this suite
 // is skipped.
 const protoDir = process.env.ZITADEL_PROTO_DIR ?? "";

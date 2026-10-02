@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 // The organization and instance-member requests must use the routes and fields
-// that the ZITADEL release in apps/auth-server/.env.example defines. CI downloads
+// that the ZITADEL release in deploy/dev/auth-server/.env.example defines. CI downloads
 // that release's proto files into ZITADEL_PROTO_DIR (see zitadel-app.test.ts);
 // without all of them this suite is skipped.
 const protoDir = process.env.ZITADEL_PROTO_DIR ?? "";
