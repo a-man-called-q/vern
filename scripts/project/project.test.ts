@@ -312,15 +312,19 @@ describe("rename-project", () => {
 	});
 
 	describe("logo text", () => {
-		const logo = readFileSync(
-			resolve(ROOT, "infra/auth-server/brand/logo-light.svg"),
-			"utf8",
-		);
 		const logoPath = "infra/auth-server/brand/logo-light.svg";
+		const shipped = readFileSync(resolve(ROOT, logoPath), "utf8");
+		// The template's logo, written out here: the shipped one carries the
+		// project's own name once the project is renamed.
+		const logo =
+			'<svg xmlns="http://www.w3.org/2000/svg" width="250" height="64" viewBox="0 0 250 64">\n' +
+			'  <text x="78" y="43" fill="#172033" font-family="Inter,Arial,sans-serif" font-size="38" font-weight="700" letter-spacing="-1.2">vern</text>\n' +
+			"</svg>\n";
 		const vern = { name: "Vern", slug: "vern" };
 		const textTag = (svg: string) => svg.match(/<text\b[^>]*>[^<]*<\/text>/)?.[0];
 
 		test("leaves the shipped logo untouched", () => {
+			expect(fitLogoText(shipped)).toBe(shipped);
 			expect(fitLogoText(logo)).toBe(logo);
 		});
 

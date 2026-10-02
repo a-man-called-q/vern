@@ -965,9 +965,17 @@ describe("setup --kubernetes", () => {
 			"infra/auth-server/brand/brand.json",
 			"infra/auth-server/brand/favicon.svg",
 		]) {
-			write(root, path, readFileSync(resolve(ROOT, path), "utf8"));
+			write(root, path, templateIdentity(readFileSync(resolve(ROOT, path), "utf8")));
 		}
 		return root;
+	}
+
+	/**
+	 * These files come from the checkout, which carries the project's own name
+	 * once it is renamed. The tests expect the template's, so it is put back.
+	 */
+	function templateIdentity(text: string): string {
+		return text.replace(/^namespace:.*$/m, "namespace: vern").replace(/^ZITADEL_ORG_NAME=.*$/m, "ZITADEL_ORG_NAME=Vern");
 	}
 
 	const generated = (root: string, overlay: string, path: string) =>
