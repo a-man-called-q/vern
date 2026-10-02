@@ -392,11 +392,16 @@ bun run project:update -- --apply
 takes the same `--apply` and `--continue` flags.
 
 A project made before APIs moved to `services/` and the Compose stacks to
-`infra/` gets the new layout from its next update: the update that brings the
-change moves `auth-server`, and `bun run project:update -- --migrate` (which
-`bun run project:doctor` asks for) moves the rest with `git mv`, local `.env`
-files and keys included, and fixes the paths in them and in `deploy/`. A file
-of `apps/auth-server` you changed yourself stays there to carry over.
+`infra/` gets the new layout from its next update. That update still runs the
+project's old updater: it moves `auth-server`, and usually stops on conflicts
+in `scripts/` that a rename had only rebranded. Resolve any other conflict, then
+`bun run project:update -- --continue` settles those by itself and moves the
+generated APIs and stacks with `git mv` (local `.env` files and keys go along),
+fixing the paths in them and in `deploy/`. A file of `apps/auth-server` you
+changed yourself stays there for you to carry over. If the update did not stop,
+`bun run project:doctor` names the folders to move and
+`bun run project:update -- --migrate` moves them. A rename no longer touches
+`scripts/`, which merges as Vern ships it.
 
 The updater needs a clean working tree, so commit the rename and your changes
 first. Generated app source is not synchronized, but its dependency manifests
