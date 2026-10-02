@@ -12,6 +12,11 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import {
+	demoDependencies,
+	formatPackageTemplate,
+	renderPackageTemplate,
+} from "./package-template";
+import {
 	CONFIG_PATH,
 	git,
 	gitTry,
@@ -357,11 +362,14 @@ function updateBunTemplate(
 	try {
 		const original = readFileSync(path, "utf8");
 		const renderedName = "vern-template-" + template;
-		const rendered = original.replace(
+		// Every dependency is upgraded, the demo-only ones included: they go
+		// back inside their block when the template is written.
+		const withDemos = renderPackageTemplate(original, true);
+		const rendered = withDemos.replace(
 			'"name": "{{ name | kebab_case }}"',
 			'"name": "' + renderedName + '"',
 		);
-		if (rendered === original)
+		if (rendered === withDemos)
 			throw new Error(
 				"Could not render the " + label + " package name placeholder.",
 			);
@@ -398,7 +406,10 @@ function updateBunTemplate(
 				| undefined;
 			updated[section] = { ...sectionDependencies, ...entries };
 		}
-		writeFileSync(path, JSON.stringify(updated, null, 2) + "\n");
+		writeFileSync(
+			path,
+			formatPackageTemplate(updated, demoDependencies(original)),
+		);
 	} finally {
 		rmSync(tempRoot, { recursive: true, force: true });
 	}
