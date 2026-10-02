@@ -1,6 +1,0 @@
-# SeaweedFS's S3 gateway (infra/storage), with the bucket and the local access
-# key from infra/storage (in the generated `storage` Secret).
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - seaweedfs.yaml

@@ -11,12 +11,12 @@ the product on top of them; do not rebuild them.
 | --- | --- |
 | `apps/<name>` | One web app each (TanStack Start or Next.js), generated from `.templates/`, and Storybook. Product code lives here |
 | `services/<name>` | One Axum API each, generated from `.templates/axum`. Product code lives here |
-| `infra/<name>` | The Compose stacks: `auth-server` (the local ZITADEL and Redis), and the generated `postgres`, `bus`, and `storage`. Configuration only |
 | `packages/ui` | Shared shadcn components and design tokens (`@vern/ui`) |
 | `.templates/` | The generators behind `moon generate` |
 | `scripts/` | Setup, provisioning, doctor, rename, and update |
 | `roles.json`, `seed-users.json` | The product's roles, and local test users |
-| `deploy/` | The production Docker Compose stack, and `deploy/k8s/` for Kubernetes |
+| `deploy/dev/<name>` | What the apps run on while developing, as Compose stacks: `auth-server` (the local ZITADEL and Redis), and the generated `postgres`, `bus`, and `storage`. Configuration only |
+| `deploy/local`, `deploy/staging`, `deploy/prod` | One folder per environment that runs the whole product: its settings, and its Kustomize overlay. `deploy/compose` (Docker Compose, one server) and `deploy/base` (Kubernetes) hold what they share; see [deploy/README.md](deploy/README.md) |
 
 ## Recipes
 
@@ -66,7 +66,7 @@ code and its production checklist.
 
 | Command | What it does |
 | --- | --- |
-| `moon generate <tanstack\|next\|axum\|postgres> -- --name <name> --port <port>` | Create `apps/<name>` (a web app), `services/<name>` (an API), or `infra/<name>` |
+| `moon generate <tanstack\|next\|axum\|postgres> -- --name <name> --port <port>` | Create `apps/<name>` (a web app), `services/<name>` (an API), or `deploy/dev/<name>` |
 | `bun run setup` | Create the `.env` files, ZITADEL applications, keys, roles, and local test users. Safe to run again; needs Docker running |
 | `moon run :dev` | Run everything. `moon run <app>:dev` runs one app and what it needs |
 | `moon run <app>:check` | Type-check one app (and lint it, for a web app) |
@@ -83,7 +83,8 @@ code and its production checklist.
   same change.
 - `bun run project:doctor` passes after a change to ports, roles, or `.env`
   examples.
-- Nothing from a `.env` file, `secrets/`, or `deploy/.env` is committed.
+- Nothing from a `.env` file, a `settings.env`, `secrets/`, or `generated/` is
+  committed.
 
 ## This project
 

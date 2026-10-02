@@ -7,8 +7,46 @@ import type { Log, SetupDeps } from "./context";
 
 /** The local ZITADEL, Redis, and Mailpit stack. */
 export const AUTH = AUTH_SERVER;
-/** The production Docker Compose stack. */
+/** Where every environment is described: `deploy/dev` and one folder per environment below. */
 export const DEPLOY = "deploy";
+/** The Docker Compose stack that runs the whole product on one server. */
+export const COMPOSE = `${DEPLOY}/compose`;
+/** The Kubernetes manifests every overlay shares. */
+export const BASE = `${DEPLOY}/base`;
+
+/**
+ * The environments that run the whole product, each in `deploy/<name>`: a
+ * rehearsal on this machine, staging, and production. (`deploy/dev` is not one
+ * of them: it runs only what the apps depend on, and the apps from source.)
+ */
+export const ENVIRONMENTS = ["local", "staging", "prod"] as const;
+export type Environment = (typeof ENVIRONMENTS)[number];
+
+export function environmentOf(flag: string, value: string | undefined): Environment {
+	const found = ENVIRONMENTS.find((name) => name === value);
+	if (!found) throw new Error(`${flag} takes ${ENVIRONMENTS.join(", ").replace(/, (\w+)$/, ", or $1")}: the environment under ${DEPLOY}/`);
+	return found;
+}
+
+/** What runs an environment. */
+export type Method = "compose" | "kubernetes";
+
+/**
+ * How `--env <name>` runs the environment: with what has been set up there
+ * before, told by its settings file (`.env` for Compose, `settings.env` for
+ * Kubernetes).
+ */
+export function methodOf(root: string, environment: Environment): Method {
+	const dir = `${DEPLOY}/${environment}`;
+	const compose = existsSync(resolve(root, dir, ".env"));
+	const kubernetes = existsSync(resolve(root, dir, "settings.env"));
+	if (compose !== kubernetes) return compose ? "compose" : "kubernetes";
+	throw new Error(
+		compose
+			? `${dir} has both .env (Docker Compose) and settings.env (Kubernetes). Say which one: --compose ${environment} or --kubernetes ${environment}.`
+			: `${dir} is not set up yet. Start with --compose ${environment} (one server with Docker) or --kubernetes ${environment}.`,
+	);
+}
 const ADMIN_PAT_PATH = "/zitadel/bootstrap/admin.pat";
 
 export function composeArgs(root: string, envFile: string, files: string[]): string[] {

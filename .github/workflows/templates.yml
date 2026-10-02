@@ -29,7 +29,7 @@ jobs:
       # auth stack runs.
       - name: Download the ZITADEL API definitions
         run: |
-          version="$(grep '^ZITADEL_VERSION=' infra/auth-server/.env.example | cut -d= -f2)"
+          version="$(grep '^ZITADEL_VERSION=' deploy/dev/auth-server/.env.example | cut -d= -f2)"
           dir="$RUNNER_TEMP/zitadel-proto"
           mkdir -p "$dir"
           for file in management.proto admin.proto app.proto user.proto project.proto member.proto object.proto \
@@ -173,8 +173,9 @@ jobs:
           moon generate storage -- --name storage --port 9000
           moon run storage:up
 
-  # Runs deploy/ on the runner with certificates from a local authority, the
-  # way deploy/README.md describes, and signs in through it.
+  # Runs deploy/compose on the runner as the `local` environment, with
+  # certificates from a local authority, the way deploy/compose/README.md
+  # describes, and signs in through it.
   deploy:
     name: deploy (${{ matrix.template }})
     runs-on: ubuntu-24.04
@@ -197,35 +198,25 @@ jobs:
           moon generate axum -- --name api --port 4000
           bun install
 
-      - name: Configure a local deployment
-        run: |
-          cp deploy/.env.example deploy/.env
-          sed -i \
-            -e 's/^AUTH_DOMAIN=.*/AUTH_DOMAIN=auth.localtest.me/' \
-            -e 's/^APP_DOMAIN=.*/APP_DOMAIN=app.localtest.me/' \
-            -e 's/^API_DOMAIN=.*/API_DOMAIN=api.localtest.me/' \
-            -e 's/^ACME_EMAIL=.*/ACME_EMAIL=ops@localtest.me/' \
-            -e 's/^WEB_APP=.*/WEB_APP=web/' \
-            deploy/.env
-          deploy/local-certs.sh
-
       - name: Deploy with setup
-        env:
-          COMPOSE_FILE: deploy/docker-compose.yml:deploy/docker-compose.local.yml
-          NODE_EXTRA_CA_CERTS: deploy/.local/ca.pem
-        run: bun run setup -- --deploy
+        run: bun run setup -- --compose local
 
       - name: Sign in through the deployed stack
-        run: deploy/smoke-test.sh
+        run: deploy/compose/smoke-test.sh
+
+      # The Moon task finds the environment as setup left it, and changes nothing.
+      - name: Run it again through Moon
+        run: moon run deploy:local
 
       - name: Show the stack's logs
         if: failure()
         env:
-          COMPOSE_FILE: deploy/docker-compose.yml:deploy/docker-compose.local.yml
-        run: docker compose --env-file deploy/.env logs --tail 100 || true
+          COMPOSE_FILE: deploy/compose/docker-compose.yml:deploy/compose/docker-compose.local.yml
+        run: docker compose --env-file deploy/local/.env logs --tail 100 || true
 
-  # A project with two web apps and two APIs: both overlays of deploy/k8s
-  # render, and every object matches the Kubernetes schemas.
+  # A project with two web apps and two APIs: the overlays of deploy/local,
+  # deploy/staging, and deploy/prod render, and every object matches the
+  # Kubernetes schemas.
   kubernetes:
     runs-on: ubuntu-24.04
     steps:
@@ -249,13 +240,16 @@ jobs:
           printf 'API_APP=api\n' >> apps/web/.env.example
           printf 'API_APP=api\nAPI_APPS=billing\n' >> apps/admin/.env.example
 
-      - name: Write the manifests of both overlays
+      - name: Write the manifests of every overlay
         run: |
-          settings=deploy/k8s/overlays/production/settings.env
-          cp "$settings.example" "$settings"
-          sed -i -e 's/^DOMAIN=.*/DOMAIN=acme.test/' -e 's|^IMAGE_REGISTRY=.*|IMAGE_REGISTRY=ghcr.io/acme/product|' "$settings"
-          bun run setup -- --kubernetes local --manifests-only
-          bun run setup -- --kubernetes production --manifests-only
+          for environment in staging prod; do
+            settings="deploy/$environment/settings.env"
+            cp "$settings.example" "$settings"
+            sed -i -e "s/^DOMAIN=.*/DOMAIN=$environment.acme.test/" -e 's|^IMAGE_REGISTRY=.*|IMAGE_REGISTRY=ghcr.io/acme/product|' "$settings"
+          done
+          for environment in local staging prod; do
+            bun run setup -- --kubernetes "$environment" --manifests-only
+          done
 
       - name: Install kubeconform
         run: |
@@ -263,15 +257,15 @@ jobs:
           curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz | tar -xz -C "$RUNNER_TEMP/bin" kubeconform
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
-      - name: Render and validate both overlays
+      - name: Render and validate every overlay
         run: |
-          for overlay in local production; do
-            kubectl kustomize "deploy/k8s/overlays/$overlay" > "$RUNNER_TEMP/$overlay.yaml"
-            kubeconform -strict -summary -kubernetes-version 1.34.0 "$RUNNER_TEMP/$overlay.yaml"
+          for environment in local staging prod; do
+            kubectl kustomize "deploy/$environment" > "$RUNNER_TEMP/$environment.yaml"
+            kubeconform -strict -summary -kubernetes-version 1.34.0 "$RUNNER_TEMP/$environment.yaml"
           done
-          kubeconform -strict -summary -kubernetes-version 1.34.0 deploy/k8s/traefik.yaml
+          kubeconform -strict -summary -kubernetes-version 1.34.0 deploy/local/traefik.yaml
 
-  # deploy/k8s/overlays/local on a kind cluster, the way deploy/k8s/README.md
+  # The overlay of deploy/local on a kind cluster, the way deploy/base/README.md
   # describes it, and a sign-in through it.
   kubernetes-kind:
     name: kubernetes (kind)
@@ -302,13 +296,13 @@ jobs:
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
       - name: Create the cluster and load the images
-        run: deploy/k8s/local-cluster.sh
+        run: deploy/local/local-cluster.sh
 
       - name: Deploy with setup
         run: bun run setup -- --kubernetes local
 
       - name: Sign in through the cluster
-        run: deploy/k8s/smoke-test.sh
+        run: deploy/local/smoke-test.sh
 
       - name: Show the cluster's state
         if: failure()

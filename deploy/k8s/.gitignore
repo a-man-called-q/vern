@@ -1,5 +1,0 @@
-# What `bun run setup -- --kubernetes` writes for an overlay: its settings and
-# the generated Secrets (ZITADEL's master key among them). Back them up in a
-# secret manager; deploy/k8s/README.md says which ones matter.
-overlays/*/settings.env
-overlays/*/generated/

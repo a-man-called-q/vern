@@ -136,7 +136,7 @@ and `test` tasks run it first). `src/events.rs` has everything:
 - On SIGTERM (`docker stop`, a rolling update) the API stops accepting
   connections and finishes the requests in flight first.
 - On Kubernetes, `k8s/` holds this API's Deployment and Service, which
-  `deploy/k8s` lists and configures; see `deploy/k8s/README.md`.
+  `deploy/base` lists and configures; see `deploy/base/README.md`.
 
 ## Local ZITADEL setup
 
@@ -180,7 +180,7 @@ The image holds only a static binary on distroless (about 15 MB) and listens
 on `0.0.0.0:4000` as a non-root user. Give it `ZITADEL_ISSUER` and
 `ZITADEL_PROJECT_ID`, and mount the key file at
 `/run/secrets/zitadel-api-key.json`, readable by that user. The repository's
-`deploy/` folder runs it behind HTTPS.
+`deploy/compose` folder runs it behind HTTPS.
 
 The auth middleware tests use a mock introspection service. They cover all 12
 temporary test pairings (four web-app token sources by three API instances),

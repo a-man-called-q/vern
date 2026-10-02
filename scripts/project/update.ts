@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { isTextBuffer, sha256, writeJson } from "../lib/files";
+import { AUTH_SERVER } from "../lib/projects";
 import { git, gitTry, run } from "../lib/run";
 import { requireCargoEdit } from "./cargo-edit";
 import {
@@ -31,7 +32,7 @@ interface UpdateState {
 export interface Options {
 	apply: boolean;
 	continueUpdate: boolean;
-	/** Only move the project to the apps/, services/, infra/ layout. */
+	/** Only move the project to the apps/, services/, deploy/ layout. */
 	migrate?: boolean;
 }
 
@@ -41,7 +42,9 @@ function migrateAndReport(root: string): void {
 	for (const move of moves) console.log("Moved " + move.from + " to " + move.to + ".");
 	if (leftovers.length > 0) {
 		console.log(
-			"These files of apps/auth-server stay where they are: they changed locally, or infra/auth-server has its own. Carry what you need over to infra/auth-server, then delete them:",
+			"These files stay where they are: they changed locally, or their new place has its own. Carry what you need over (the auth stack is in " +
+				AUTH_SERVER +
+				", and deploy/README.md says where the rest of deploy/ went), then delete them:",
 		);
 		for (const path of leftovers) console.log("  " + path);
 	}
@@ -148,7 +151,7 @@ export function updateProject(root: string, options: Options): void {
 		if (git(root, "status", "--porcelain").stdout.trim())
 			throw new Error("Working tree must be clean before moving folders.");
 		if (planLayoutMigration(root).length === 0) {
-			console.log("The project already has the apps/, services/, infra/ layout.");
+			console.log("The project already has the apps/, services/, deploy/ layout.");
 			return;
 		}
 		migrateAndReport(root);

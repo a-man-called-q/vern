@@ -15,15 +15,15 @@ against.
 | `.templates/postgres` | Optional PostgreSQL for the APIs' own data, one database per API |
 | `.templates/bus` | Optional NATS JetStream, the event bus between APIs generated with `--events` |
 | `.templates/storage` | Optional S3-compatible object store for uploads, with one bucket |
-| `infra/auth-server` | Local Docker Compose stack: ZITADEL, its Login App, PostgreSQL, Redis, and Mailpit (a local inbox for the email ZITADEL sends) |
-| `deploy` | Production Docker Compose stack for one server, with HTTPS |
+| `deploy/dev/auth-server` | Local Docker Compose stack: ZITADEL, its Login App, PostgreSQL, Redis, and Mailpit (a local inbox for the email ZITADEL sends) |
+| `deploy` | How the product is run, one folder per environment: `dev`, `local`, `staging`, and `prod`, on one server with Docker Compose or on Kubernetes |
 | `apps/storybook` | Storybook workbench for the shared UI components |
 | `packages/ui` | Shared shadcn components and design tokens (`@vern/ui`) |
 | `scripts/` | Project tools: setup, provisioning, rename, update, and doctor |
 
 Projects are generated from the templates by kind: web apps into
 `apps/<name>`, Axum APIs into `services/<name>`, and the PostgreSQL, bus, and
-storage stacks into `infra/<name>`, next to the auth stack. Each app and API has
+storage stacks into `deploy/dev/<name>`, next to the auth stack. Each app and API has
 a production Dockerfile. The web apps keep OAuth tokens on the server in Redis;
 the browser only gets an HTTP-only session cookie. Each generated app's README
 covers its code and a production checklist.
@@ -96,14 +96,14 @@ moon run :dev
   plus Storybook.
 
 Open <http://localhost:3000> and sign in as `zitadel-admin@vern.localhost` with
-the password from `infra/auth-server/.env` (`Password1!` by default). The ZITADEL
+the password from `deploy/dev/auth-server/.env` (`Password1!` by default). The ZITADEL
 Console is at <http://localhost:8081/ui/console/>. Stop the auth containers
 (keeping their data) with `moon run auth-server:down`.
 
 `bun run setup` signs in to ZITADEL as the `vern-setup` service account, whose
 token ZITADEL creates when it first sets up its database. A database created
 before that account existed needs a reset
-(`docker compose --env-file infra/auth-server/.env -f infra/auth-server/docker-compose.yml down -v`)
+(`docker compose --env-file deploy/dev/auth-server/.env -f deploy/dev/auth-server/docker-compose.yml down -v`)
 or a token of a service user with the IAM Owner role in `ZITADEL_PAT`.
 
 To manage one app's OIDC application by hand, use
@@ -142,7 +142,7 @@ group:
 ```
 
 `bun run setup` creates the missing roles on the ZITADEL project, locally and
-with `--deploy`. It never changes or deletes a role that exists, so edit or
+in a deployment. It never changes or deletes a role that exists, so edit or
 remove roles in the Console. Grant roles to users in the Console, or from your
 product with the service account below. The Axum template reads a user's roles
 from the token and offers `require_role("publisher")?` for its handlers (see its
@@ -194,13 +194,13 @@ user carries the organization's ID (the web apps ask for it with the
 if a role is granted in the Console from another organization, the user still
 belongs to their own.
 
-- **Local only.** It never runs with `--deploy`, and it is skipped when
+- **Local only.** It never runs for a deployment (`--compose`, `--kubernetes`), and it is skipped when
   `ZITADEL_ISSUER` is not `localhost`, `127.0.0.1`, or `[::1]`. In production,
   create users and grant roles in the Console or with the service account below.
   `--no-seed` skips it on a local ZITADEL too.
 - **The password is yours, not shared.** The seeded users share one password,
   which `setup` generates into `ZITADEL_SEED_PASSWORD` in
-  `infra/auth-server/.env` the first time it creates a user (set it there first to
+  `deploy/dev/auth-server/.env` the first time it creates a user (set it there first to
   choose your own). It is never committed or printed, because the auth stack
   listens on every network interface of your machine.
 - **Additive.** A user that already exists is left as it is, password included,
@@ -251,9 +251,9 @@ them. Change them at the level you need:
 1. **Colors, logo, and font**: ZITADEL's branding settings in the Console, per
    instance or per organization. The shell's buttons and links follow the
    primary color, and an uploaded logo replaces the brand logo. The initial
-   colors are the `LABELPOLICY` values in `infra/auth-server/docker-compose.yml`;
+   colors are the `LABELPOLICY` values in `deploy/dev/auth-server/docker-compose.yml`;
    ZITADEL only applies them when it creates its database.
-2. **Text and images of the shell**: edit `infra/auth-server/brand/`.
+2. **Text and images of the shell**: edit `deploy/dev/auth-server/brand/`.
    `brand.json` holds the headline, description, highlights, and image paths;
    the SVGs next to it are served under `/brand/`. Changes show on the next page
    load. See the [brand file reference](https://github.com/a-man-called-q/vern-zitadel-login#brand-file).
@@ -261,7 +261,7 @@ them. Change them at the level you need:
    [vern-zitadel-login](https://github.com/a-man-called-q/vern-zitadel-login).
    `npx create-vern login`, run inside your project, clones it next to the
    project as `<slug>-login/`, forks it on GitHub, builds an image, and points
-   `infra/auth-server/.env` at it (`create-vern` offers the same when it creates
+   `deploy/dev/auth-server/.env` at it (`create-vern` offers the same when it creates
    the project). To deploy your login, publish an image from your fork (see its
    README) and set `ZITADEL_LOGIN_IMAGE` to that tag.
 
@@ -271,11 +271,12 @@ A new project has no "Sign up" link on the sign-in page: an administrator
 creates the accounts, locally from `seed-users.json` and in production in the
 Console or from your product. A visitor who registered on their own would get an
 account with no roles, which is harmless but not what an admin screen promises.
-`ZITADEL_ALLOW_REGISTER` in `infra/auth-server/.env` (and `deploy/.env`) holds
+`ZITADEL_ALLOW_REGISTER` in `deploy/dev/auth-server/.env` (and in a deployment's
+settings: `deploy/<environment>/.env` or `settings.env`) holds
 the choice, `false` unless you set it to `true`.
 
 ZITADEL reads the variable only when it creates its database, like the initial
-colors above. `bun run setup` (and `bun run setup -- --deploy`) applies the value
+colors above. `bun run setup` (and `bun run setup -- --env <environment>`) applies the value
 in `.env` to an instance that already exists and changes nothing else in its
 login policy. With no value in `.env` it changes nothing, and says so when
 sign-up is open. An organization that overrides the login policy in the Console
@@ -296,8 +297,8 @@ chooses a password. If the Console already has a mail setup for another server,
 `setup` leaves it alone.
 
 In production, `SMTP_HOST`, `SMTP_FROM_ADDRESS`, and (when the server asks)
-`SMTP_USER` and `SMTP_PASSWORD` in `deploy/.env` configure it, and
-`bun run setup -- --deploy` applies them to the running ZITADEL; see
+`SMTP_USER` and `SMTP_PASSWORD` in the environment's settings configure it, and
+`bun run setup -- --env <environment>` applies them to the running ZITADEL; see
 [deploy/README.md](deploy/README.md). `bun run project:doctor` says when none is
 set.
 
@@ -370,7 +371,7 @@ The rename updates text references to Vern (URLs and container images keep
 their names) and records the project identity and the Vern commit it started
 from in `.vern/config.json`. If Git history cannot identify that commit, pass
 it with `--base <sha>`. A checkout that has already started its auth stack
-(it has `infra/auth-server/.env`) needs Docker running for the rename, and its
+(it has `deploy/dev/auth-server/.env`) needs Docker running for the rename, and its
 existing auth volumes must be migrated by hand first. A fresh copy without that
 file owns no Docker data, so it is renamed without looking at Docker, whatever
 other Vern checkouts have on the machine.
@@ -391,16 +392,23 @@ bun run project:update -- --apply
 `npx create-vern update` runs the same script from any folder of the project and
 takes the same `--apply` and `--continue` flags.
 
-A project made before APIs moved to `services/` and the Compose stacks to
-`infra/` gets the new layout from its next update. That update still runs the
-project's old updater: it moves `auth-server`, and usually stops on conflicts
-in `scripts/` that a rename had only rebranded. Resolve any other conflict, then
-`bun run project:update -- --continue` settles those by itself and moves the
-generated APIs and stacks with `git mv` (local `.env` files and keys go along),
-fixing the paths in them and in `deploy/`. A file of `apps/auth-server` you
-changed yourself stays there for you to carry over. If the update did not stop,
-`bun run project:doctor` names the folders to move and
-`bun run project:update -- --migrate` moves them. A rename no longer touches
+A project made before the layout of today (APIs in `services/`, the Compose
+stacks in `deploy/dev/`, and one folder per environment in `deploy/`) gets it
+from its next update. That update still runs the project's old updater, which
+brings the new files but cannot move the project's own: the stacks it generated
+stay in `infra/` (or `apps/`), with the local `.env` of `auth-server`, and a
+deployment's settings stay in `deploy/.env` and `deploy/k8s/overlays/`.
+`bun run project:doctor` names each of them, and
+`bun run project:update -- --migrate` moves them: the stacks with `git mv`
+(local `.env` files and keys go along, and the paths in them are fixed),
+`deploy/.env` and `deploy/secrets/` to `deploy/prod/` (to `deploy/local/` when
+its hostnames are under `localtest.me`), and each overlay's `settings.env` and
+`generated/` to `deploy/prod/` or `deploy/local/`. When the update stops on a
+conflict, `bun run project:update -- --continue` does the same once the
+conflicts are resolved. A file of the old layout that you changed yourself
+(`deploy/docker-compose.yml`, a brand file of the old `auth-server`) stays where
+it is, for you to carry over to its new place and delete. Docker keeps the
+volumes: no Compose project changes its name. A rename no longer touches
 `scripts/`, which merges as Vern ships it.
 
 The updater needs a clean working tree, so commit the rename and your changes
@@ -414,24 +422,43 @@ and merge it yourself.
 
 ## Deploy
 
-[`deploy/`](deploy/README.md) runs ZITADEL, one web app, and one API on a single
-server with Docker, behind Traefik with Let's Encrypt certificates. After you
-set three hostnames in `deploy/.env`, one command generates the secrets,
-creates the production ZITADEL project and applications, and starts
+[`deploy/`](deploy/README.md) says how the product is run, with one folder per
+environment:
+
+| Folder | Runs |
+| --- | --- |
+| `deploy/dev` | What the apps depend on while you develop (ZITADEL, Redis, and the stacks you generate); the apps themselves run from source |
+| `deploy/local` | The whole product on your machine, as a rehearsal of production |
+| `deploy/staging` | The whole product, to try a change before production |
+| `deploy/prod` | Production |
+
+`local`, `staging`, and `prod` each run in one of two ways, and an environment
+folder holds only its own settings.
+
+[`deploy/compose`](deploy/compose/README.md) runs ZITADEL, one web app, and one
+API on a single server with Docker, behind Traefik with Let's Encrypt
+certificates. After you set three hostnames in `deploy/prod/.env`, one command
+generates the secrets, creates the ZITADEL project and applications, and starts
 everything:
 
 ```sh
-bun run setup -- --deploy
+bun run setup -- --compose prod
 ```
 
-The same stack runs on your machine with local certificates, which CI uses to
-sign in through it on every change.
+`bun run setup -- --compose local` runs the same stack on your machine with
+local certificates and no settings to fill in; CI signs in through it on every
+change.
 
-For several web apps and APIs, or replicas, [`deploy/k8s/`](deploy/k8s/README.md)
+For several web apps and APIs, or replicas, [`deploy/base`](deploy/base/README.md)
 runs the product on Kubernetes with Kustomize: every app gets its own manifests
-and HTTPS hostname, and `bun run setup -- --kubernetes production` creates them
-all in ZITADEL. `deploy/k8s/local-cluster.sh` runs the same overlay on a kind
-cluster on your machine. For other platforms, build the images with
+and HTTPS hostname, and `bun run setup -- --kubernetes prod` creates them all
+in ZITADEL. `deploy/staging` is an overlay on the same base with its own
+hostnames, namespace, and Secrets, and `deploy/local` runs it on a kind cluster
+on your machine (`deploy/local/local-cluster.sh`).
+
+Once an environment is set up, `moon run deploy:staging` and
+`moon run deploy:prod` (or `bun run setup -- --env <environment>`) run it again
+the same way, after a change to the apps or the settings. For other platforms, build the images with
 `moon run <app>:docker` and run them with the settings from the app's README
 and its production checklist. For more on running ZITADEL itself, see ZITADEL's
 [self-hosting guide](https://zitadel.com/docs/self-hosting/deploy/overview).

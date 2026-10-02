@@ -20,11 +20,11 @@ A service stores the user's ID (`sub`) next to the rows that user owns.
 ## Steps
 
 1. **Choose a free port and a new name.** See `PORT` in
-   `apps/*/.env.example`, `services/*/.env.example`, and `infra/*/.env.example`;
+   `apps/*/.env.example`, `services/*/.env.example`, and `deploy/dev/*/.env.example`;
    the convention is 4000 and up for APIs. The name must not be taken in any of
    the three folders.
 2. **If it stores data**, the workspace needs the data project once. Check for
-   `infra/data`; when it is missing:
+   `deploy/dev/data`; when it is missing:
 
    ```sh
    moon generate postgres -- --name data --port 5433
@@ -95,7 +95,7 @@ const fetchBillingApi = createApiClient("BILLING_API_URL");
 token works for every service of the project. The variable is `<APP>_API_URL`,
 with the app's name in capitals and non-letters as `_` (`billing-api` becomes
 `BILLING_API_API_URL`). In a deployment, set the variable to the API's public
-HTTPS address; `deploy/` runs one API.
+HTTPS address; `deploy/compose` runs one API.
 
 ## A service that calls another service
 
@@ -116,5 +116,6 @@ timeout.
   or its key is stale (ZITADEL's database was reset). Run `bun run setup`.
 - **`could not connect to the database`.** The service was started outside
   Moon. `moon run <name>:dev` runs `data:up` first.
-- **Deploying a second service.** `deploy/` runs one web app and one API; its
-  README ("More apps") shows how to add another.
+- **Deploying a second service.** `deploy/compose` runs one web app and one
+  API; its README ("More apps") shows how to add another. On Kubernetes every
+  service is deployed.

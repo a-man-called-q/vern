@@ -7,8 +7,8 @@ cd "$(dirname "$0")"
 
 docker compose up --detach --wait
 
-for file in ../../services/*/db/init.sql; do
+for file in ../../../services/*/db/init.sql; do
   [ -e "$file" ] || continue
-  echo "data: applying ${file#../../}"
+  echo "data: applying ${file#../../../}"
   docker compose exec -T postgres psql -U postgres -v ON_ERROR_STOP=1 --quiet -f - < "$file"
 done

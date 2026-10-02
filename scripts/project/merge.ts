@@ -27,12 +27,15 @@ function upstreamPaths(root: string, revision: string): Set<string> {
 	);
 }
 
-/** Folders `moon generate` made in this project: Vern itself ships no moon.yml there. */
-function generatedProjectDirs(root: string, baseFiles: Set<string>): Set<string> {
+/**
+ * Folders `moon generate` made in this project: Vern itself ships no moon.yml
+ * there, before the update or after it (a folder Vern moved is in one of them).
+ */
+function generatedProjectDirs(root: string, upstreamFiles: Set<string>[]): Set<string> {
 	return new Set(
 		listProjects(root)
 			.map((project) => project.path)
-			.filter((path) => !baseFiles.has(path + "/moon.yml")),
+			.filter((path) => !upstreamFiles.some((files) => files.has(path + "/moon.yml"))),
 	);
 }
 
@@ -45,13 +48,13 @@ function shouldSkipUpstreamPath(
 		path === CONFIG_PATH ||
 		path === "bun.lock" ||
 		// `bun run setup -- --kubernetes` writes the project's own list of apps.
-		path === "deploy/k8s/base/kustomization.yaml" ||
+		path === "deploy/base/kustomization.yaml" ||
 		path.endsWith("/bun.lock") ||
 		path.endsWith("/Cargo.lock")
 	)
 		return true;
 	if (path === ".env" || path.endsWith("/.env")) return true;
-	const projectDir = path.match(/^(?:apps|services|infra)\/[^/]+(?=\/)/)?.[0];
+	const projectDir = path.match(/^(?:apps|services|deploy\/dev)\/[^/]+(?=\/)/)?.[0];
 	return Boolean(projectDir && generatedDirs.has(projectDir));
 }
 
@@ -203,8 +206,7 @@ export function mergeUpstreamFiles(
 	from: string,
 	to: string,
 ): { updated: string[]; conflicts: Conflict[] } {
-	const baseFiles = upstreamPaths(root, from);
-	const generatedDirs = generatedProjectDirs(root, baseFiles);
+	const generatedDirs = generatedProjectDirs(root, [upstreamPaths(root, from), upstreamPaths(root, to)]);
 	const updated: string[] = [];
 	const conflicts: Conflict[] = [];
 	for (const path of allChangedUpstreamPaths(root, from, to)) {

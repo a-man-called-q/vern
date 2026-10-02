@@ -1,6 +1,0 @@
-# The APIs' PostgreSQL (infra/data). Each API with a database applies its
-# db/init.sql to it before it starts (see generated/).
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - postgres.yaml
