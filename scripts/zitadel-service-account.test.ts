@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { parseEnv } from "./env-files";
+import { parseEnv } from "./lib/env";
 import { main } from "./zitadel-service-account";
 
 const tempDirs: string[] = [];
