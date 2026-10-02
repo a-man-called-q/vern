@@ -57,6 +57,10 @@ callbacks or sessions.
 
 ### Production checklist
 
+- `GET /healthz` answers `{"status":"ok"}` with no session and no call to
+  ZITADEL or Redis: point load balancers and probes at it.
+- On Kubernetes, `k8s/` holds this app's Deployment and Service, which
+  `deploy/k8s` lists and configures; see `deploy/k8s/README.md`.
 - Register a separate ZITADEL Web application for each environment: Authorization
   Code with PKCE (no client secret), the **Refresh Token** grant, and HTTPS
   redirect and post-logout URLs. Leave **Development Mode** off; it exists only

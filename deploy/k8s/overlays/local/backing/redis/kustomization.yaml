@@ -1,0 +1,5 @@
+# The web apps' session store, with the password in the generated `redis` Secret.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - redis.yaml

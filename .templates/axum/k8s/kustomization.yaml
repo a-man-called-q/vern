@@ -1,0 +1,7 @@
+# This API on Kubernetes. deploy/k8s/base lists it, and an overlay of
+# deploy/k8s gives it its image, hostname, and settings. See deploy/k8s/README.md.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml

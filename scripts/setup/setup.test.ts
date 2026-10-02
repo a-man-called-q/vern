@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { ROOT } from "../lib/paths";
 import { findApps } from "../lib/projects";
 import { parseEnv } from "../lib/env";
 import { apiUrlKey } from "./api-urls";
@@ -225,6 +226,8 @@ function deps(root: string, zitadel: ReturnType<typeof fakeZitadel>, logs: strin
 		startAuthStack: () => {},
 		readStackToken: () => "stack-token",
 		randomSecret: () => "generated-secret",
+		generateAppManifests: (target: string, app: { path: string }) =>
+			write(target, `${app.path}/k8s/kustomization.yaml`, "resources: []\n"),
 	};
 }
 
@@ -944,6 +947,133 @@ describe("setup", () => {
 		const zitadel = fakeZitadel();
 		await expect(setup([], { ...deps(root, zitadel), readStackToken: () => undefined })).rejects.toThrow(
 			"No ZITADEL token found",
+		);
+	});
+});
+
+describe("setup --kubernetes", () => {
+	/** The workspace, with deploy/k8s and the auth stack's brand files as Vern ships them. */
+	function kubeWorkspace(): string {
+		const root = workspace();
+		for (const path of [
+			"deploy/k8s/base/kustomization.yaml",
+			"deploy/k8s/overlays/local/kustomization.yaml",
+			"deploy/k8s/overlays/local/settings.env.example",
+			"deploy/k8s/overlays/production/kustomization.yaml",
+			"deploy/k8s/overlays/production/settings.env.example",
+			"infra/auth-server/nginx.conf",
+			"infra/auth-server/brand/brand.json",
+			"infra/auth-server/brand/favicon.svg",
+		]) {
+			write(root, path, readFileSync(resolve(ROOT, path), "utf8"));
+		}
+		return root;
+	}
+
+	const generated = (root: string, overlay: string, path: string) =>
+		readFileSync(resolve(root, `deploy/k8s/overlays/${overlay}/generated`, path), "utf8");
+
+	test("--manifests-only lists the apps and writes the overlay's settings and private Secrets", async () => {
+		const root = kubeWorkspace();
+		const zitadel = fakeZitadel();
+		expect(await setup(["--kubernetes", "local", "--manifests-only"], deps(root, zitadel))).toBe(0);
+		expect(zitadel.calls).toEqual([]);
+
+		const base = readFileSync(resolve(root, "deploy/k8s/base/kustomization.yaml"), "utf8");
+		expect(base).toContain("  - identity\n  - ../../../services/api/k8s\n  - ../../../apps/dashboard/k8s\n");
+		const component = generated(root, "local", "kustomization.yaml");
+		expect(component).toContain('"ZITADEL_ISSUER=https://auth.localtest.me"');
+		expect(component).toContain('"APP_URL=https://dashboard.localtest.me"');
+		// The workspace has one API, so the web app calls it on its hostname.
+		expect(component).toContain('"API_BASE_URL=https://api.localtest.me"');
+		expect(component).toContain("- name: local-tls");
+		expect(generated(root, "local", "ingress.yaml")).toContain("host: api.localtest.me");
+		expect(generated(root, "local", "brand/favicon.svg")).toContain("<svg");
+
+		const secrets = resolve(root, "deploy/k8s/overlays/local/generated/secrets");
+		expect(parseEnv(resolve(secrets, "zitadel.env")).get("ZITADEL_MASTERKEY")).toBe("generated-secret");
+		expect(parseEnv(resolve(secrets, "redis.env")).get("url")).toBe("redis://:generated-secret@redis:6379");
+		expect(statSync(resolve(secrets, "zitadel.env")).mode & 0o777).toBe(0o600);
+		expect(existsSync(resolve(root, "deploy/k8s/overlays/local/generated/tls/cert.pem"))).toBe(true);
+
+		// A second run keeps every secret it made.
+		await setup(["--kubernetes", "local", "--manifests-only"], { ...deps(root, zitadel), randomSecret: () => "other" });
+		expect(parseEnv(resolve(secrets, "zitadel.env")).get("ZITADEL_MASTERKEY")).toBe("generated-secret");
+		expect(parseEnv(resolve(secrets, "dashboard.env")).get("SESSION_SECRET")).toBe("generated-secret");
+	});
+
+	test("production needs its hostnames and a registry, and runs no database", async () => {
+		const root = kubeWorkspace();
+		const run = () => setup(["--kubernetes", "production", "--manifests-only"], deps(root, fakeZitadel()));
+		await expect(run()).rejects.toThrow("Created deploy/k8s/overlays/production/settings.env");
+		const settings = resolve(root, "deploy/k8s/overlays/production/settings.env");
+		await expect(run()).rejects.toThrow("Set DOMAIN in deploy/k8s/overlays/production/settings.env");
+		writeFileSync(settings, readFileSync(settings, "utf8").replace("DOMAIN=example.com", "DOMAIN=acme.test"));
+		await expect(run()).rejects.toThrow("Set IMAGE_REGISTRY");
+		writeFileSync(
+			settings,
+			readFileSync(settings, "utf8")
+				.replace("IMAGE_REGISTRY=ghcr.io/your-org/your-repo", "IMAGE_REGISTRY=ghcr.io/acme/product/")
+				.replace("IMAGE_TAG=", "IMAGE_TAG=0123abc"),
+		);
+		expect(await run()).toBe(0);
+
+		const component = generated(root, "production", "kustomization.yaml");
+		expect(component).toContain("newName: ghcr.io/acme/product/api\n    newTag: \"0123abc\"");
+		expect(component).not.toContain("redis");
+		expect(component).not.toContain("local-tls");
+		const ingress = generated(root, "production", "ingress.yaml");
+		expect(ingress).toContain("cert-manager.io/cluster-issuer: letsencrypt");
+		expect(ingress).toContain("secretName: dashboard-tls");
+		expect(existsSync(resolve(root, "deploy/k8s/overlays/production/generated/secrets/redis.env"))).toBe(false);
+	});
+
+	test("applies the overlay, creates the applications and keys in ZITADEL, and applies them", async () => {
+		const root = kubeWorkspace();
+		const zitadel = fakeZitadel();
+		const kubectl: string[] = [];
+		const logs: string[] = [];
+		expect(
+			await setup(["--kubernetes", "local"], {
+				...deps(root, zitadel, logs),
+				runKubectl: (_root, args) => kubectl.push(args.join(" ")),
+				readKubeToken: (_root, namespace) => `token-from-${namespace}`,
+			}),
+		).toBe(0);
+
+		expect(kubectl).toEqual([
+			"apply -k deploy/k8s/overlays/local",
+			"-n vern rollout status deployment/zitadel --timeout=15m",
+			"apply -k deploy/k8s/overlays/local",
+			"-n vern rollout status deployment/api --timeout=10m",
+			"-n vern rollout status deployment/dashboard --timeout=10m",
+		]);
+		expect(zitadel.projects).toEqual([{ id: "100", name: "Vern" }]);
+		const oidc = zitadel.calls.find((call) => call.path.endsWith("/apps/oidc"));
+		expect(oidc?.body).toMatchObject({ redirectUris: ["https://dashboard.localtest.me/auth/callback"], devMode: false });
+
+		const secrets = resolve(root, "deploy/k8s/overlays/local/generated/secrets");
+		expect(parseEnv(resolve(secrets, "dashboard.env")).get("ZITADEL_CLIENT_ID")).toBeTruthy();
+		expect(JSON.parse(readFileSync(resolve(secrets, "api-key.json"), "utf8")).keyId).toBeTruthy();
+		expect(generated(root, "local", "kustomization.yaml")).toContain('"ZITADEL_PROJECT_ID=100"');
+		expect(logs.join("\n")).toContain("Sign in as zitadel-admin@vern.auth.localtest.me");
+
+		// Run again: the same project, application, and key.
+		await setup(["--kubernetes", "local"], {
+			...deps(root, zitadel),
+			runKubectl: () => {},
+			readKubeToken: () => "token",
+		});
+		expect(zitadel.projects).toHaveLength(1);
+		expect(zitadel.calls.filter((call) => call.path.endsWith("/apps/oidc"))).toHaveLength(1);
+		expect(zitadel.keys).toHaveLength(1);
+	});
+
+	test("refuses an app whose hostname is ZITADEL's", async () => {
+		const root = kubeWorkspace();
+		write(root, "apps/auth/.env.example", "PORT=3002\nAPP_URL=http://localhost:3002\nZITADEL_CLIENT_ID=\n");
+		await expect(setup(["--kubernetes", "local", "--manifests-only"], deps(root, fakeZitadel()))).rejects.toThrow(
+			"apps/auth: its hostname auth.localtest.me is ZITADEL's",
 		);
 	});
 });

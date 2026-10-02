@@ -14,4 +14,7 @@ export type SetupDeps = {
 	sleep?: (ms: number) => Promise<void>;
 	issuerTimeoutMs?: number;
 	randomSecret?: (kind: SecretKind, bytes: number) => string;
+	runKubectl?: (root: string, args: string[]) => void;
+	readKubeToken?: (root: string, namespace: string) => string | undefined;
+	generateAppManifests?: (root: string, app: { name: string; path: string; kind: "web" | "api"; database: boolean; events: boolean }) => void;
 };

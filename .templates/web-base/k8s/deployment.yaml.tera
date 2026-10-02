@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ name | kebab_case }}
+  labels:
+    app.kubernetes.io/name: {{ name | kebab_case }}
+    app.kubernetes.io/component: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ name | kebab_case }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ name | kebab_case }}
+        app.kubernetes.io/component: web
+    spec:
+      containers:
+        - name: web
+          # The overlay sets the registry and the tag.
+          image: {{ name | kebab_case }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          envFrom:
+            # ZITADEL_ISSUER and ZITADEL_PROJECT_ID, the same for every app.
+            - configMapRef:
+                name: identity
+            # APP_URL and the URLs of the APIs it calls.
+            - configMapRef:
+                name: {{ name | kebab_case }}
+            # ZITADEL_CLIENT_ID and SESSION_SECRET.
+            - secretRef:
+                name: {{ name | kebab_case }}
+          env:
+            # The Redis that holds the sessions; see deploy/k8s/README.md.
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: redis
+                  key: url
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
