@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { stripCargoConditions } from "./cargo-template";
 import { parseEnv } from "./env-files";
 import { renderPackageTemplate } from "./package-template";
 import {
@@ -273,6 +274,21 @@ function main(): void {
 					label +
 						" package template is invalid: " +
 						(error instanceof Error ? error.message : String(error)),
+				);
+			}
+		}
+		const cargoTemplate = resolve(ROOT, ".templates/axum/Cargo.toml.tera");
+		if (existsSync(cargoTemplate)) {
+			try {
+				stripCargoConditions(readFileSync(cargoTemplate, "utf8"));
+				report(
+					"OK",
+					"Axum Cargo template marks only whole dependency lines as conditional.",
+				);
+			} catch (error) {
+				report(
+					"FAIL",
+					error instanceof Error ? error.message : String(error),
 				);
 			}
 		}

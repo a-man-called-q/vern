@@ -71,7 +71,7 @@ function installFakeCommands(): void {
 	write(
 		bin,
 		"cargo",
-		'#!/bin/sh\nif [ "$1" = "upgrade" ] && [ "$2" = "--help" ]; then\n  echo \'Upgrade dependency version requirements\'\nfi\nif [ "$1" = "upgrade" ] && [ "$2" = "--manifest-path" ]; then\n  if grep -q \'{%\' "$3"; then echo "Tera markers are not TOML" >&2; exit 1; fi\n  python3 -c \'import pathlib,sys; p=pathlib.Path(sys.argv[1]); s=p.read_text(); p.write_text(s.replace("async-trait = \\"0.1\\"", "async-trait = \\"0.2\\"").replace("sqlx = \\"0.8\\"", "sqlx = \\"0.9\\""))\' "$3"\nfi\nexit 0\n',
+		'#!/bin/sh\nif [ "$1" = "upgrade" ] && [ "$2" = "--help" ]; then\n  echo \'Upgrade dependency version requirements\'\nfi\nif [ "$1" = "upgrade" ] && [ "$2" = "--manifest-path" ]; then\n  if grep -q \'{%\' "$3"; then echo "Tera markers are not TOML" >&2; exit 1; fi\n  python3 -c \'import pathlib,sys; p=pathlib.Path(sys.argv[1]); s=p.read_text(); p.write_text(s.replace("async-trait = \\"0.1\\"", "async-trait = \\"0.2\\"").replace("sqlx = \\"0.8\\"", "sqlx = \\"0.9\\"").replace("async-nats = \\"0.50\\"", "async-nats = \\"0.51\\"").replace("uuid = \\"1\\"", "uuid = \\"2\\""))\' "$3"\nfi\nexit 0\n',
 	);
 	write(
 		bin,
@@ -386,7 +386,7 @@ describe("update-project", () => {
 			".templates/next/package.json.tera":
 				'{\n  "name": "{{ name | kebab_case }}",\n  "dependencies": {\n    "@acme/ui": "workspace:*",\n    "demo": "^1.0.0"\n  }\n}\n',
 			".templates/axum/Cargo.toml.tera":
-				'[package]\nname = "{{ name | kebab_case }}"\nversion = "0.1.0"\n\n[dependencies]\nasync-trait = "0.1"\n{% if database %}sqlx = "0.8"\n{% endif %}serde = "1"\n',
+				'[package]\nname = "{{ name | kebab_case }}"\nversion = "0.1.0"\n\n[dependencies]\n{% if events %}async-nats = "0.50"\n{% endif %}async-trait = "0.1"\n{% if database %}sqlx = "0.8"\n{% endif %}serde = "1"\n{% if database %}uuid = "1"\n{% endif %}\n[dev-dependencies]\ntower = "0.5"\n',
 		});
 		git(consumer, "clone", upstream, ".");
 		git(consumer, "config", "user.name", "Vern Script Tests");
@@ -521,8 +521,10 @@ describe("update-project", () => {
 		);
 		expect(rustTemplate).toContain('name = "{{ name | kebab_case }}"');
 		expect(rustTemplate).toContain('async-trait = "0.2"');
-		// The database dependency is upgraded and keeps its conditional markers.
-		expect(rustTemplate).toContain('{% if database %}sqlx = "0.9"\n{% endif %}serde = "1"');
+		// Every conditional dependency is upgraded and keeps its own condition.
+		expect(rustTemplate).toBe(
+			'[package]\nname = "{{ name | kebab_case }}"\nversion = "0.1.0"\n\n[dependencies]\n{% if events %}async-nats = "0.51"\n{% endif %}async-trait = "0.2"\n{% if database %}sqlx = "0.9"\n{% endif %}serde = "1"\n{% if database %}uuid = "2"\n{% endif %}\n[dev-dependencies]\ntower = "0.5"\n',
+		);
 		expect(readConfig(consumer)?.upstream.lastSyncedSha).toBe(target);
 		expect(existsState(consumer)).toBe(false);
 	});
