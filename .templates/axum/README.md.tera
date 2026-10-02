@@ -48,12 +48,18 @@ are read.
 
 ## Organization
 
-The same claims say which ZITADEL organization the roles are granted in.
-`AuthenticatedUser` carries it as `org_id`, and `user.org()?` answers `403` when
-there is none (a token with no role, or roles from several organizations). A
-product where one company has several users keeps `org_id` on every row and
-limits each query with `WHERE org_id = $1`, so the company comes from the token
-and never from the request.
+The user's own ZITADEL organization is in the token's
+`urn:zitadel:iam:user:resourceowner:id` claim, which the web apps ask for with
+the `urn:zitadel:iam:user:resourceowner` scope. `AuthenticatedUser` carries it as
+`org_id`, and `user.org()?` answers `403` when there is none (a session that
+began before the web app asked for it: sign in again). A product where one
+company has several users keeps `org_id` on every row and limits each query with
+`WHERE org_id = $1`, so the company comes from the token and never from the
+request.
+
+The organization written inside the role claims is not used for this: it is the
+one that owns the grant, so a role granted from the project's organization (the
+Console's default) would make a customer's user look like part of it.
 
 ## Token cache
 

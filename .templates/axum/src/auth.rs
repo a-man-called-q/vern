@@ -22,11 +22,15 @@ use thiserror::Error;
 use crate::{config::Config, error::ApiError};
 
 // ZITADEL puts the user's roles in the introspection response under these
-// claims when the web app asked for the `urn:zitadel:iam:org:projects:roles`
-// scope (the web templates do): an object keyed by role key, whose value is an
-// object keyed by the ID of the organization the role is granted in. The second
-// form is scoped to one project.
+// claims for a token that carries the project audience scope (the web templates
+// ask for it): an object keyed by role key. The second form is scoped to one
+// project. The organizations inside it are the ones that own the grants, not
+// necessarily the user's, so they are not read as the user's organization.
 const ROLES_CLAIM: &str = "urn:zitadel:iam:org:project:roles";
+
+// The user's own organization, present when the web app asked for the
+// `urn:zitadel:iam:user:resourceowner` scope (the web templates do).
+const ORG_ID_CLAIM: &str = "urn:zitadel:iam:user:resourceowner:id";
 
 const PRIVATE_KEY_JWT_ASSERTION_TYPE: &str =
     "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
@@ -114,8 +118,8 @@ pub struct AuthenticatedUser {
     /// Role keys granted to the user in this project.
     pub roles: BTreeSet<String>,
     /// The ZITADEL organization the user belongs to: the company that owns the
-    /// rows they may see. `None` when the token carries no role, or roles from
-    /// more than one organization.
+    /// rows they may see. `None` when the token carries no organization (the
+    /// session began before the web app asked for it: sign in again).
     pub org_id: Option<String>,
 }
 
@@ -155,21 +159,17 @@ fn roles_from_claims(extra: &HashMap<String, Value>, project_id: &str) -> BTreeS
         .collect()
 }
 
-/// The organization the roles in the claims are granted in. A user belongs to
-/// one organization, so a token that names several is treated as naming none.
-fn org_id_from_claims(extra: &HashMap<String, Value>, project_id: &str) -> Option<String> {
-    let project_claim = format!("urn:zitadel:iam:org:project:{project_id}:roles");
-    let orgs: BTreeSet<&String> = [ROLES_CLAIM, project_claim.as_str()]
-        .into_iter()
-        .filter_map(|claim| extra.get(claim)?.as_object())
-        .flat_map(|roles| roles.values())
-        .filter_map(Value::as_object)
-        .flat_map(|granted_in| granted_in.keys())
-        .collect();
-    match orgs.len() {
-        1 => orgs.into_iter().next().cloned(),
-        _ => None,
-    }
+/// The user's own organization. It is not read from the role claims: the
+/// organization there owns the grant, so a role granted from the project's
+/// organization (the Console does that by default) would make a customer's user
+/// look like a member of the project's organization.
+fn org_id_from_claims(extra: &HashMap<String, Value>) -> Option<String> {
+    extra
+        .get(ORG_ID_CLAIM)?
+        .as_str()
+        .map(str::trim)
+        .filter(|org_id| !org_id.is_empty())
+        .map(str::to_owned)
 }
 
 struct ZitadelIntrospector {
@@ -341,7 +341,7 @@ pub async fn require_bearer(
         return ApiError::Unauthorized.into_response();
     };
     let roles = roles_from_claims(&claims.extra, &state.0.project_id);
-    let org_id = org_id_from_claims(&claims.extra, &state.0.project_id);
+    let org_id = org_id_from_claims(&claims.extra);
     request.extensions_mut().insert(AuthenticatedUser {
         sub,
         display_name: claims.name.or(claims.preferred_username),
@@ -636,7 +636,8 @@ mod tests {
             "urn:zitadel:iam:org:project:roles": {
                 "publisher": { "org-1": "acme.localhost" },
                 "admin": { "org-1": "acme.localhost" }
-            }
+            },
+            "urn:zitadel:iam:user:resourceowner:id": "org-1"
         }));
         claims.name = Some("Ada Lovelace".to_owned());
         let mut replies = HashMap::new();
@@ -664,43 +665,44 @@ mod tests {
     }
 
     #[test]
-    fn the_organization_is_the_one_the_roles_are_granted_in() {
+    fn the_organization_is_the_users_own() {
+        let claims = extra(json!({
+            "urn:zitadel:iam:user:resourceowner:id": "org-1",
+            "urn:zitadel:iam:user:resourceowner:name": "Acme Co",
+            "urn:zitadel:iam:user:resourceowner:primary_domain": "acme.localhost"
+        }));
+        assert_eq!(org_id_from_claims(&claims).as_deref(), Some("org-1"));
+    }
+
+    #[test]
+    fn the_organization_in_the_role_claims_is_not_the_users() {
+        // A role granted from the project's organization (what the Console does by
+        // default) names that organization, whichever company the user is in.
         let claims = extra(json!({
             "urn:zitadel:iam:org:project:roles": {
-                "publisher": { "org-1": "acme.localhost" },
-                "owner": { "org-1": "acme.localhost" }
+                "owner": { "project-org": "vern.localhost" }
             },
             "urn:zitadel:iam:org:project:shared-project-id:roles": {
-                "publisher": { "org-1": "acme.localhost" }
-            },
-            "urn:zitadel:iam:org:project:another-project:roles": {
-                "owner": { "org-2": "other.localhost" }
+                "owner": { "project-org": "vern.localhost" }
             }
         }));
-        assert_eq!(
-            org_id_from_claims(&claims, PROJECT).as_deref(),
-            Some("org-1")
-        );
-    }
-
-    #[test]
-    fn roles_from_several_organizations_mean_no_organization() {
-        let claims = extra(json!({
+        assert_eq!(org_id_from_claims(&claims), None);
+        let both = extra(json!({
             "urn:zitadel:iam:org:project:roles": {
-                "publisher": { "org-1": "acme.localhost" },
-                "advertiser": { "org-2": "other.localhost" }
-            }
+                "owner": { "project-org": "vern.localhost" }
+            },
+            "urn:zitadel:iam:user:resourceowner:id": "company-org"
         }));
-        assert_eq!(org_id_from_claims(&claims, PROJECT), None);
+        assert_eq!(org_id_from_claims(&both).as_deref(), Some("company-org"));
     }
 
     #[test]
-    fn no_role_claim_or_a_malformed_one_means_no_organization() {
-        assert_eq!(org_id_from_claims(&HashMap::new(), PROJECT), None);
-        let malformed = extra(json!({
-            "urn:zitadel:iam:org:project:roles": { "publisher": "org-1", "admin": [] }
-        }));
-        assert_eq!(org_id_from_claims(&malformed, PROJECT), None);
+    fn a_missing_or_malformed_resource_owner_means_no_organization() {
+        assert_eq!(org_id_from_claims(&HashMap::new()), None);
+        for value in [json!(""), json!("  "), json!(42), json!(["org"])] {
+            let claims = extra(json!({ "urn:zitadel:iam:user:resourceowner:id": value }));
+            assert_eq!(org_id_from_claims(&claims), None);
+        }
     }
 
     async fn call_org_route(claims: IntrospectionClaims) -> axum::response::Response {
@@ -726,16 +728,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn org_gives_the_callers_organization() {
-        let claims = claims_with(json!({
-            "urn:zitadel:iam:org:project:roles": { "owner": { "org-1": "acme.localhost" } }
-        }));
-        let response = call_org_route(claims).await;
-        assert_eq!(response.status(), StatusCode::OK);
-        let body = to_bytes(response.into_body(), usize::MAX)
-            .await
-            .expect("response body is readable");
-        assert_eq!(&body[..], b"org-1");
+    async fn org_gives_each_caller_their_own_organization() {
+        for org in ["org-1", "org-2"] {
+            let claims = claims_with(json!({
+                "urn:zitadel:iam:user:resourceowner:id": org
+            }));
+            let response = call_org_route(claims).await;
+            assert_eq!(response.status(), StatusCode::OK);
+            let body = to_bytes(response.into_body(), usize::MAX)
+                .await
+                .expect("response body is readable");
+            assert_eq!(&body[..], org.as_bytes());
+        }
     }
 
     #[tokio::test]

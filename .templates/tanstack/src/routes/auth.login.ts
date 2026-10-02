@@ -6,6 +6,7 @@ import {
 	getAppUrl,
 	getOidcConfiguration,
 	getProjectAudienceScope,
+	RESOURCE_OWNER_SCOPE,
 } from "../server/oidc.server";
 import { getAuthTransactionSession } from "../server/session.server";
 
@@ -29,6 +30,7 @@ export const Route = createFileRoute("/auth/login")({
 							"email",
 							"offline_access",
 							getProjectAudienceScope(),
+							RESOURCE_OWNER_SCOPE,
 						].join(" "),
 						state,
 						nonce,
