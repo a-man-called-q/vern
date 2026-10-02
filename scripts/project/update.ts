@@ -16,6 +16,7 @@ import {
 	type Conflict,
 	mergeUpstreamFiles,
 	safeProjectPath,
+	settleConflicts,
 } from "./merge";
 
 interface UpdateState {
@@ -167,6 +168,21 @@ export function updateProject(root: string, options: Options): void {
 		if (currentBranch !== state.branch)
 			throw new Error("Switch back to " + state.branch + " before continuing.");
 		if (state.phase === "conflicts") {
+			const { remaining, settled } = settleConflicts(
+				root,
+				config,
+				state.previousSha,
+				state.targetSha,
+				state.conflicts,
+			);
+			if (settled.length > 0) {
+				console.log(
+					"Merged again without a conflict (the rename had only rebranded them): " +
+						settled.join(", "),
+				);
+				state.conflicts = remaining;
+				writeState(root, state);
+			}
 			checkUnresolved(root, state);
 			state.phase = "dependencies";
 			writeState(root, state);

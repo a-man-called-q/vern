@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { sha256 } from "../lib/files";
 import { ROOT } from "../lib/paths";
 import { run } from "../lib/run";
 import { type ProjectConfig, readConfig } from "./config";
@@ -18,6 +19,7 @@ import { rebrandText, replaceIdentity } from "./identity";
 import { fitLogoText } from "./logo";
 import { renderPackageTemplate } from "./package-template";
 import { renameProject } from "./rename";
+import { settleConflicts } from "./merge";
 import { updateProject } from "./update";
 
 const tempRoots: string[] = [];
@@ -167,9 +169,10 @@ describe("rename-project", () => {
 		expect(readFileSync(resolve(root, ".gitignore"), "utf8")).toContain(
 			".vern/update-state.json",
 		);
+		// Scripts are Vern's tooling: a rename leaves them as they are.
 		expect(
 			readFileSync(resolve(root, "scripts/check-ports.ts"), "utf8"),
-		).toContain("'acme-platform'");
+		).toBe("const label = 'vern';\n");
 		expect(readConfig(root)).toEqual({
 			schemaVersion: 1,
 			project: { name: "Acme Platform", slug: "acme-platform" },
@@ -525,6 +528,84 @@ describe("update-project", () => {
 		);
 		expect(readConfig(consumer)?.upstream.lastSyncedSha).toBe(target);
 		expect(existsState(consumer)).toBe(false);
+	});
+});
+
+describe("update-project and scripts", () => {
+	/** A consumer whose scripts an older rename rebranded, and an upstream that changed them. */
+	function renamedConsumer() {
+		const upstream = tempRoot("vern-upstream-scripts-");
+		const consumer = tempRoot("vern-consumer-scripts-");
+		const base = initRepo(upstream, {
+			"README.md": "Project: Vern\n",
+			"scripts/setup.ts": 'const fallback = "Vern";\nexport const steps = 1;\n',
+			"scripts/zitadel-smtp.ts": 'const DESCRIPTION = "Vern";\n',
+			"scripts/custom.ts": 'const name = "Vern";\n',
+		});
+		git(consumer, "clone", upstream, ".");
+		git(consumer, "config", "user.name", "Vern Script Tests");
+		git(consumer, "config", "user.email", "vern-tests@example.test");
+		// What an older rename wrote: every script rebranded.
+		write(consumer, "README.md", "Project: Acme\n");
+		write(consumer, "scripts/setup.ts", 'const fallback = "Acme";\nexport const steps = 1;\n');
+		write(consumer, "scripts/zitadel-smtp.ts", 'const DESCRIPTION = "Acme";\n');
+		// A script the project changed itself.
+		write(consumer, "scripts/custom.ts", 'const name = "Acme";\nconst mine = true;\n');
+		write(
+			consumer,
+			".vern/config.json",
+			JSON.stringify(
+				{
+					schemaVersion: 1,
+					project: { name: "Acme", slug: "acme" },
+					upstream: { url: upstream, branch: "main", lastSyncedSha: base },
+				} satisfies ProjectConfig,
+				null,
+				2,
+			) + "\n",
+		);
+		commitAll(consumer, "renamed by an older rename");
+
+		write(upstream, "scripts/setup.ts", 'const fallback = "Vern";\nexport const steps = 2;\n');
+		rmSync(resolve(upstream, "scripts/zitadel-smtp.ts"));
+		write(upstream, "scripts/custom.ts", 'const name = "Vern";\nconst theirs = true;\n');
+		const target = commitAll(upstream, "move the scripts");
+		return { upstream, consumer, base, target };
+	}
+
+	test("takes upstream's scripts over copies a rename only rebranded", () => {
+		const { consumer } = renamedConsumer();
+		installFakeCommands();
+		updateProject(consumer, { apply: true, continueUpdate: false });
+		expect(readFileSync(resolve(consumer, "scripts/setup.ts"), "utf8")).toBe(
+			'const fallback = "Vern";\nexport const steps = 2;\n',
+		);
+		expect(existsSync(resolve(consumer, "scripts/zitadel-smtp.ts"))).toBe(false);
+		// A real local change still meets upstream's in a conflict.
+		expect(readFileSync(resolve(consumer, "scripts/custom.ts"), "utf8")).toContain("<<<<<<<");
+		expect(readStateForTest(consumer).phase).toBe("conflicts");
+	});
+
+	test("settles the conflicts an older updater left on such copies", () => {
+		const { consumer, base, target } = renamedConsumer();
+		git(consumer, "fetch", "origin", "main");
+		// What an older updater left: markers in one script, the other kept.
+		const markers = "<<<<<<< ours\nconst fallback = \"Acme\";\n=======\nconst fallback = \"Vern\";\n>>>>>>> theirs\n";
+		write(consumer, "scripts/setup.ts", markers);
+		const smtp = readFileSync(resolve(consumer, "scripts/zitadel-smtp.ts"));
+		const conflicts = [
+			{ path: "scripts/setup.ts", initialHash: sha256(markers) },
+			{ path: "scripts/zitadel-smtp.ts", initialHash: sha256(smtp) },
+			{ path: "README.md", initialHash: "changed-by-the-user" },
+		];
+		const config = readConfig(consumer) as ProjectConfig;
+		const { remaining, settled } = settleConflicts(consumer, config, base, target, conflicts);
+		expect(settled).toEqual(["scripts/setup.ts", "scripts/zitadel-smtp.ts"]);
+		expect(remaining.map((conflict) => conflict.path)).toEqual(["README.md"]);
+		expect(readFileSync(resolve(consumer, "scripts/setup.ts"), "utf8")).toBe(
+			'const fallback = "Vern";\nexport const steps = 2;\n',
+		);
+		expect(existsSync(resolve(consumer, "scripts/zitadel-smtp.ts"))).toBe(false);
 	});
 });
 

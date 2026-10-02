@@ -75,3 +75,13 @@ export function readGitFile(
 	if (result.error || result.status !== 0) return undefined;
 	return result.stdout;
 }
+
+/**
+ * scripts/ is Vern's tooling, which names Vern on purpose (the upstream it
+ * follows, the identity it renames from, defaults). A rename leaves it as it
+ * is, and an update merges upstream's copy as it is, so a project's scripts
+ * stay byte for byte Vern's and merge cleanly.
+ */
+export function isVernScript(path: string): boolean {
+	return path.startsWith("scripts/");
+}

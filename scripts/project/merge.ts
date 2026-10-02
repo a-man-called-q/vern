@@ -13,7 +13,7 @@ import { isTextBuffer, sha256, writeFileSafely } from "../lib/files";
 import { listProjects } from "../lib/projects";
 import { git, run } from "../lib/run";
 import { CONFIG_PATH, type ProjectConfig, UPDATE_STATE_PATH } from "./config";
-import { readGitFile } from "./files";
+import { isVernScript, readGitFile } from "./files";
 import { rebrandText } from "./identity";
 
 /** A file the merge left for the user, and its hash then, to tell when it is resolved. */
@@ -53,22 +53,27 @@ function shouldSkipUpstreamPath(
 	return Boolean(projectDir && generatedDirs.has(projectDir));
 }
 
-function rebrandSnapshot(
-	path: string,
-	data: Buffer,
-	config: ProjectConfig,
-): Buffer {
-	if (
-		!isTextBuffer(data) ||
-		path.startsWith("scripts/") ||
-		path.startsWith(".vern/")
-	)
-		return data;
+function rebrand(data: Buffer, path: string, config: ProjectConfig): Buffer {
 	const text = new TextDecoder().decode(data);
 	return Buffer.from(
 		rebrandText(path, text, { name: "Vern", slug: "vern" }, config.project),
 		"utf8",
 	);
+}
+
+/**
+ * Upstream's copy of a file as this project's rename would have written it, so
+ * the merge compares like with like. Scripts are never rebranded (see
+ * isVernScript).
+ */
+function rebrandSnapshot(
+	path: string,
+	data: Buffer,
+	config: ProjectConfig,
+): Buffer {
+	if (!isTextBuffer(data) || isVernScript(path) || path.startsWith(".vern/"))
+		return data;
+	return rebrand(data, path, config);
 }
 
 export function allChangedUpstreamPaths(
@@ -129,6 +134,67 @@ function mergeText(
 	}
 }
 
+/** What to do with one file, given its three versions. */
+type Plan =
+	| { kind: "keep" }
+	| { kind: "delete" }
+	| { kind: "write"; data: Buffer }
+	/** `data` is the text merge with its conflict markers, when there is one. */
+	| { kind: "conflict"; data?: Buffer };
+
+function planMerge(
+	root: string,
+	path: string,
+	ours: Buffer | undefined,
+	versions: { base?: Buffer; theirs?: Buffer; renamedBase?: Buffer },
+): Plan {
+	const { base, theirs, renamedBase } = versions;
+	// Ours is still upstream's base, or what an older rename made of it.
+	const untouched =
+		!!ours && !!base && (ours.equals(base) || !!renamedBase?.equals(ours));
+	if (!theirs) {
+		if (!ours) return { kind: "keep" };
+		if (untouched) return { kind: "delete" };
+		return { kind: "conflict" };
+	}
+	if (!ours) return base ? { kind: "conflict" } : { kind: "write", data: theirs };
+	if (ours.equals(theirs)) return { kind: "keep" };
+	if (!base || untouched) return { kind: "write", data: theirs };
+	if (theirs.equals(base)) return { kind: "keep" };
+	if (!isTextBuffer(ours) || !isTextBuffer(base) || !isTextBuffer(theirs))
+		return { kind: "conflict" };
+	const merged = mergeText(root, path, ours, base, theirs);
+	return merged.conflicted
+		? { kind: "conflict", data: merged.data }
+		: { kind: "write", data: merged.data };
+}
+
+function snapshots(
+	root: string,
+	config: ProjectConfig,
+	from: string,
+	to: string,
+	path: string,
+): { base?: Buffer; theirs?: Buffer; renamedBase?: Buffer } {
+	const baseRaw = readGitFile(root, from, path);
+	const targetRaw = readGitFile(root, to, path);
+	return {
+		base: baseRaw ? rebrandSnapshot(path, baseRaw, config) : undefined,
+		theirs: targetRaw ? rebrandSnapshot(path, targetRaw, config) : undefined,
+		// A rename used to rebrand most scripts; such a copy is not a local change.
+		renamedBase:
+			baseRaw && isVernScript(path) && isTextBuffer(baseRaw)
+				? rebrand(baseRaw, path, config)
+				: undefined,
+	};
+}
+
+function readWorkingFile(absolute: string): Buffer | undefined {
+	return existsSync(absolute) && statSync(absolute).isFile()
+		? readFileSync(absolute)
+		: undefined;
+}
+
 export function mergeUpstreamFiles(
 	root: string,
 	config: ProjectConfig,
@@ -142,52 +208,68 @@ export function mergeUpstreamFiles(
 	for (const path of allChangedUpstreamPaths(root, from, to)) {
 		if (shouldSkipUpstreamPath(path, generatedDirs)) continue;
 		const absolute = safeProjectPath(root, path);
-		const baseRaw = readGitFile(root, from, path);
-		const targetRaw = readGitFile(root, to, path);
-		const base = baseRaw ? rebrandSnapshot(path, baseRaw, config) : undefined;
-		const theirs = targetRaw
-			? rebrandSnapshot(path, targetRaw, config)
-			: undefined;
-		const ours =
-			existsSync(absolute) && statSync(absolute).isFile()
-				? readFileSync(absolute)
-				: undefined;
-
-		if (!theirs) {
-			if (!ours) continue;
-			if (base && ours.equals(base)) {
-				unlinkSync(absolute);
-				updated.push(path);
-				continue;
-			}
-			conflicts.push({ path, initialHash: sha256(ours) });
-			continue;
-		}
-		if (!ours) {
-			if (base) {
-				conflicts.push({ path, initialHash: "<missing>" });
-				continue;
-			}
-			writeFileSafely(root, path, theirs);
+		const versions = snapshots(root, config, from, to, path);
+		const ours = readWorkingFile(absolute);
+		const plan = planMerge(root, path, ours, versions);
+		if (plan.kind === "keep") continue;
+		if (plan.kind === "delete") {
+			unlinkSync(absolute);
 			updated.push(path);
-			continue;
-		}
-		if (ours.equals(theirs)) continue;
-		if (!base || ours.equals(base)) {
-			writeFileSafely(root, path, theirs);
+		} else if (plan.kind === "write") {
+			writeFileSafely(root, path, plan.data);
 			updated.push(path);
-			continue;
+		} else if (plan.data) {
+			writeFileSafely(root, path, plan.data);
+			updated.push(path);
+			conflicts.push({ path, initialHash: sha256(plan.data) });
+		} else {
+			conflicts.push({ path, initialHash: ours ? sha256(ours) : "<missing>" });
 		}
-		if (theirs.equals(base)) continue;
-		if (!isTextBuffer(ours) || !isTextBuffer(base) || !isTextBuffer(theirs)) {
-			conflicts.push({ path, initialHash: sha256(ours) });
-			continue;
-		}
-		const merged = mergeText(root, path, ours, base, theirs);
-		writeFileSafely(root, path, merged.data);
-		updated.push(path);
-		if (merged.conflicted)
-			conflicts.push({ path, initialHash: sha256(merged.data) });
 	}
 	return { updated, conflicts };
+}
+
+/**
+ * Merges again each conflict the user has not touched, from the project's own
+ * copy (in HEAD). An older updater counted a script that an older rename had
+ * rebranded as changed locally, so every upstream change to it was a
+ * conflict; those settle here. Returns the conflicts that remain, and the
+ * paths it settled.
+ */
+export function settleConflicts(
+	root: string,
+	config: ProjectConfig,
+	from: string,
+	to: string,
+	conflicts: Conflict[],
+): { remaining: Conflict[]; settled: string[] } {
+	const remaining: Conflict[] = [];
+	const settled: string[] = [];
+	for (const conflict of conflicts) {
+		const absolute = safeProjectPath(root, conflict.path);
+		const current = readWorkingFile(absolute);
+		const ours = readGitFile(root, "HEAD", conflict.path);
+		if (
+			(current ? sha256(current) : "<missing>") !== conflict.initialHash ||
+			(ours && /^(<<<<<<<|=======|>>>>>>>)(?: |$)/m.test(ours.toString("utf8")))
+		) {
+			remaining.push(conflict);
+			continue;
+		}
+		const plan = planMerge(
+			root,
+			conflict.path,
+			ours,
+			snapshots(root, config, from, to, conflict.path),
+		);
+		if (plan.kind === "conflict") {
+			remaining.push(conflict);
+			continue;
+		}
+		if (plan.kind === "write") writeFileSafely(root, conflict.path, plan.data);
+		else if (plan.kind === "delete" || !ours) rmSync(absolute, { force: true });
+		else writeFileSafely(root, conflict.path, ours);
+		settled.push(conflict.path);
+	}
+	return { remaining, settled };
 }

@@ -10,7 +10,7 @@ import {
 	UPSTREAM_BRANCH,
 	UPSTREAM_URL,
 } from "./config";
-import { listTextFiles } from "./files";
+import { isVernScript, listTextFiles } from "./files";
 import { rebrandText, replaceIdentity, validateIdentity } from "./identity";
 
 export interface Options {
@@ -18,22 +18,6 @@ export interface Options {
 	slug: string;
 	apply: boolean;
 	base?: string;
-}
-
-// The rename and update code names Vern on purpose (the upstream it follows,
-// the identity it renames from), so a rename leaves it alone.
-const PROTECTED_SCRIPTS = [
-	"scripts/project/",
-	"scripts/doctor/",
-	"scripts/rename-project.ts",
-	"scripts/update-project.ts",
-	"scripts/doctor.ts",
-];
-
-function isProtectedScript(path: string): boolean {
-	return PROTECTED_SCRIPTS.some((prefix) =>
-		prefix.endsWith("/") ? path.startsWith(prefix) : path === prefix,
-	);
 }
 
 function fetchUpstream(root: string, url: string, branch: string): string {
@@ -125,7 +109,7 @@ export function renameProject(root: string, options: Options): string[] {
 
 	const changed: Array<{ path: string; content: string }> = [];
 	for (const path of listTextFiles(root)) {
-		if (isProtectedScript(path)) continue;
+		if (isVernScript(path)) continue;
 		const absolute = resolve(root, path);
 		const source = readFileSync(absolute, "utf8");
 		const content = rebrandText(path, source, from, to);
