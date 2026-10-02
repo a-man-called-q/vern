@@ -62,6 +62,7 @@ function oldProject(): string {
 	write(root, "apps/data/docker-compose.yml", "# The data, apart from apps/auth-server.\nservices: {}\n");
 	write(root, "apps/data/moon.yml", "tasks: {}\n");
 	write(root, "apps/data/up.sh", OLD_UP_SH);
+	write(root, "apps/data/README.md", "Applies `apps/*/db/init.sql` each time.\n");
 	write(root, "apps/auth-server/brand/logo.svg", "<svg>ours</svg>\n");
 	write(root, "infra/auth-server/docker-compose.yml", "services: {}\n");
 	write(root, "infra/auth-server/brand/logo.svg", "<svg>upstream</svg>\n");
@@ -105,6 +106,7 @@ for file in ../../services/*/db/init.sql; do
 done
 `);
 		expect(read(root, "infra/data/docker-compose.yml")).toContain("apart from infra/auth-server.");
+		expect(read(root, "infra/data/README.md")).toBe("Applies `services/*/db/init.sql` each time.\n");
 		// Git sees moves, not a deletion and a new file.
 		expect(git(root, "status", "--porcelain")).toContain("R  apps/api/Cargo.toml -> services/api/Cargo.toml");
 

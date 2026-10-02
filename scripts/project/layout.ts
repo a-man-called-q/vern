@@ -86,11 +86,11 @@ function fixMovedProject(root: string, move: LayoutMove): void {
 		rewrite(file, [
 			[new RegExp(`(^|[^\\w./-])${escapeRegExp(move.from)}(?=$|[^\\w-])`, "gm"), `$1${move.to}`],
 			[OLD_AUTH_SERVER, AUTH_SERVER],
+			["apps/*/db/init.sql", "services/*/db/init.sql"],
 		]);
 	}
 	const upScript = resolve(root, move.to, "up.sh");
 	rewrite(upScript, [
-		["apps/*/db/init.sql", "services/*/db/init.sql"],
 		["../*/db/init.sql", "../../services/*/db/init.sql"],
 		["${file#../}", "${file#../../}"],
 	]);
