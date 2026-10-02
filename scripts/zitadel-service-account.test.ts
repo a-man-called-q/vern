@@ -190,6 +190,7 @@ describe("zitadel:service-account", () => {
 		expect(zitadel.instanceMembers).toEqual([{ userId: "user-1", roles: ["IAM_ORG_MANAGER"] }]);
 		expect(parseEnv(resolve(root, "apps/admin/.env")).get("ZITADEL_ORG_ADMIN_TOKEN")).toBe("pat-2");
 		expect(logs.join("\n")).toContain('Granted IAM_ORG_MANAGER to "orgs" in the instance');
+		expect(logs.join("\n")).toContain("reaches every organization of the instance");
 	});
 
 	test("adds an instance role to a member that has another, and keeps it when run again", async () => {

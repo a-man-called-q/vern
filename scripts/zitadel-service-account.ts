@@ -195,6 +195,7 @@ export async function main(argv: string[], deps: ServiceAccountDeps = {}): Promi
 				? `"${userName}" already holds ${instanceRole} in the instance`
 				: `Granted ${instanceRole} to "${userName}" in the instance`,
 		);
+		log(`"${userName}" reaches every organization of the instance: use its token only to act for the caller's own.`);
 	}
 
 	const envPath = resolve(root, appPath, ".env");

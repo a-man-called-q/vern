@@ -40,14 +40,20 @@ function fakeZitadel(options: { searchLag?: number } = {}) {
 				lag--;
 				return json({ result: [] });
 			}
-			const matches = orgs.filter((item) =>
-				query.nameQuery ? item.name === query.nameQuery.name : item.id === query.idQuery.id,
-			);
+			const sameName = (item: Org) =>
+				query.nameQuery.method === "TEXT_QUERY_METHOD_EQUALS_IGNORE_CASE"
+					? item.name.toLowerCase() === query.nameQuery.name.toLowerCase()
+					: item.name === query.nameQuery.name;
+			const matches = orgs.filter((item) => (query.nameQuery ? sameName(item) : item.id === query.idQuery.id));
 			return json({ result: matches });
 		}
 		if (path === "/v2/organizations" && method === "POST") {
 			const name = body.name as string;
 			const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+			// Like ZITADEL: a name or a domain that is taken is refused.
+			if (orgs.some((other) => other.name.toLowerCase() === name.toLowerCase() || other.primaryDomain === `${slug}.localhost`)) {
+				return json({ message: "Organisation's name or id already taken" }, 409);
+			}
 			const item = { id: `org${next++}`, name, primaryDomain: `${slug}.localhost` };
 			orgs.push(item);
 			return json({ organizationId: item.id }, 201);
@@ -133,6 +139,23 @@ describe("ensureOrg", () => {
 	test("gives up when the organization never shows up", async () => {
 		const zitadel = fakeZitadel({ searchLag: 1000 });
 		await expect(ensureOrg(zitadel.api, "Acme Ads", noSleep)).rejects.toThrow('did not list it');
+	});
+
+	test("an organization is found whatever the case of the name", async () => {
+		const zitadel = fakeZitadel();
+		await ensureOrg(zitadel.api, "Acme Ads", noSleep);
+		const again = await ensureOrg(zitadel.api, "ACME ads", noSleep);
+		expect(again).toMatchObject({ created: false, org: { name: "Acme Ads" } });
+		expect(zitadel.orgs).toHaveLength(2);
+	});
+
+	test("explains an organization ZITADEL refuses because its domain is taken", async () => {
+		const zitadel = fakeZitadel();
+		await ensureOrg(zitadel.api, "Acme Ads", noSleep);
+		// A different name that makes the same domain: "acme-ads.localhost".
+		await expect(ensureOrg(zitadel.api, "Acme-Ads", noSleep)).rejects.toThrow(
+			'ZITADEL refused the organization "Acme-Ads": its name, or the domain made from it, belongs to another organization',
+		);
 	});
 
 	test("findOrg matches the whole name, not a part of it", async () => {
