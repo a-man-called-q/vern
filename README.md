@@ -183,8 +183,11 @@ those roles plus their own:
 
 The users sign in as `<name>@<organization domain>`, such as
 `owner@acme-ads.localhost`; `setup` prints the logins it seeded. A token of such a
-user carries the organization's ID next to each role, which the Axum template
-reads as `AuthenticatedUser::org_id`.
+user carries the organization's ID (the web apps ask for it with the
+`urn:zitadel:iam:user:resourceowner` scope), which the Axum template reads as
+`AuthenticatedUser::org_id`. A user is in the company that holds their roles;
+if a role is granted in the Console from another organization, the user still
+belongs to their own.
 
 - **Local only.** It never runs with `--deploy`, and it is skipped when
   `ZITADEL_ISSUER` is not `localhost`, `127.0.0.1`, or `[::1]`. In production,
@@ -271,6 +274,23 @@ keeps its own. The Login App caches ZITADEL's settings for 15 minutes, so the
 sign-in pages follow a change within that time; restart the `zitadel-login`
 container to apply it at once. `bun run project:doctor` shows the current
 choice.
+
+## Email
+
+ZITADEL sends mail for invitations (a user created with an email code), email
+verification, and password resets. Locally the auth stack's Mailpit container
+catches it: a new database starts with ZITADEL pointed at it, and `bun run setup`
+does the same for one that predates that, then prints where to read the messages
+(<http://localhost:8025> by default). An invitation can be tried end to end: the
+link in the mail opens the sign-in pages, where the user verifies the address and
+chooses a password. If the Console already has a mail setup for another server,
+`setup` leaves it alone.
+
+In production, `SMTP_HOST`, `SMTP_FROM_ADDRESS`, and (when the server asks)
+`SMTP_USER` and `SMTP_PASSWORD` in `deploy/.env` configure it, and
+`bun run setup -- --deploy` applies them to the running ZITADEL; see
+[deploy/README.md](deploy/README.md). `bun run project:doctor` says when none is
+set.
 
 ## Building with a coding agent
 

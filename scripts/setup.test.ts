@@ -58,6 +58,12 @@ function fakeZitadel() {
 			passwordCheckLifetime: "864000s",
 		},
 	};
+	// ZITADEL's JSON also leaves out a false flag and an empty string.
+	const smtp: Record<string, unknown>[] = [];
+	const smtpPasswords = new Map<string, string>();
+	let nextSmtp = 1;
+	const present = (body: Record<string, unknown>) =>
+		Object.fromEntries(Object.entries(body).filter(([, value]) => value !== false && value !== ""));
 	const flagsOnly = (settings: Record<string, unknown>) =>
 		JSON.stringify(Object.entries(settings).filter(([, value]) => value !== false).sort(([a], [b]) => a.localeCompare(b)));
 	let next = 100;
@@ -137,6 +143,30 @@ function fakeZitadel() {
 			const keyDetails = Buffer.from(JSON.stringify({ type: "application", keyId, key: "PEM", appId: key[1], clientId: "c1" })).toString("base64");
 			return json({ id: keyId, keyDetails });
 		}
+		if (path === "/admin/v1/smtp/_search") return json(smtp.length > 0 ? { result: smtp } : { details: {} });
+		if (path === "/admin/v1/smtp" && method === "POST") {
+			const { password, ...settings } = body;
+			const config = { id: `smtp${nextSmtp++}`, state: "SMTP_CONFIG_INACTIVE", ...present(settings) };
+			smtp.push(config);
+			if (password) smtpPasswords.set(config.id, String(password));
+			return json({ id: config.id });
+		}
+		const smtpRoute = path.match(/^\/admin\/v1\/smtp\/([^/]+)(?:\/(_activate|password))?$/);
+		if (smtpRoute) {
+			const config = smtp.find((item) => item.id === smtpRoute[1]);
+			if (!config) return json({ message: "not found" }, 404);
+			if (smtpRoute[2] === "_activate") {
+				for (const other of smtp) other.state = "SMTP_CONFIG_INACTIVE";
+				config.state = "SMTP_CONFIG_ACTIVE";
+			} else if (smtpRoute[2] === "password") {
+				smtpPasswords.set(String(config.id), body.password);
+			} else {
+				const { state, id } = config;
+				for (const key of Object.keys(config)) delete config[key];
+				Object.assign(config, { id, state, ...present(body) });
+			}
+			return json({});
+		}
 		if (path === "/admin/v1/policies/login" && method === "GET") {
 			return json({
 				policy: {
@@ -157,7 +187,7 @@ function fakeZitadel() {
 		}
 		return json({ message: `unexpected ${method} ${path}` }, 500);
 	}) as typeof fetch;
-	return { calls, fetcher, projects, apps, keys, roles, users, grants, loginPolicy };
+	return { calls, fetcher, projects, apps, keys, roles, users, grants, loginPolicy, smtp, smtpPasswords };
 }
 
 function deps(root: string, zitadel: ReturnType<typeof fakeZitadel>, logs: string[] = []) {
@@ -557,6 +587,113 @@ describe("setup", () => {
 			zitadel.loginPolicy.settings.allowRegister = true;
 			await setup(["--deploy"], { ...deps(root, zitadel), runCompose: () => {} });
 			expect(zitadel.loginPolicy.settings.allowRegister).toBeUndefined();
+		});
+	});
+
+	describe("mail", () => {
+		const smtpCalls = (zitadel: ReturnType<typeof fakeZitadel>) =>
+			zitadel.calls.filter((call) => call.path.startsWith("/admin/v1/smtp") && !call.path.endsWith("_search"));
+		const deployEnv =
+			"AUTH_DOMAIN=auth.acme.test\nAPP_DOMAIN=app.acme.test\nAPI_DOMAIN=api.acme.test\nACME_EMAIL=ops@acme.test\nWEB_APP=dashboard\nAPI_APP=api\n";
+
+		test("points ZITADEL at Mailpit locally, and says where to read the mail", async () => {
+			const root = workspace();
+			write(root, "apps/auth-server/.env", "ZITADEL_ORG_NAME=Vern\nMAIL_UI_PORT=8030\n");
+			const zitadel = fakeZitadel();
+			const logs: string[] = [];
+			await setup([], deps(root, zitadel, logs));
+
+			expect(zitadel.smtp).toEqual([
+				{
+					id: "smtp1",
+					state: "SMTP_CONFIG_ACTIVE",
+					senderAddress: "no-reply@vern.localhost",
+					senderName: "Vern",
+					host: "mailpit:1025",
+					description: "Vern",
+				},
+			]);
+			expect(logs).toContain("ZITADEL sends mail to Mailpit; read it at http://localhost:8030");
+		});
+
+		test("running it again leaves the configuration alone", async () => {
+			const root = workspace();
+			const zitadel = fakeZitadel();
+			await setup([], deps(root, zitadel));
+			zitadel.calls.length = 0;
+			const logs: string[] = [];
+			await setup([], deps(root, zitadel, logs));
+			expect(smtpCalls(zitadel)).toEqual([]);
+			expect(zitadel.smtp).toHaveLength(1);
+			expect(logs).toContain("ZITADEL sends mail to Mailpit; read it at http://localhost:8025");
+		});
+
+		test("does not replace a mail setup someone made in the Console", async () => {
+			const root = workspace();
+			const zitadel = fakeZitadel();
+			zitadel.smtp.push({ id: "console1", state: "SMTP_CONFIG_ACTIVE", host: "smtp.gmail.com:587", description: "Gmail" });
+			const logs: string[] = [];
+			await setup([], deps(root, zitadel, logs));
+			expect(zitadel.smtp).toHaveLength(1);
+			expect(smtpCalls(zitadel)).toEqual([]);
+			expect(logs).toContain("ZITADEL sends mail through smtp.gmail.com:587, set up in the Console; leaving it as it is.");
+		});
+
+		test("--deploy applies the SMTP_* of deploy/.env, password included", async () => {
+			const root = workspace();
+			write(
+				root,
+				"deploy/.env",
+				`${deployEnv}SMTP_HOST=smtp.acme.test:587\nSMTP_FROM_ADDRESS=hello@acme.test\nSMTP_FROM_NAME=Acme\nSMTP_USER=apikey\nSMTP_PASSWORD=s3cret\nSMTP_TLS=true\n`,
+			);
+			const zitadel = fakeZitadel();
+			const logs: string[] = [];
+			await setup(["--deploy"], { ...deps(root, zitadel, logs), runCompose: () => {} });
+
+			expect(zitadel.smtp).toEqual([
+				{
+					id: "smtp1",
+					state: "SMTP_CONFIG_ACTIVE",
+					senderAddress: "hello@acme.test",
+					senderName: "Acme",
+					tls: true,
+					host: "smtp.acme.test:587",
+					user: "apikey",
+					description: "Vern",
+				},
+			]);
+			expect(zitadel.smtpPasswords.get("smtp1")).toBe("s3cret");
+			expect(logs).toContain("ZITADEL sends mail through smtp.acme.test:587 as hello@acme.test");
+			expect(logs.join("\n")).not.toContain("s3cret");
+		});
+
+		test("--deploy replaces a Console configuration when SMTP_HOST is set", async () => {
+			const root = workspace();
+			write(root, "deploy/.env", `${deployEnv}SMTP_HOST=smtp.acme.test:25\nSMTP_FROM_ADDRESS=hello@acme.test\nSMTP_TLS=false\n`);
+			const zitadel = fakeZitadel();
+			zitadel.smtp.push({ id: "console1", state: "SMTP_CONFIG_ACTIVE", host: "smtp.gmail.com:587", description: "Gmail" });
+			await setup(["--deploy"], { ...deps(root, zitadel), runCompose: () => {} });
+			expect(zitadel.smtp.find((config) => config.state === "SMTP_CONFIG_ACTIVE")).toMatchObject({ host: "smtp.acme.test:25", description: "Vern" });
+		});
+
+		test("--deploy says out loud that there is no mail server", async () => {
+			const root = workspace();
+			write(root, "deploy/.env", deployEnv);
+			const zitadel = fakeZitadel();
+			const logs: string[] = [];
+			await setup(["--deploy"], { ...deps(root, zitadel, logs), runCompose: () => {} });
+			expect(zitadel.smtp).toEqual([]);
+			expect(logs.some((line) => line.startsWith("ZITADEL has no SMTP server") && line.includes("deploy/.env"))).toBe(true);
+		});
+
+		test("--deploy stops on a half-filled mail setup before starting anything", async () => {
+			const root = workspace();
+			write(root, "deploy/.env", `${deployEnv}SMTP_FROM_ADDRESS=hello@acme.test\n`);
+			let started = false;
+			await expect(
+				setup(["--deploy"], { ...deps(root, fakeZitadel()), runCompose: () => (started = true) as never }),
+			).rejects.toThrow("SMTP_FROM_ADDRESS set in deploy/.env without SMTP_HOST");
+			expect(started).toBe(false);
 		});
 	});
 

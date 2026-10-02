@@ -26,6 +26,7 @@ import {
 import { ALLOW_REGISTER_KEY, ensureSelfRegistration, parseAllowRegister } from "./zitadel-login-policy";
 import { ensureProjectRoles, readProjectRoles, ROLES_FILE } from "./zitadel-roles";
 import { isLocalIssuer, readSeedUsers, SEED_FILE, SEED_PASSWORD_KEY, type SeedUsers, seedUsers } from "./zitadel-seed";
+import { ensureSmtp, readSmtpSettings, type SmtpSettings } from "./zitadel-smtp";
 
 const ROOT = resolve(import.meta.dir, "..");
 export const AUTH = "apps/auth-server";
@@ -234,6 +235,33 @@ async function applySelfRegistration(api: ApiOptions, wanted: boolean | undefine
 	}
 }
 
+/**
+ * Points ZITADEL's outgoing mail at `wanted` and says where mail goes. Locally
+ * that is Mailpit, and a mail setup someone made in the Console stays; in a
+ * deployment it is the SMTP_* of deploy/.env, and without them nothing is
+ * changed but the missing mail server is said out loud, because invitations and
+ * password resets silently never arrive.
+ */
+async function applySmtp(
+	api: ApiOptions,
+	wanted: SmtpSettings | undefined,
+	options: { local: boolean; mailpitUrl: string; envFile: string },
+	log: Log,
+): Promise<void> {
+	const result = await ensureSmtp(api, wanted, { replaceOthers: !options.local });
+	if (result.action === "none") {
+		log(
+			`ZITADEL has no SMTP server, so invitations, email verification, and password resets are not sent. Set SMTP_HOST and SMTP_FROM_ADDRESS (and SMTP_USER and SMTP_PASSWORD) in ${options.envFile} and run this again.`,
+		);
+	} else if (result.action === "kept") {
+		log(`ZITADEL sends mail through ${result.host}, set up in the Console; leaving it as it is.`);
+	} else if (options.local) {
+		log(`ZITADEL sends mail to Mailpit; read it at ${options.mailpitUrl}`);
+	} else {
+		log(`ZITADEL sends mail through ${result.host} as ${wanted?.senderAddress}`);
+	}
+}
+
 /** Whether ZITADEL still has the key in this file, e.g. after a database reset. */
 async function keyIsKnown(api: ApiOptions, projectId: string, keyFile: string): Promise<boolean> {
 	let key: { appId?: string; keyId?: string };
@@ -412,6 +440,19 @@ async function setupLocal(
 	await applySelfRegistration(api, allowRegister, authEnvFile, log);
 
 	const authEnv = readEffectiveEnv(root, AUTH);
+	const localDomain = authEnv.get("ZITADEL_DOMAIN") || "localhost";
+	await applySmtp(
+		api,
+		{
+			// The Mailpit container of the auth stack, reached by its name on the stack's network.
+			host: "mailpit:1025",
+			senderAddress: `no-reply@${loginDomain(authEnv, localDomain)}`,
+			senderName: authEnv.get("ZITADEL_ORG_NAME") || "Vern",
+			tls: false,
+		},
+		{ local: true, mailpitUrl: `http://localhost:${authEnv.get("MAIL_UI_PORT") || "8025"}`, envFile: `${AUTH}/.env` },
+		log,
+	);
 	const project = await ensureProject(api, rootEnv.get("ZITADEL_PROJECT_ID"), authEnv.get("ZITADEL_ORG_NAME") || "Vern", log);
 	const projectId = project.id;
 	if (project.changed) {
@@ -515,6 +556,8 @@ async function setupDeploy(
 	}
 	env = parseEnv(envPath);
 	const allowRegister = parseAllowRegister(env.get(ALLOW_REGISTER_KEY), `${DEPLOY}/.env`);
+	// A half-filled mail setup stops here, before a container starts.
+	const smtp = readSmtpSettings(env, `${DEPLOY}/.env`, env.get("ZITADEL_ORG_NAME") || "Vern");
 
 	// COMPOSE_FILE adds overrides, such as deploy/docker-compose.local.yml.
 	const files = processEnv.COMPOSE_FILE?.split(":").filter(Boolean) ?? [`${DEPLOY}/docker-compose.yml`];
@@ -538,6 +581,7 @@ async function setupDeploy(
 	);
 
 	await applySelfRegistration(api, allowRegister, `${DEPLOY}/.env`, log);
+	await applySmtp(api, smtp, { local: false, mailpitUrl: "", envFile: `${DEPLOY}/.env` }, log);
 
 	const project = await ensureProject(api, env.get("ZITADEL_PROJECT_ID"), env.get("ZITADEL_ORG_NAME") || "Vern", log);
 	if (project.changed) set("ZITADEL_PROJECT_ID", project.id);

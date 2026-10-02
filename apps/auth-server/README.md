@@ -11,6 +11,7 @@ containers from `docker-compose.yml`:
 | `auth-server` | nginx | Serves `brand/` under `/brand` and sends `/` to the sign-in page |
 | `postgres` | PostgreSQL | ZITADEL's database |
 | `redis` | Redis | Session store for the generated web apps |
+| `mailpit` | Mailpit | Catches the email ZITADEL sends, so nothing leaves your machine |
 
 ## Run
 
@@ -27,6 +28,7 @@ moon run auth-server:down   # stop, keeping the data
 | <http://localhost:8081/> | Sign-in page |
 | <http://localhost:8081/ui/console/> | Console |
 | <http://localhost:8081> | OIDC issuer (`ZITADEL_ISSUER`) |
+| <http://localhost:8025/> | Mailpit: the email ZITADEL "sent" (`MAIL_UI_PORT`) |
 
 `AUTH_HTTP_PORT` and `REDIS_PORT` in the root `.env` move the published ports.
 The admin account comes from `ZITADEL_ADMIN_USERNAME` and

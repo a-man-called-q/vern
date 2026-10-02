@@ -34,7 +34,7 @@ jobs:
           mkdir -p "$dir"
           for file in management.proto admin.proto app.proto user.proto project.proto member.proto object.proto \
             user/v2/user_service.proto user/v2/user.proto user/v2/email.proto user/v2/password.proto \
-            org/v2/org_service.proto org/v2/org.proto org/v2/query.proto; do
+            org/v2/org_service.proto org/v2/org.proto org/v2/query.proto settings.proto; do
             mkdir -p "$dir/$(dirname "$file")"
             curl --fail --silent --show-error --location --output "$dir/$file" \
               "https://raw.githubusercontent.com/zitadel/zitadel/${version}/proto/zitadel/${file}"
