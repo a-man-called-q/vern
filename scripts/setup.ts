@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { parseEnv, readEffectiveEnv } from "./env-files";
+import { readConfig } from "./project-utils";
 import {
 	type ApiOptions,
 	buildOidcConfig,
@@ -90,6 +91,35 @@ function randomSecret(kind: "hex" | "base64" | "password", bytes: number): strin
 	if (kind === "base64") return value.toString("base64");
 	// ZITADEL's default password policy wants upper and lower case, a digit, and a symbol.
 	return `${value.toString("base64url")}Aa1!`;
+}
+
+/** The variable an API declares when it creates organizations, such as the service that signs companies up. */
+export const ORG_ADMIN_TOKEN_KEY = "ZITADEL_ORG_ADMIN_TOKEN";
+/** What creating organizations takes: no organization role reaches that far. */
+const ORG_ADMIN_ROLE = "IAM_ORG_MANAGER";
+
+/**
+ * Gives an API that declares ZITADEL_ORG_ADMIN_TOKEN a service user that may
+ * create organizations, and its token. The token is broader than the API's own key
+ * (it can also create projects, roles, and applications in the default
+ * organization): README explains it, and `bun run zitadel:service-account` does
+ * the same by hand against a production ZITADEL.
+ */
+async function provisionOrgAdmin(api: ApiOptions, root: string, app: App, log: Log): Promise<void> {
+	// Imported here: that module imports this one.
+	const { createToken, ensureInstanceRole, ensureServiceUser, tokenWorks } = await import("./zitadel-service-account");
+	const userName = `${readConfig(root)?.project.slug ?? "vern"}-${app.name}-orgs`;
+	const user = await ensureServiceUser(api, userName);
+	await ensureInstanceRole(api, user.id, ORG_ADMIN_ROLE);
+	const env = resolve(root, app.path, ".env");
+	const example = resolve(root, app.path, ".env.example");
+	const current = parseEnv(env).get(ORG_ADMIN_TOKEN_KEY);
+	if (current && (await tokenWorks(api, current, user.id))) {
+		log(`${app.path}: keeping the token in ${ORG_ADMIN_TOKEN_KEY}`);
+		return;
+	}
+	setEnvValue(env, example, ORG_ADMIN_TOKEN_KEY, await createToken(api, user.id));
+	log(`${app.path}: wrote a token for service user "${userName}" (${ORG_ADMIN_ROLE}) to ${ORG_ADMIN_TOKEN_KEY} in ${app.path}/.env`);
 }
 
 /** Generated apps, recognized by the variables in their `.env.example`. */
@@ -515,6 +545,7 @@ async function setupLocal(
 			chmodSync(keyFile, 0o600);
 			log(`${app.path}: created a key for API application "${app.name}" in ${relative(root, keyFile)}`);
 		}
+		if (parseEnv(example).has(ORG_ADMIN_TOKEN_KEY)) await provisionOrgAdmin(api, root, app, log);
 		const port = appEnv.get("PORT");
 		if (port) apiUrls.set(app.name, `http://localhost:${port}`);
 	}

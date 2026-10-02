@@ -66,6 +66,8 @@ function fakeZitadel() {
 		Object.fromEntries(Object.entries(body).filter(([, value]) => value !== false && value !== ""));
 	const flagsOnly = (settings: Record<string, unknown>) =>
 		JSON.stringify(Object.entries(settings).filter(([, value]) => value !== false).sort(([a], [b]) => a.localeCompare(b)));
+	const instanceMembers: { userId: string; roles: string[] }[] = [];
+	const tokens = new Map<string, string>();
 	let next = 100;
 	const json = (body: unknown, status = 200) =>
 		new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -94,6 +96,28 @@ function fakeZitadel() {
 		}
 		if (path === "/management/v1/users/_search") {
 			return json({ result: users.filter((u) => u.userName === body.queries[0].userNameQuery.userName) });
+		}
+		if (path === "/management/v1/users/machine") {
+			const user = { id: `machine${next++}`, userName: body.userName, machine: {} };
+			users.push(user as never);
+			return json({ userId: user.id });
+		}
+		const pat = path.match(/^\/management\/v1\/users\/([^/]+)\/pats$/);
+		if (pat && method === "POST") {
+			const token = `pat-${next++}`;
+			tokens.set(token, pat[1]);
+			return json({ token });
+		}
+		if (path === "/auth/v1/users/me") {
+			const userId = tokens.get(String(new Headers(init?.headers).get("Authorization")).replace("Bearer ", ""));
+			return userId ? json({ user: { id: userId } }) : json({ message: "invalid token" }, 401);
+		}
+		if (path === "/admin/v1/members/_search") {
+			return json({ result: instanceMembers.filter((m) => m.userId === body.queries[0].userIdQuery.userId) });
+		}
+		if (path === "/admin/v1/members" && method === "POST") {
+			instanceMembers.push({ userId: body.userId, roles: body.roles });
+			return json({});
 		}
 		if (path === "/v2/users/human") {
 			const user = { id: `user${next++}`, userName: body.username, password: body.password.password };
@@ -187,7 +211,7 @@ function fakeZitadel() {
 		}
 		return json({ message: `unexpected ${method} ${path}` }, 500);
 	}) as typeof fetch;
-	return { calls, fetcher, projects, apps, keys, roles, users, grants, loginPolicy, smtp, smtpPasswords };
+	return { calls, fetcher, projects, apps, keys, roles, users, grants, loginPolicy, smtp, smtpPasswords, instanceMembers, tokens };
 }
 
 function deps(root: string, zitadel: ReturnType<typeof fakeZitadel>, logs: string[] = []) {
@@ -232,6 +256,47 @@ describe("setup", () => {
 
 		const created = zitadel.calls.find((call) => call.path.endsWith("/apps/oidc"));
 		expect(created?.body).toMatchObject({ redirectUris: ["http://localhost:3000/auth/callback"], devMode: true });
+	});
+
+	describe("an API that creates organizations", () => {
+		function tenants(): string {
+			const root = workspace();
+			write(
+				root,
+				"apps/tenants/.env.example",
+				"PORT=4003\nZITADEL_ISSUER=http://localhost:8081\nZITADEL_PROJECT_ID=replace-with-your-zitadel-project-id\nZITADEL_API_KEY_FILE=./secrets/zitadel-api-key.json\nZITADEL_ORG_ADMIN_TOKEN=\n",
+			);
+			return root;
+		}
+
+		test("gets a service user with the instance role and its token", async () => {
+			const root = tenants();
+			const zitadel = fakeZitadel();
+			const logs: string[] = [];
+			expect(await setup([], deps(root, zitadel, logs))).toBe(0);
+
+			const user = zitadel.users.find((item) => item.userName === "vern-tenants-orgs");
+			expect(user).toBeDefined();
+			expect(zitadel.instanceMembers).toEqual([{ userId: user!.id, roles: ["IAM_ORG_MANAGER"] }]);
+			const token = parseEnv(resolve(root, "apps/tenants/.env")).get("ZITADEL_ORG_ADMIN_TOKEN");
+			expect(zitadel.tokens.get(token!)).toBe(user!.id);
+			// An API that does not ask for the token does not get one.
+			expect(parseEnv(resolve(root, "apps/api/.env")).get("ZITADEL_ORG_ADMIN_TOKEN")).toBeUndefined();
+			expect(logs.join("\n")).not.toContain(token!);
+		});
+
+		test("keeps a token that still works when run again", async () => {
+			const root = tenants();
+			const zitadel = fakeZitadel();
+			await setup([], deps(root, zitadel));
+			const before = readFileSync(resolve(root, "apps/tenants/.env"), "utf8");
+
+			const logs: string[] = [];
+			await setup([], deps(root, zitadel, logs));
+			expect(readFileSync(resolve(root, "apps/tenants/.env"), "utf8")).toBe(before);
+			expect(zitadel.instanceMembers).toHaveLength(1);
+			expect(logs.join("\n")).toContain("keeping the token in ZITADEL_ORG_ADMIN_TOKEN");
+		});
 	});
 
 	describe("with several APIs", () => {

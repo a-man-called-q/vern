@@ -214,6 +214,14 @@ roles) and writes its token to one app's `.env`:
 bun run zitadel:service-account -- --app user-management
 ```
 
+The token is stored as `ZITADEL_USER_ADMIN_TOKEN`. It manages every user of the
+organization and can grant them project roles, so keep it on the server. Running
+the command again changes nothing while the token still works; to rotate it,
+remove the variable and run it again. For a production ZITADEL, pass an IAM Owner
+token and the issuer:
+`ZITADEL_PAT=<token> bun run zitadel:service-account -- --app <name> --issuer https://auth.example.com`.
+`--help` lists the other options.
+
 A service that signs companies up creates organizations, which no organization
 role allows; it needs an instance role. `--instance-role IAM_ORG_MANAGER` grants
 it, and `--role none` skips the organization role:
@@ -227,14 +235,10 @@ That token can create organizations, give them project roles, and create their
 users, and it can also create projects, roles, and applications in the default
 organization. ZITADEL has no narrower role that creates organizations, so treat
 the token like a database password: server only, one service, rotated on a
-schedule.
-
-The token is stored as `ZITADEL_USER_ADMIN_TOKEN`. It manages every user of the
-organization and can grant them project roles, so keep it on the server. Running the command again changes nothing while the token
-still works; to rotate it, remove the variable and run it again. For a
-production ZITADEL, pass an IAM Owner token and the issuer:
-`ZITADEL_PAT=<token> bun run zitadel:service-account -- --app <name> --issuer https://auth.example.com`.
-`--help` lists the other options.
+schedule. It reaches every organization, your customers' included, so the service
+takes the organization from the caller's verified token, never from a request.
+A local `bun run setup` does this by itself for an Axum API whose `.env.example`
+declares `ZITADEL_ORG_ADMIN_TOKEN=`.
 
 ## Customize the login page
 

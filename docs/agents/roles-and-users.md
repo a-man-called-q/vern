@@ -95,6 +95,11 @@ bun run zitadel:service-account -- --app tenants --name tenants --role none \
   --instance-role IAM_ORG_MANAGER --env-key ZITADEL_ORG_ADMIN_TOKEN
 ```
 
+A local `bun run setup` does the same for an API whose `.env.example` declares
+`ZITADEL_ORG_ADMIN_TOKEN=`: it creates the service user and writes its token to
+that API's `.env`. In production you run the command above, with an IAM Owner
+token, and give the service the result as a secret.
+
 Everything above applies, and more:
 
 - The token reaches **every** organization, your customers' included. Take the
