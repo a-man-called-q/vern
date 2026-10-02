@@ -4,7 +4,7 @@ tasks:
     description: Run this Next.js app in development mode
     deps:
       - 'workspace:install'
-      - 'auth-server:dev'
+      - 'auth-server:up'
     toolchains: system
     preset: server
 

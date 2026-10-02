@@ -116,6 +116,10 @@ timeout.
   or its key is stale (ZITADEL's database was reset). Run `bun run setup`.
 - **`could not connect to the database`.** The service was started outside
   Moon. `moon run <name>:dev` runs `data:up` first.
+- **`Connection refused` in a test that uses Redis or ZITADEL.** Nothing
+  started the auth stack for it. Add `- 'auth-server:up'` to the `deps` of the
+  `test` task in the service's `moon.yml`, as `data:up` is there for the
+  database.
 - **Deploying a second service.** `deploy/compose` runs one web app and one
   API; its README ("More apps") shows how to add another. On Kubernetes every
   service is deployed.

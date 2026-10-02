@@ -96,7 +96,7 @@ export async function setupLocal(
 				if (!issuer) throw new Error("ZITADEL_ISSUER is not set in .env");
 				return issuer;
 			},
-			waitHint: "Check ZITADEL_ISSUER in .env and the auth stack (moon run auth-server:dev).",
+			waitHint: "Check ZITADEL_ISSUER in .env and the auth stack (moon run auth-server:up).",
 		},
 		deps,
 		log,

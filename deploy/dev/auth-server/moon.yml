@@ -1,5 +1,5 @@
 tasks:
-  dev:
+  up:
     command: docker compose --env-file .env -f docker-compose.yml up -d --wait
     description: Start local ZITADEL, PostgreSQL, and Redis containers
     deps:
@@ -8,6 +8,17 @@ tasks:
     options:
       cache: false
       envFile: true
+      persistent: false
+
+  # The name the stack had before `up`, kept for a project whose apps depend on
+  # it. A task named `dev` does not run in CI, so a `test` task depends on `up`.
+  dev:
+    description: Start the auth stack (the same as up)
+    deps:
+      - 'up'
+    toolchains: system
+    options:
+      cache: false
       persistent: false
 
   down:

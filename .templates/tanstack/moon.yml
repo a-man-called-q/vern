@@ -4,7 +4,7 @@ tasks:
     description: Run this TanStack dashboard in development mode
     deps:
       - 'workspace:install'
-      - 'auth-server:dev'
+      - 'auth-server:up'
     toolchains: system
     preset: server
 
