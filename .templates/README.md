@@ -3,6 +3,10 @@
 This directory contains the Moon code generation templates. Every template
 creates a project under `apps/<name>` and requires an explicit, unique local port.
 
+`web-base` is not generated on its own: it holds the files the TanStack and
+Next.js templates share, and both extend it. Change a shared file there once; a
+file in `tanstack/` or `next/` at the same path replaces the shared one.
+
 ## TanStack
 
 ```sh
