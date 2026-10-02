@@ -1,6 +1,9 @@
 projects:
   globs:
+    # Web apps, Axum APIs, and the Compose stacks they run on; see AGENTS.md.
     - 'apps/*/moon.yml'
+    - 'services/*/moon.yml'
+    - 'infra/*/moon.yml'
     - 'packages/*/moon.yml'
   sources:
     workspace: '.'

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { writeJson } from "../lib/files";
+import { AUTH_SERVER } from "../lib/projects";
 import { git, gitTry, run } from "../lib/run";
 import {
 	CONFIG_PATH,
@@ -9,7 +10,7 @@ import {
 	UPSTREAM_BRANCH,
 	UPSTREAM_URL,
 } from "./config";
-import { listTextFiles } from "./files";
+import { isVernScript, listTextFiles } from "./files";
 import { rebrandText, replaceIdentity, validateIdentity } from "./identity";
 
 export interface Options {
@@ -17,22 +18,6 @@ export interface Options {
 	slug: string;
 	apply: boolean;
 	base?: string;
-}
-
-// The rename and update code names Vern on purpose (the upstream it follows,
-// the identity it renames from), so a rename leaves it alone.
-const PROTECTED_SCRIPTS = [
-	"scripts/project/",
-	"scripts/doctor/",
-	"scripts/rename-project.ts",
-	"scripts/update-project.ts",
-	"scripts/doctor.ts",
-];
-
-function isProtectedScript(path: string): boolean {
-	return PROTECTED_SCRIPTS.some((prefix) =>
-		prefix.endsWith("/") ? path.startsWith(prefix) : path === prefix,
-	);
 }
 
 function fetchUpstream(root: string, url: string, branch: string): string {
@@ -74,12 +59,12 @@ function resolveBase(root: string, url: string, branch: string, explicit?: strin
 
 function checkComposeData(root: string, oldName: string, newName: string): void {
 	if (oldName === newName) return;
-	const compose = resolve(root, "apps/auth-server/docker-compose.yml");
+	const compose = resolve(root, `${AUTH_SERVER}/docker-compose.yml`);
 	if (!existsSync(compose)) return;
-	// The stack cannot start without apps/auth-server/.env (the compose file requires
+	// The stack cannot start without infra/auth-server/.env (the compose file requires
 	// ZITADEL_VERSION from it), so a tree without one owns no containers or volumes.
 	// Any `<oldName>` project Docker knows about then belongs to another checkout.
-	if (!existsSync(resolve(root, "apps/auth-server/.env"))) return;
+	if (!existsSync(resolve(root, `${AUTH_SERVER}/.env`))) return;
 	const volumeList = run("docker", ["volume", "ls", "--format", "{{.Name}}"], {
 		cwd: root,
 		allowFailure: true,
@@ -106,7 +91,7 @@ function checkComposeData(root: string, oldName: string, newName: string): void 
 }
 
 function composeProjectName(root: string): string | undefined {
-	const path = resolve(root, "apps/auth-server/docker-compose.yml");
+	const path = resolve(root, `${AUTH_SERVER}/docker-compose.yml`);
 	if (!existsSync(path)) return undefined;
 	const match = readFileSync(path, "utf8").match(/^name:\s*([^\s#]+)/m);
 	return match?.[1];
@@ -124,7 +109,7 @@ export function renameProject(root: string, options: Options): string[] {
 
 	const changed: Array<{ path: string; content: string }> = [];
 	for (const path of listTextFiles(root)) {
-		if (isProtectedScript(path)) continue;
+		if (isVernScript(path)) continue;
 		const absolute = resolve(root, path);
 		const source = readFileSync(absolute, "utf8");
 		const content = rebrandText(path, source, from, to);

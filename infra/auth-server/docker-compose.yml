@@ -66,7 +66,7 @@ services:
       - traefik.http.routers.auth-login.priority=250
 
   zitadel-api:
-    image: ghcr.io/zitadel/zitadel:${ZITADEL_VERSION:?Set ZITADEL_VERSION in apps/auth-server/.env (see .env.example)}
+    image: ghcr.io/zitadel/zitadel:${ZITADEL_VERSION:?Set ZITADEL_VERSION in infra/auth-server/.env (see .env.example)}
     restart: unless-stopped
     user: "0"
     command: start-from-init --masterkey "${ZITADEL_MASTERKEY:-MasterkeyNeedsToHave32Characters}"
@@ -165,7 +165,7 @@ services:
 
   zitadel-login:
     # Built from https://github.com/a-man-called-q/vern-zitadel-login; must match ZITADEL_VERSION.
-    image: ${ZITADEL_LOGIN_IMAGE:?Set ZITADEL_LOGIN_IMAGE in apps/auth-server/.env (see .env.example)}
+    image: ${ZITADEL_LOGIN_IMAGE:?Set ZITADEL_LOGIN_IMAGE in infra/auth-server/.env (see .env.example)}
     restart: unless-stopped
     environment:
       ZITADEL_API_URL: http://zitadel-api:8080

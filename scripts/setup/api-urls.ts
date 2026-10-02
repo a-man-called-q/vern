@@ -1,4 +1,4 @@
-import type { App } from "../lib/apps";
+import type { App } from "../lib/projects";
 
 /** The variable that holds the URL of an Axum app: `inventory` becomes `INVENTORY_API_URL`. */
 export function apiUrlKey(name: string): string {
@@ -9,7 +9,7 @@ export function apiUrlKey(name: string): string {
 
 function notAnApi(app: App, what: string, names: string[]): Error {
 	return new Error(
-		`${app.path}: ${what} an Axum API with a PORT under apps/` + (names.length > 0 ? ` (found: ${names.join(", ")})` : ""),
+		`${app.path}: ${what} an Axum API with a PORT under services/` + (names.length > 0 ? ` (found: ${names.join(", ")})` : ""),
 	);
 }
 

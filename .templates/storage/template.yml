@@ -1,6 +1,6 @@
 title: S3-compatible object storage
 description: Generate a local S3-compatible object store (SeaweedFS) with one bucket, for the API that handles uploads.
-destination: '/apps/[name | kebab_case]'
+destination: '/infra/[name | kebab_case]'
 variables:
   name:
     type: string

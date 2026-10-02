@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util";
-import { appPath as resolveAppPath } from "./lib/apps";
+import { projectPath } from "./lib/projects";
 import { runCommand } from "./lib/cli";
 import { envFiles, parseEnv, readEffectiveEnv, setEnvValue } from "./lib/env";
 import { ROOT } from "./lib/paths";
@@ -14,9 +14,9 @@ const DEFAULT_ENV_KEY = "ZITADEL_USER_ADMIN_TOKEN";
 
 const USAGE = `Create a service account an app can use to manage users, and give the app its token.
 
-Usage: bun run zitadel:service-account -- --app <apps folder> [options]
+Usage: bun run zitadel:service-account -- --app <name> [options]
 
-  --app <name>         Folder under apps/ whose .env receives the token
+  --app <name>         The web app or API whose .env receives the token
   --name <user name>   ZITADEL user name (default: <project slug>-user-admin)
   --role <role>        Organization role to grant (default: ${DEFAULT_ROLE}, which
                        manages users and grants them project roles); "none" grants
@@ -69,8 +69,8 @@ export async function main(argv: string[], deps: ServiceAccountDeps = {}): Promi
 		log(USAGE);
 		return 0;
 	}
-	if (!values.app) throw new Error("Pass --app <apps folder>, the app that receives the token");
-	const appPath = resolveAppPath(root, values.app);
+	if (!values.app) throw new Error("Pass --app <name>, the app that receives the token");
+	const appPath = projectPath(root, values.app);
 	const envKey = values["env-key"] ?? DEFAULT_ENV_KEY;
 	if (!/^[A-Z][A-Z0-9_]*$/.test(envKey)) throw new Error("--env-key must be an upper-case variable name");
 	const role = values.role ?? DEFAULT_ROLE;

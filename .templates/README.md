@@ -1,7 +1,9 @@
 # Moon generators
 
-This directory contains the Moon code generation templates. Every template
-creates a project under `apps/<name>` and requires an explicit, unique local port.
+This directory contains the Moon code generation templates. Each requires an
+explicit local port, and a name that no other project uses. The web apps go to
+`apps/<name>`, the Axum APIs to `services/<name>`, and the PostgreSQL, bus, and
+storage stacks to `infra/<name>`.
 
 `web-base` is not generated on its own: it holds the files the TanStack and
 Next.js templates share, and both extend it. Change a shared file there once; a

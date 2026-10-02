@@ -14,7 +14,7 @@ function workspace(files: Record<string, string>): string {
 	roots.push(root);
 	for (const [path, content] of Object.entries({
 		".env.example": "ZITADEL_ISSUER=http://localhost:8081\nREDIS_URL=redis://localhost:6379\n",
-		"apps/auth-server/.env.example": "AUTH_HTTP_PORT=8081\nREDIS_PORT=6379\n",
+		"infra/auth-server/.env.example": "AUTH_HTTP_PORT=8081\nREDIS_PORT=6379\n",
 		...files,
 	})) {
 		mkdirSync(dirname(resolve(root, path)), { recursive: true });
@@ -28,8 +28,8 @@ describe("checkPorts", () => {
 		const root = workspace({
 			"apps/web/moon.yml": "",
 			"apps/web/.env.example": "PORT=3000\nAPP_URL=http://localhost:3000\n",
-			"apps/api/moon.yml": "",
-			"apps/api/.env.example": "PORT=4000\n",
+			"services/api/moon.yml": "",
+			"services/api/.env.example": "PORT=4000\n",
 		});
 		expect(checkPorts(root)).toEqual([]);
 	});
@@ -40,8 +40,8 @@ describe("checkPorts", () => {
 			"apps/web/.env.example": "PORT=3000\n",
 			"apps/admin/moon.yml": "",
 			"apps/admin/.env": "PORT=3000\n",
-			"apps/api/moon.yml": "",
-			"apps/api/.env.example": "PORT=8081\n",
+			"services/api/moon.yml": "",
+			"services/api/.env.example": "PORT=8081\n",
 		});
 		expect(checkPorts(root)).toEqual([
 			"Port 8081 is assigned to multiple projects: auth-server (ZITADEL), api (8081).",
@@ -54,9 +54,9 @@ describe("checkPorts", () => {
 			".env": "ZITADEL_ISSUER=http://localhost:9999\n",
 			"apps/web/moon.yml": "",
 			"apps/web/.env.example": "PORT=3000\nAPP_URL=http://localhost:3001\n",
-			"apps/api/moon.yml": "",
-			"apps/api/.env.example": "PORT=80\n",
-			"apps/worker/moon.yml": "",
+			"services/api/moon.yml": "",
+			"services/api/.env.example": "PORT=80\n",
+			"services/worker/moon.yml": "",
 			// A folder without moon.yml is not a project.
 			"apps/notes/.env.example": "PORT=3000\n",
 		});

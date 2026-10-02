@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseEnv } from "../lib/env";
+import { AUTH_SERVER } from "../lib/projects";
 import { errorMessage } from "../lib/errors";
 import { ALLOW_REGISTER_KEY, parseAllowRegister } from "../zitadel/login-policy";
 import { readProjectRoles, ROLES_FILE } from "../zitadel/roles";
@@ -41,7 +42,7 @@ export function checkAccess(root: string, report: Report): void {
 		report("FAIL", errorMessage(error));
 	}
 
-	for (const dir of ["apps/auth-server", "deploy"]) {
+	for (const dir of [AUTH_SERVER, "deploy"]) {
 		const file = envFileOf(root, dir);
 		if (!file) continue;
 		try {

@@ -15,14 +15,16 @@ against.
 | `.templates/postgres` | Optional PostgreSQL for the APIs' own data, one database per API |
 | `.templates/bus` | Optional NATS JetStream, the event bus between APIs generated with `--events` |
 | `.templates/storage` | Optional S3-compatible object store for uploads, with one bucket |
-| `apps/auth-server` | Local Docker Compose stack: ZITADEL, its Login App, PostgreSQL, Redis, and Mailpit (a local inbox for the email ZITADEL sends) |
+| `infra/auth-server` | Local Docker Compose stack: ZITADEL, its Login App, PostgreSQL, Redis, and Mailpit (a local inbox for the email ZITADEL sends) |
 | `deploy` | Production Docker Compose stack for one server, with HTTPS |
 | `apps/storybook` | Storybook workbench for the shared UI components |
 | `packages/ui` | Shared shadcn components and design tokens (`@vern/ui`) |
 | `scripts/` | Project tools: setup, provisioning, rename, update, and doctor |
 
-Apps are generated from the templates into `apps/<name>`, each with a
-production Dockerfile. The web apps keep OAuth tokens on the server in Redis;
+Projects are generated from the templates by kind: web apps into
+`apps/<name>`, Axum APIs into `services/<name>`, and the PostgreSQL, bus, and
+storage stacks into `infra/<name>`, next to the auth stack. Each app and API has
+a production Dockerfile. The web apps keep OAuth tokens on the server in Redis;
 the browser only gets an HTTP-only session cookie. Each generated app's README
 covers its code and a production checklist.
 
@@ -72,7 +74,8 @@ bun run setup
 moon run :dev
 ```
 
-- `moon generate` creates each app under `apps/`. Use
+- `moon generate` creates each web app under `apps/` and each API under
+  `services/`. Use
   `moon generate next -- --name web --port 3001` for a Next.js app instead of (or
   next to) the TanStack one, and add `--no-include_demos` to leave out the demo
   routes and the sample dashboard: you get a signed-in shell with a working
@@ -93,14 +96,14 @@ moon run :dev
   plus Storybook.
 
 Open <http://localhost:3000> and sign in as `zitadel-admin@vern.localhost` with
-the password from `apps/auth-server/.env` (`Password1!` by default). The ZITADEL
+the password from `infra/auth-server/.env` (`Password1!` by default). The ZITADEL
 Console is at <http://localhost:8081/ui/console/>. Stop the auth containers
 (keeping their data) with `moon run auth-server:down`.
 
 `bun run setup` signs in to ZITADEL as the `vern-setup` service account, whose
 token ZITADEL creates when it first sets up its database. A database created
 before that account existed needs a reset
-(`docker compose --env-file apps/auth-server/.env -f apps/auth-server/docker-compose.yml down -v`)
+(`docker compose --env-file infra/auth-server/.env -f infra/auth-server/docker-compose.yml down -v`)
 or a token of a service user with the IAM Owner role in `ZITADEL_PAT`.
 
 To manage one app's OIDC application by hand, use
@@ -197,7 +200,7 @@ belongs to their own.
   `--no-seed` skips it on a local ZITADEL too.
 - **The password is yours, not shared.** The seeded users share one password,
   which `setup` generates into `ZITADEL_SEED_PASSWORD` in
-  `apps/auth-server/.env` the first time it creates a user (set it there first to
+  `infra/auth-server/.env` the first time it creates a user (set it there first to
   choose your own). It is never committed or printed, because the auth stack
   listens on every network interface of your machine.
 - **Additive.** A user that already exists is left as it is, password included,
@@ -248,9 +251,9 @@ them. Change them at the level you need:
 1. **Colors, logo, and font**: ZITADEL's branding settings in the Console, per
    instance or per organization. The shell's buttons and links follow the
    primary color, and an uploaded logo replaces the brand logo. The initial
-   colors are the `LABELPOLICY` values in `apps/auth-server/docker-compose.yml`;
+   colors are the `LABELPOLICY` values in `infra/auth-server/docker-compose.yml`;
    ZITADEL only applies them when it creates its database.
-2. **Text and images of the shell**: edit `apps/auth-server/brand/`.
+2. **Text and images of the shell**: edit `infra/auth-server/brand/`.
    `brand.json` holds the headline, description, highlights, and image paths;
    the SVGs next to it are served under `/brand/`. Changes show on the next page
    load. See the [brand file reference](https://github.com/a-man-called-q/vern-zitadel-login#brand-file).
@@ -258,7 +261,7 @@ them. Change them at the level you need:
    [vern-zitadel-login](https://github.com/a-man-called-q/vern-zitadel-login).
    `npx create-vern login`, run inside your project, clones it next to the
    project as `<slug>-login/`, forks it on GitHub, builds an image, and points
-   `apps/auth-server/.env` at it (`create-vern` offers the same when it creates
+   `infra/auth-server/.env` at it (`create-vern` offers the same when it creates
    the project). To deploy your login, publish an image from your fork (see its
    README) and set `ZITADEL_LOGIN_IMAGE` to that tag.
 
@@ -268,7 +271,7 @@ A new project has no "Sign up" link on the sign-in page: an administrator
 creates the accounts, locally from `seed-users.json` and in production in the
 Console or from your product. A visitor who registered on their own would get an
 account with no roles, which is harmless but not what an admin screen promises.
-`ZITADEL_ALLOW_REGISTER` in `apps/auth-server/.env` (and `deploy/.env`) holds
+`ZITADEL_ALLOW_REGISTER` in `infra/auth-server/.env` (and `deploy/.env`) holds
 the choice, `false` unless you set it to `true`.
 
 ZITADEL reads the variable only when it creates its database, like the initial
@@ -367,7 +370,7 @@ The rename updates text references to Vern (URLs and container images keep
 their names) and records the project identity and the Vern commit it started
 from in `.vern/config.json`. If Git history cannot identify that commit, pass
 it with `--base <sha>`. A checkout that has already started its auth stack
-(it has `apps/auth-server/.env`) needs Docker running for the rename, and its
+(it has `infra/auth-server/.env`) needs Docker running for the rename, and its
 existing auth volumes must be migrated by hand first. A fresh copy without that
 file owns no Docker data, so it is renamed without looking at Docker, whatever
 other Vern checkouts have on the machine.
@@ -387,6 +390,18 @@ bun run project:update -- --apply
 
 `npx create-vern update` runs the same script from any folder of the project and
 takes the same `--apply` and `--continue` flags.
+
+A project made before APIs moved to `services/` and the Compose stacks to
+`infra/` gets the new layout from its next update. That update still runs the
+project's old updater: it moves `auth-server`, and usually stops on conflicts
+in `scripts/` that a rename had only rebranded. Resolve any other conflict, then
+`bun run project:update -- --continue` settles those by itself and moves the
+generated APIs and stacks with `git mv` (local `.env` files and keys go along),
+fixing the paths in them and in `deploy/`. A file of `apps/auth-server` you
+changed yourself stays there for you to carry over. If the update did not stop,
+`bun run project:doctor` names the folders to move and
+`bun run project:update -- --migrate` moves them. A rename no longer touches
+`scripts/`, which merges as Vern ships it.
 
 The updater needs a clean working tree, so commit the rename and your changes
 first. Generated app source is not synchronized, but its dependency manifests

@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { sha256 } from "../lib/files";
 import { ROOT } from "../lib/paths";
 import { run } from "../lib/run";
 import { type ProjectConfig, readConfig } from "./config";
@@ -18,6 +19,7 @@ import { rebrandText, replaceIdentity } from "./identity";
 import { fitLogoText } from "./logo";
 import { renderPackageTemplate } from "./package-template";
 import { renameProject } from "./rename";
+import { settleConflicts } from "./merge";
 import { updateProject } from "./update";
 
 const tempRoots: string[] = [];
@@ -167,9 +169,10 @@ describe("rename-project", () => {
 		expect(readFileSync(resolve(root, ".gitignore"), "utf8")).toContain(
 			".vern/update-state.json",
 		);
+		// Scripts are Vern's tooling: a rename leaves them as they are.
 		expect(
 			readFileSync(resolve(root, "scripts/check-ports.ts"), "utf8"),
-		).toContain("'acme-platform'");
+		).toBe("const label = 'vern';\n");
 		expect(readConfig(root)).toEqual({
 			schemaVersion: 1,
 			project: { name: "Acme Platform", slug: "acme-platform" },
@@ -193,12 +196,12 @@ describe("rename-project", () => {
 		const base = initRepo(root, {
 			".gitignore": ".env\n",
 			"README.md": "# Vern\n",
-			"apps/auth-server/docker-compose.yml":
+			"infra/auth-server/docker-compose.yml":
 				"name: vern-auth\nvolumes:\n  postgres-data:\n",
 		});
 		git(root, "update-ref", "refs/vern/upstream-main", base);
 		// The checkout has started its stack: it has an .env, so the volumes are its own.
-		write(root, "apps/auth-server/.env", "ZITADEL_VERSION=v1\n");
+		write(root, "infra/auth-server/.env", "ZITADEL_VERSION=v1\n");
 		installFakeDocker("vern-auth_postgres-data");
 		expect(() =>
 			renameProject(root, { name: "Acme", slug: "acme", apply: true, base }),
@@ -211,11 +214,11 @@ describe("rename-project", () => {
 		const root = tempRoot("vern-fresh-copy-rename-test-");
 		const base = initRepo(root, {
 			"README.md": "# Vern\n",
-			"apps/auth-server/docker-compose.yml":
+			"infra/auth-server/docker-compose.yml":
 				"name: vern-auth\nvolumes:\n  postgres-data:\n",
 		});
 		git(root, "update-ref", "refs/vern/upstream-main", base);
-		// No apps/auth-server/.env: this copy never started anything. The fake Docker
+		// No infra/auth-server/.env: this copy never started anything. The fake Docker
 		// reports another checkout's volume and a running container, and logs any call.
 		const log = installFakeDocker("vern-auth_postgres-data", "abc123");
 		renameProject(root, { name: "Acme", slug: "acme", apply: true, base });
@@ -231,10 +234,10 @@ describe("rename-project", () => {
 		const base = initRepo(root, {
 			".gitignore": ".env\n",
 			"README.md": "# Vern\n",
-			"apps/auth-server/docker-compose.yml": "name: vern-auth\n",
+			"infra/auth-server/docker-compose.yml": "name: vern-auth\n",
 		});
 		git(root, "update-ref", "refs/vern/upstream-main", base);
-		write(root, "apps/auth-server/.env", "ZITADEL_VERSION=v1\n");
+		write(root, "infra/auth-server/.env", "ZITADEL_VERSION=v1\n");
 		installFakeDocker("", "abc123");
 		expect(() =>
 			renameProject(root, { name: "Acme", slug: "acme", apply: true, base }),
@@ -271,7 +274,7 @@ describe("rename-project", () => {
 			"README.md": "# Vern\n\nUse @vern/ui in vern-auth.\n",
 			"package.json": '{"name":"vern","private":true}\n',
 			"packages/ui/package.json": '{"name":"@vern/ui"}\n',
-			"apps/auth-server/docker-compose.yml":
+			"infra/auth-server/docker-compose.yml":
 				"name: vern-auth\nnetworks:\n  auth:\n    name: ${AUTH_NETWORK_NAME:-vern-auth}\n",
 		});
 		git(root, "update-ref", "refs/vern/upstream-main", base);
@@ -292,7 +295,7 @@ describe("rename-project", () => {
 				.name,
 		).toBe("@testing-vern-aja/ui");
 		const compose = readFileSync(
-			resolve(root, "apps/auth-server/docker-compose.yml"),
+			resolve(root, "infra/auth-server/docker-compose.yml"),
 			"utf8",
 		);
 		expect(compose).toContain("name: testing-vern-aja-auth\n");
@@ -310,10 +313,10 @@ describe("rename-project", () => {
 
 	describe("logo text", () => {
 		const logo = readFileSync(
-			resolve(ROOT, "apps/auth-server/brand/logo-light.svg"),
+			resolve(ROOT, "infra/auth-server/brand/logo-light.svg"),
 			"utf8",
 		);
-		const logoPath = "apps/auth-server/brand/logo-light.svg";
+		const logoPath = "infra/auth-server/brand/logo-light.svg";
 		const vern = { name: "Vern", slug: "vern" };
 		const textTag = (svg: string) => svg.match(/<text\b[^>]*>[^<]*<\/text>/)?.[0];
 
@@ -375,9 +378,9 @@ describe("update-project", () => {
 		const base = initRepo(upstream, {
 			".gitignore": ".vern/update-state.json\n",
 			"README.md": "Project: Vern\nFeature: one\n",
-			"apps/auth-server/moon.yml": "tasks: {}\n",
-			"apps/auth-server/brand.txt": "Product Vern\nVariant baseline\n",
-			"apps/auth-server/conflict.txt": "shared line\n",
+			"infra/auth-server/moon.yml": "tasks: {}\n",
+			"infra/auth-server/brand.txt": "Product Vern\nVariant baseline\n",
+			"infra/auth-server/conflict.txt": "shared line\n",
 			"packages/ui/token.txt": "color: violet\n",
 			".templates/tanstack/package.json.tera":
 				'{\n  "name": "{{ name | kebab_case }}",\n  "dependencies": {\n{% if include_demos %}    "chart": "^1.0.0",\n{% endif %}    "@acme/ui": "workspace:*",\n    "demo": "^1.0.0"\n  }\n}\n',
@@ -392,10 +395,10 @@ describe("update-project", () => {
 		write(consumer, "README.md", "Project: Acme\nFeature: one\n");
 		write(
 			consumer,
-			"apps/auth-server/brand.txt",
+			"infra/auth-server/brand.txt",
 			"Product Acme\nVariant baseline\n",
 		);
-		write(consumer, "apps/auth-server/conflict.txt", "local line\n");
+		write(consumer, "infra/auth-server/conflict.txt", "local line\n");
 		write(consumer, "apps/dashboard/moon.yml", "tasks: {}\n");
 		write(
 			consumer,
@@ -407,15 +410,15 @@ describe("update-project", () => {
 			"apps/dashboard/package.json",
 			'{"name":"dashboard","dependencies":{"demo":"^1.0.0"}}\n',
 		);
-		write(consumer, "apps/service/moon.yml", "tasks: {}\n");
+		write(consumer, "services/service/moon.yml", "tasks: {}\n");
 		write(
 			consumer,
-			"apps/service/Cargo.toml",
+			"services/service/Cargo.toml",
 			'[package]\nname = "service"\nversion = "0.1.0"\n\n[dependencies]\nasync-trait = "0.1"\n',
 		);
 		write(
 			consumer,
-			"apps/service/src/main.rs",
+			"services/service/src/main.rs",
 			'fn main() { println!("custom service source"); }\n',
 		);
 		write(
@@ -436,10 +439,10 @@ describe("update-project", () => {
 		write(upstream, "README.md", "Project: Vern\nFeature: two\n");
 		write(
 			upstream,
-			"apps/auth-server/brand.txt",
+			"infra/auth-server/brand.txt",
 			"Product Vern\nVariant updated upstream\n",
 		);
-		write(upstream, "apps/auth-server/conflict.txt", "upstream line\n");
+		write(upstream, "infra/auth-server/conflict.txt", "upstream line\n");
 		write(upstream, "docs/upstream.md", "Added by Vern\n");
 		const target = commitAll(upstream, "update template");
 		installFakeCommands();
@@ -453,7 +456,7 @@ describe("update-project", () => {
 			"vern/update-" + target.slice(0, 8),
 		);
 		expect(
-			readFileSync(resolve(consumer, "apps/auth-server/brand.txt"), "utf8"),
+			readFileSync(resolve(consumer, "infra/auth-server/brand.txt"), "utf8"),
 		).toBe("Product Acme\nVariant updated upstream\n");
 		expect(readFileSync(resolve(consumer, "README.md"), "utf8")).toBe(
 			"Project: Acme\nFeature: two\n",
@@ -462,7 +465,7 @@ describe("update-project", () => {
 			"Added by Acme\n",
 		);
 		expect(
-			readFileSync(resolve(consumer, "apps/auth-server/conflict.txt"), "utf8"),
+			readFileSync(resolve(consumer, "infra/auth-server/conflict.txt"), "utf8"),
 		).toContain("<<<<<<<");
 		expect(
 			readFileSync(resolve(consumer, "apps/dashboard/src/main.ts"), "utf8"),
@@ -471,7 +474,7 @@ describe("update-project", () => {
 
 		write(
 			consumer,
-			"apps/auth-server/conflict.txt",
+			"infra/auth-server/conflict.txt",
 			"manually resolved line\n",
 		);
 		updateProject(consumer, { apply: false, continueUpdate: true });
@@ -484,10 +487,10 @@ describe("update-project", () => {
 			).dependencies.demo,
 		).toBe("^2.0.0");
 		expect(
-			readFileSync(resolve(consumer, "apps/service/src/main.rs"), "utf8"),
+			readFileSync(resolve(consumer, "services/service/src/main.rs"), "utf8"),
 		).toBe('fn main() { println!("custom service source"); }\n');
 		expect(
-			readFileSync(resolve(consumer, "apps/service/Cargo.toml"), "utf8"),
+			readFileSync(resolve(consumer, "services/service/Cargo.toml"), "utf8"),
 		).toContain('async-trait = "0.2"');
 		const tanstackTemplateText = readFileSync(
 			resolve(consumer, ".templates/tanstack/package.json.tera"),
@@ -525,6 +528,84 @@ describe("update-project", () => {
 		);
 		expect(readConfig(consumer)?.upstream.lastSyncedSha).toBe(target);
 		expect(existsState(consumer)).toBe(false);
+	});
+});
+
+describe("update-project and scripts", () => {
+	/** A consumer whose scripts an older rename rebranded, and an upstream that changed them. */
+	function renamedConsumer() {
+		const upstream = tempRoot("vern-upstream-scripts-");
+		const consumer = tempRoot("vern-consumer-scripts-");
+		const base = initRepo(upstream, {
+			"README.md": "Project: Vern\n",
+			"scripts/setup.ts": 'const fallback = "Vern";\nexport const steps = 1;\n',
+			"scripts/zitadel-smtp.ts": 'const DESCRIPTION = "Vern";\n',
+			"scripts/custom.ts": 'const name = "Vern";\n',
+		});
+		git(consumer, "clone", upstream, ".");
+		git(consumer, "config", "user.name", "Vern Script Tests");
+		git(consumer, "config", "user.email", "vern-tests@example.test");
+		// What an older rename wrote: every script rebranded.
+		write(consumer, "README.md", "Project: Acme\n");
+		write(consumer, "scripts/setup.ts", 'const fallback = "Acme";\nexport const steps = 1;\n');
+		write(consumer, "scripts/zitadel-smtp.ts", 'const DESCRIPTION = "Acme";\n');
+		// A script the project changed itself.
+		write(consumer, "scripts/custom.ts", 'const name = "Acme";\nconst mine = true;\n');
+		write(
+			consumer,
+			".vern/config.json",
+			JSON.stringify(
+				{
+					schemaVersion: 1,
+					project: { name: "Acme", slug: "acme" },
+					upstream: { url: upstream, branch: "main", lastSyncedSha: base },
+				} satisfies ProjectConfig,
+				null,
+				2,
+			) + "\n",
+		);
+		commitAll(consumer, "renamed by an older rename");
+
+		write(upstream, "scripts/setup.ts", 'const fallback = "Vern";\nexport const steps = 2;\n');
+		rmSync(resolve(upstream, "scripts/zitadel-smtp.ts"));
+		write(upstream, "scripts/custom.ts", 'const name = "Vern";\nconst theirs = true;\n');
+		const target = commitAll(upstream, "move the scripts");
+		return { upstream, consumer, base, target };
+	}
+
+	test("takes upstream's scripts over copies a rename only rebranded", () => {
+		const { consumer } = renamedConsumer();
+		installFakeCommands();
+		updateProject(consumer, { apply: true, continueUpdate: false });
+		expect(readFileSync(resolve(consumer, "scripts/setup.ts"), "utf8")).toBe(
+			'const fallback = "Vern";\nexport const steps = 2;\n',
+		);
+		expect(existsSync(resolve(consumer, "scripts/zitadel-smtp.ts"))).toBe(false);
+		// A real local change still meets upstream's in a conflict.
+		expect(readFileSync(resolve(consumer, "scripts/custom.ts"), "utf8")).toContain("<<<<<<<");
+		expect(readStateForTest(consumer).phase).toBe("conflicts");
+	});
+
+	test("settles the conflicts an older updater left on such copies", () => {
+		const { consumer, base, target } = renamedConsumer();
+		git(consumer, "fetch", "origin", "main");
+		// What an older updater left: markers in one script, the other kept.
+		const markers = "<<<<<<< ours\nconst fallback = \"Acme\";\n=======\nconst fallback = \"Vern\";\n>>>>>>> theirs\n";
+		write(consumer, "scripts/setup.ts", markers);
+		const smtp = readFileSync(resolve(consumer, "scripts/zitadel-smtp.ts"));
+		const conflicts = [
+			{ path: "scripts/setup.ts", initialHash: sha256(markers) },
+			{ path: "scripts/zitadel-smtp.ts", initialHash: sha256(smtp) },
+			{ path: "README.md", initialHash: "changed-by-the-user" },
+		];
+		const config = readConfig(consumer) as ProjectConfig;
+		const { remaining, settled } = settleConflicts(consumer, config, base, target, conflicts);
+		expect(settled).toEqual(["scripts/setup.ts", "scripts/zitadel-smtp.ts"]);
+		expect(remaining.map((conflict) => conflict.path)).toEqual(["README.md"]);
+		expect(readFileSync(resolve(consumer, "scripts/setup.ts"), "utf8")).toBe(
+			'const fallback = "Vern";\nexport const steps = 2;\n',
+		);
+		expect(existsSync(resolve(consumer, "scripts/zitadel-smtp.ts"))).toBe(false);
 	});
 });
 

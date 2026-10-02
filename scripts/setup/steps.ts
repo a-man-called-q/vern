@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, relative } from "node:path";
-import type { App } from "../lib/apps";
+import type { App } from "../lib/projects";
 import { isUnset } from "../lib/env";
 import { createApiKey, keyIsKnown } from "../zitadel/api-keys";
 import type { ApiOptions } from "../zitadel/client";

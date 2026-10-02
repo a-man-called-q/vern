@@ -219,7 +219,7 @@ describe("zitadel:service-account", () => {
 	test("needs an app that exists, and a well-formed variable name", async () => {
 		const root = workspace();
 		await expect(run(root, fakeZitadel(), [])).rejects.toThrow("Pass --app");
-		await expect(run(root, fakeZitadel(), ["--app", "missing"])).rejects.toThrow("apps/missing does not exist");
+		await expect(run(root, fakeZitadel(), ["--app", "missing"])).rejects.toThrow("No project is named missing");
 		await expect(run(root, fakeZitadel(), ["--app", "admin", "--env-key", "bad key"])).rejects.toThrow("--env-key");
 	});
 

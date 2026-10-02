@@ -1,6 +1,6 @@
 import { copyFileSync, existsSync } from "node:fs";
 import { relative, resolve } from "node:path";
-import { findApps } from "../lib/apps";
+import { findApps } from "../lib/projects";
 import { envFiles, isUnset, parseEnv, readEffectiveEnv, setEnvValue } from "../lib/env";
 import type { ApiOptions } from "../zitadel/client";
 import { ALLOW_REGISTER_KEY, parseAllowRegister } from "../zitadel/login-policy";

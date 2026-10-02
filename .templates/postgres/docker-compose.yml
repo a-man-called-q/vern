@@ -1,5 +1,5 @@
 # The APIs' own data, separate from the PostgreSQL that ZITADEL uses in
-# apps/auth-server. The project name includes the repository folder, so two
+# infra/auth-server. The project name includes the repository folder, so two
 # projects on one machine do not share a volume.
 name: {{ workspace_root | split(pat="/") | last | kebab_case }}-{{ name | kebab_case }}
 

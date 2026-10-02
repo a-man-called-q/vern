@@ -156,7 +156,7 @@ a way in for an outside caller.
 ## Before calling it done
 
 ```sh
-cargo fmt                              # in apps/<service>
+cargo fmt                              # in services/<service>
 moon run <service>:check <service>:test
 ```
 

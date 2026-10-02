@@ -10,11 +10,13 @@ import {
 	UPDATE_STATE_PATH,
 } from "./config";
 import { updateDependencies, validateProject } from "./dependencies";
+import { migrateLayout, planLayoutMigration } from "./layout";
 import {
 	allChangedUpstreamPaths,
 	type Conflict,
 	mergeUpstreamFiles,
 	safeProjectPath,
+	settleConflicts,
 } from "./merge";
 
 interface UpdateState {
@@ -29,6 +31,20 @@ interface UpdateState {
 export interface Options {
 	apply: boolean;
 	continueUpdate: boolean;
+	/** Only move the project to the apps/, services/, infra/ layout. */
+	migrate?: boolean;
+}
+
+/** Moves the folders to the current layout, and says what it did. */
+function migrateAndReport(root: string): void {
+	const { moves, leftovers } = migrateLayout(root);
+	for (const move of moves) console.log("Moved " + move.from + " to " + move.to + ".");
+	if (leftovers.length > 0) {
+		console.log(
+			"These files of apps/auth-server stay where they are: they changed locally, or infra/auth-server has its own. Carry what you need over to infra/auth-server, then delete them:",
+		);
+		for (const path of leftovers) console.log("  " + path);
+	}
 }
 
 function readState(root: string): UpdateState | undefined {
@@ -111,6 +127,9 @@ function applyDependenciesAndValidation(
 	state: UpdateState,
 ): void {
 	if (state.phase === "dependencies") {
+		// An update from before the layout change ran the old updater, which could
+		// not move the folders; the dependency upgrades look for them in place.
+		migrateAndReport(root);
 		updateDependencies(root);
 		config.upstream.lastSyncedSha = state.targetSha;
 		writeJson(resolve(root, CONFIG_PATH), config);
@@ -125,6 +144,17 @@ function applyDependenciesAndValidation(
 }
 
 export function updateProject(root: string, options: Options): void {
+	if (options.migrate) {
+		if (git(root, "status", "--porcelain").stdout.trim())
+			throw new Error("Working tree must be clean before moving folders.");
+		if (planLayoutMigration(root).length === 0) {
+			console.log("The project already has the apps/, services/, infra/ layout.");
+			return;
+		}
+		migrateAndReport(root);
+		console.log("Review the moves with `git status`, run `moon run :check`, and commit.");
+		return;
+	}
 	const config = readConfig(root);
 	if (!config)
 		throw new Error(
@@ -138,6 +168,21 @@ export function updateProject(root: string, options: Options): void {
 		if (currentBranch !== state.branch)
 			throw new Error("Switch back to " + state.branch + " before continuing.");
 		if (state.phase === "conflicts") {
+			const { remaining, settled } = settleConflicts(
+				root,
+				config,
+				state.previousSha,
+				state.targetSha,
+				state.conflicts,
+			);
+			if (settled.length > 0) {
+				console.log(
+					"Merged again without a conflict (the rename had only rebranded them): " +
+						settled.join(", "),
+				);
+				state.conflicts = remaining;
+				writeState(root, state);
+			}
 			checkUnresolved(root, state);
 			state.phase = "dependencies";
 			writeState(root, state);
@@ -184,6 +229,7 @@ export function updateProject(root: string, options: Options): void {
 		throw new Error("Review branch already exists: " + branch);
 	}
 	git(root, "switch", "-c", branch);
+	migrateAndReport(root);
 	const merged = mergeUpstreamFiles(
 		root,
 		config,

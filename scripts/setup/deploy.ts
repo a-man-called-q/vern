@@ -1,6 +1,6 @@
 import { copyFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { findApps } from "../lib/apps";
+import { findApps } from "../lib/projects";
 import { envFiles, parseEnv, setEnvValue } from "../lib/env";
 import { ALLOW_REGISTER_KEY, parseAllowRegister } from "../zitadel/login-policy";
 import { readSmtpSettings } from "../zitadel/smtp";
@@ -41,7 +41,7 @@ export async function setupDeploy(
 	const web = apps.find((app) => app.kind === "web" && app.name === env.get("WEB_APP"));
 	const apiApp = apps.find((app) => app.kind === "api" && app.name === env.get("API_APP"));
 	if (!web) throw new Error(`WEB_APP=${env.get("WEB_APP") ?? ""} does not name a generated web app under apps/`);
-	if (!apiApp) throw new Error(`API_APP=${env.get("API_APP") ?? ""} does not name a generated Axum API under apps/`);
+	if (!apiApp) throw new Error(`API_APP=${env.get("API_APP") ?? ""} does not name a generated Axum API under services/`);
 
 	const secret = deps.randomSecret ?? randomSecret;
 	const generated: [string, () => string][] = [

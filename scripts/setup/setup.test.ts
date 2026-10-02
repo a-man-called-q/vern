@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { findApps } from "../lib/apps";
+import { findApps } from "../lib/projects";
 import { parseEnv } from "../lib/env";
 import { apiUrlKey } from "./api-urls";
 import { setup } from "./setup";
@@ -22,7 +22,7 @@ function workspace(): string {
 	const root = mkdtempSync(join(tmpdir(), "vern-setup-"));
 	tempDirs.push(root);
 	write(root, ".env.example", "ZITADEL_ISSUER=http://localhost:8081\nZITADEL_PROJECT_ID=replace-with-your-zitadel-project-id\n");
-	write(root, "apps/auth-server/.env.example", "ZITADEL_ORG_NAME=Vern\nZITADEL_ADMIN_USERNAME=zitadel-admin\n");
+	write(root, "infra/auth-server/.env.example", "ZITADEL_ORG_NAME=Vern\nZITADEL_ADMIN_USERNAME=zitadel-admin\n");
 	write(
 		root,
 		"apps/dashboard/.env.example",
@@ -30,7 +30,7 @@ function workspace(): string {
 	);
 	write(
 		root,
-		"apps/api/.env.example",
+		"services/api/.env.example",
 		"PORT=4000\nZITADEL_ISSUER=http://localhost:8081\nZITADEL_PROJECT_ID=replace-with-your-zitadel-project-id\nZITADEL_API_KEY_FILE=./secrets/zitadel-api-key.json\n",
 	);
 	mkdirSync(resolve(root, "apps/storybook"), { recursive: true });
@@ -243,16 +243,16 @@ describe("setup", () => {
 		const rootEnv = parseEnv(resolve(root, ".env"));
 		expect(rootEnv.get("ZITADEL_PROJECT_ID")).toBe("100");
 		expect(zitadel.projects).toEqual([{ id: "100", name: "Vern" }]);
-		expect(existsSync(resolve(root, "apps/auth-server/.env"))).toBe(true);
+		expect(existsSync(resolve(root, "infra/auth-server/.env"))).toBe(true);
 
 		const web = parseEnv(resolve(root, "apps/dashboard/.env"));
 		expect(web.get("ZITADEL_CLIENT_ID")).toBe("client-dashboard");
 		expect(web.get("SESSION_SECRET")).toBe("generated-secret");
 		expect(web.get("API_BASE_URL")).toBe("http://localhost:4000");
 
-		const api = parseEnv(resolve(root, "apps/api/.env"));
+		const api = parseEnv(resolve(root, "services/api/.env"));
 		expect(api.get("ZITADEL_PROJECT_ID")).toBe("100");
-		const keyFile = resolve(root, "apps/api/secrets/zitadel-api-key.json");
+		const keyFile = resolve(root, "services/api/secrets/zitadel-api-key.json");
 		expect(JSON.parse(readFileSync(keyFile, "utf8")).keyId).toBe("k1");
 		expect(statSync(keyFile).mode & 0o777).toBe(0o600);
 
@@ -265,7 +265,7 @@ describe("setup", () => {
 			const root = workspace();
 			write(
 				root,
-				"apps/tenants/.env.example",
+				"services/tenants/.env.example",
 				"PORT=4003\nZITADEL_ISSUER=http://localhost:8081\nZITADEL_PROJECT_ID=replace-with-your-zitadel-project-id\nZITADEL_API_KEY_FILE=./secrets/zitadel-api-key.json\nZITADEL_ORG_ADMIN_TOKEN=\n",
 			);
 			return root;
@@ -280,10 +280,10 @@ describe("setup", () => {
 			const user = zitadel.users.find((item) => item.userName === "vern-tenants-orgs");
 			expect(user).toBeDefined();
 			expect(zitadel.instanceMembers).toEqual([{ userId: user!.id, roles: ["IAM_ORG_MANAGER"] }]);
-			const token = parseEnv(resolve(root, "apps/tenants/.env")).get("ZITADEL_ORG_ADMIN_TOKEN");
+			const token = parseEnv(resolve(root, "services/tenants/.env")).get("ZITADEL_ORG_ADMIN_TOKEN");
 			expect(zitadel.tokens.get(token!)).toBe(user!.id);
 			// An API that does not ask for the token does not get one.
-			expect(parseEnv(resolve(root, "apps/api/.env")).get("ZITADEL_ORG_ADMIN_TOKEN")).toBeUndefined();
+			expect(parseEnv(resolve(root, "services/api/.env")).get("ZITADEL_ORG_ADMIN_TOKEN")).toBeUndefined();
 			expect(logs.join("\n")).not.toContain(token!);
 		});
 
@@ -291,11 +291,11 @@ describe("setup", () => {
 			const root = tenants();
 			const zitadel = fakeZitadel();
 			await setup([], deps(root, zitadel));
-			const before = readFileSync(resolve(root, "apps/tenants/.env"), "utf8");
+			const before = readFileSync(resolve(root, "services/tenants/.env"), "utf8");
 
 			const logs: string[] = [];
 			await setup([], deps(root, zitadel, logs));
-			expect(readFileSync(resolve(root, "apps/tenants/.env"), "utf8")).toBe(before);
+			expect(readFileSync(resolve(root, "services/tenants/.env"), "utf8")).toBe(before);
 			expect(zitadel.instanceMembers).toHaveLength(1);
 			expect(logs.join("\n")).toContain("keeping the token in ZITADEL_ORG_ADMIN_TOKEN");
 		});
@@ -306,7 +306,7 @@ describe("setup", () => {
 			const root = workspace();
 			write(
 				root,
-				"apps/ads-api/.env.example",
+				"services/ads-api/.env.example",
 				"PORT=4001\nZITADEL_ISSUER=http://localhost:8081\nZITADEL_PROJECT_ID=replace-with-your-zitadel-project-id\nZITADEL_API_KEY_FILE=./secrets/zitadel-api-key.json\n",
 			);
 			return root;
@@ -333,7 +333,7 @@ describe("setup", () => {
 			const root = twoApis();
 			write(root, "apps/dashboard/.env", "API_APP=billing\n");
 			await expect(setup([], deps(root, fakeZitadel()))).rejects.toThrow(
-				"apps/dashboard: API_APP=billing does not name an Axum API with a PORT under apps/ (found: ads-api, api)",
+				"apps/dashboard: API_APP=billing does not name an Axum API with a PORT under services/ (found: ads-api, api)",
 			);
 		});
 
@@ -377,7 +377,7 @@ describe("setup", () => {
 
 			write(root, "apps/dashboard/.env", "API_APPS=ads-api,billing\n");
 			await expect(setup([], deps(root, fakeZitadel()))).rejects.toThrow(
-				"apps/dashboard: API_APPS names billing, which is not an Axum API with a PORT under apps/ (found: ads-api, api)",
+				"apps/dashboard: API_APPS names billing, which is not an Axum API with a PORT under services/ (found: ads-api, api)",
 			);
 		});
 	});
@@ -392,7 +392,7 @@ describe("setup", () => {
 
 	test("says nothing about APIs when there are none", async () => {
 		const root = workspace();
-		rmSync(resolve(root, "apps/api"), { recursive: true });
+		rmSync(resolve(root, "services/api"), { recursive: true });
 		const logs: string[] = [];
 		await setup([], deps(root, fakeZitadel(), logs));
 		expect(logs.some((line) => line.includes("API_BASE_URL"))).toBe(false);
@@ -474,7 +474,7 @@ describe("setup", () => {
 			write(root, "seed-users.json", JSON.stringify(seed));
 			return root;
 		}
-		const passwordOf = (root: string) => parseEnv(resolve(root, "apps/auth-server/.env")).get("ZITADEL_SEED_PASSWORD");
+		const passwordOf = (root: string) => parseEnv(resolve(root, "infra/auth-server/.env")).get("ZITADEL_SEED_PASSWORD");
 
 		test("grants the admin and creates the users with a generated password, once", async () => {
 			const root = seeded();
@@ -492,8 +492,8 @@ describe("setup", () => {
 				{ userId: zitadel.users[1].id, projectId: "100", roleKeys: ["publisher"] },
 			]);
 			expect(passwordOf(root)).toBe("generated-secret");
-			expect(logs).toContain("Generated ZITADEL_SEED_PASSWORD in apps/auth-server/.env");
-			expect(logs).toContain("Seeded users: publisher@vern.localhost (password: ZITADEL_SEED_PASSWORD in apps/auth-server/.env)");
+			expect(logs).toContain("Generated ZITADEL_SEED_PASSWORD in infra/auth-server/.env");
+			expect(logs).toContain("Seeded users: publisher@vern.localhost (password: ZITADEL_SEED_PASSWORD in infra/auth-server/.env)");
 			expect(logs.join("\n")).not.toContain("generated-secret");
 
 			zitadel.calls.length = 0;
@@ -505,7 +505,7 @@ describe("setup", () => {
 
 		test("keeps a password that is already set", async () => {
 			const root = seeded();
-			write(root, "apps/auth-server/.env", "ZITADEL_SEED_PASSWORD=my-own-Passw0rd!\n");
+			write(root, "infra/auth-server/.env", "ZITADEL_SEED_PASSWORD=my-own-Passw0rd!\n");
 			const zitadel = fakeZitadel();
 			const logs: string[] = [];
 			await setup([], deps(root, zitadel, logs));
@@ -581,7 +581,7 @@ describe("setup", () => {
 
 		test("turns sign-up off on an instance that has it on, keeping the other settings", async () => {
 			const root = workspace();
-			write(root, "apps/auth-server/.env", "ZITADEL_ALLOW_REGISTER=false\n");
+			write(root, "infra/auth-server/.env", "ZITADEL_ALLOW_REGISTER=false\n");
 			const zitadel = fakeZitadel();
 			zitadel.loginPolicy.settings.allowRegister = true;
 			const logs: string[] = [];
@@ -604,13 +604,13 @@ describe("setup", () => {
 				"passwordCheckLifetime",
 				"passwordlessType",
 			]);
-			expect(logs).toContain("Turned self-registration off in ZITADEL (ZITADEL_ALLOW_REGISTER=false in apps/auth-server/.env)");
+			expect(logs).toContain("Turned self-registration off in ZITADEL (ZITADEL_ALLOW_REGISTER=false in infra/auth-server/.env)");
 			expect(logs.some((line) => line.startsWith("The sign-in pages follow within 15 minutes"))).toBe(true);
 		});
 
 		test("turns sign-up on when asked to", async () => {
 			const root = workspace();
-			write(root, "apps/auth-server/.env", "ZITADEL_ALLOW_REGISTER=true\n");
+			write(root, "infra/auth-server/.env", "ZITADEL_ALLOW_REGISTER=true\n");
 			const zitadel = fakeZitadel();
 			await setup([], deps(root, zitadel));
 			expect(zitadel.loginPolicy.settings.allowRegister).toBe(true);
@@ -619,18 +619,18 @@ describe("setup", () => {
 
 		test("leaves the policy alone when it already matches", async () => {
 			const root = workspace();
-			write(root, "apps/auth-server/.env", "ZITADEL_ALLOW_REGISTER=false\n");
+			write(root, "infra/auth-server/.env", "ZITADEL_ALLOW_REGISTER=false\n");
 			const zitadel = fakeZitadel();
 			const logs: string[] = [];
 			await setup([], deps(root, zitadel, logs));
 			expect(policyCalls(zitadel, "PUT")).toHaveLength(0);
-			expect(logs).toContain("Self-registration is off (ZITADEL_ALLOW_REGISTER=false in apps/auth-server/.env)");
+			expect(logs).toContain("Self-registration is off (ZITADEL_ALLOW_REGISTER=false in infra/auth-server/.env)");
 			expect(logs.some((line) => line.startsWith("The sign-in pages follow"))).toBe(false);
 		});
 
 		test("takes a new project's choice from the copied .env.example", async () => {
 			const root = workspace();
-			write(root, "apps/auth-server/.env.example", "ZITADEL_ORG_NAME=Vern\nZITADEL_ALLOW_REGISTER=false\n");
+			write(root, "infra/auth-server/.env.example", "ZITADEL_ORG_NAME=Vern\nZITADEL_ALLOW_REGISTER=false\n");
 			const zitadel = fakeZitadel();
 			zitadel.loginPolicy.settings.allowRegister = true;
 			await setup([], deps(root, zitadel));
@@ -646,7 +646,7 @@ describe("setup", () => {
 			expect(policyCalls(zitadel, "PUT")).toHaveLength(0);
 			expect(zitadel.loginPolicy.settings.allowRegister).toBe(true);
 			expect(logs.find((line) => line.startsWith("Anyone can create an account"))).toContain(
-				"Set ZITADEL_ALLOW_REGISTER=false in apps/auth-server/.env",
+				"Set ZITADEL_ALLOW_REGISTER=false in infra/auth-server/.env",
 			);
 		});
 
@@ -659,7 +659,7 @@ describe("setup", () => {
 
 		test("treats ZITADEL's refusal of a no-op update as nothing to do", async () => {
 			const root = workspace();
-			write(root, "apps/auth-server/.env", "ZITADEL_ALLOW_REGISTER=false\n");
+			write(root, "infra/auth-server/.env", "ZITADEL_ALLOW_REGISTER=false\n");
 			const zitadel = fakeZitadel();
 			zitadel.loginPolicy.settings.allowRegister = true;
 			const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -675,7 +675,7 @@ describe("setup", () => {
 
 		test("stops before starting anything on a value that is not true or false", async () => {
 			const root = workspace();
-			write(root, "apps/auth-server/.env", "ZITADEL_ALLOW_REGISTER=nope\n");
+			write(root, "infra/auth-server/.env", "ZITADEL_ALLOW_REGISTER=nope\n");
 			let started = false;
 			await expect(
 				setup([], {
@@ -684,7 +684,7 @@ describe("setup", () => {
 						started = true;
 					},
 				}),
-			).rejects.toThrow('ZITADEL_ALLOW_REGISTER must be true or false in apps/auth-server/.env, not "nope"');
+			).rejects.toThrow('ZITADEL_ALLOW_REGISTER must be true or false in infra/auth-server/.env, not "nope"');
 			expect(started).toBe(false);
 		});
 
@@ -710,7 +710,7 @@ describe("setup", () => {
 
 		test("points ZITADEL at Mailpit locally, and says where to read the mail", async () => {
 			const root = workspace();
-			write(root, "apps/auth-server/.env", "ZITADEL_ORG_NAME=Vern\nMAIL_UI_PORT=8030\n");
+			write(root, "infra/auth-server/.env", "ZITADEL_ORG_NAME=Vern\nMAIL_UI_PORT=8030\n");
 			const zitadel = fakeZitadel();
 			const logs: string[] = [];
 			await setup([], deps(root, zitadel, logs));
@@ -826,10 +826,10 @@ describe("setup", () => {
 
 	test("replaces a key that ZITADEL no longer knows", async () => {
 		const root = workspace();
-		write(root, "apps/api/secrets/zitadel-api-key.json", JSON.stringify({ appId: "old", keyId: "gone", key: "PEM" }));
+		write(root, "services/api/secrets/zitadel-api-key.json", JSON.stringify({ appId: "old", keyId: "gone", key: "PEM" }));
 		const zitadel = fakeZitadel();
 		await setup([], deps(root, zitadel));
-		const key = JSON.parse(readFileSync(resolve(root, "apps/api/secrets/zitadel-api-key.json"), "utf8"));
+		const key = JSON.parse(readFileSync(resolve(root, "services/api/secrets/zitadel-api-key.json"), "utf8"));
 		expect(key.keyId).toBe("k1");
 	});
 
