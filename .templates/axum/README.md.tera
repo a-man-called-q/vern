@@ -46,6 +46,29 @@ users there; `has_role` is the non-failing check. Both claim forms ZITADEL uses
 (`urn:zitadel:iam:org:project:roles` and the one scoped to this project's ID)
 are read.
 
+## Organization
+
+The user's own ZITADEL organization is in the token's
+`urn:zitadel:iam:user:resourceowner:id` claim, which the web apps ask for with
+the `urn:zitadel:iam:user:resourceowner` scope. `AuthenticatedUser` carries it as
+`org_id`, and `user.org()?` answers `403` when there is none (a session that
+began before the web app asked for it: sign in again). A product where one
+company has several users keeps `org_id` on every row and limits each query with
+`WHERE org_id = $1`, so the company comes from the token and never from the
+request.
+
+The organization written inside the role claims is not used for this: it is the
+one that owns the grant, so a role granted from the project's organization (the
+Console's default) would make a customer's user look like part of it.
+
+## Token cache
+
+Asking ZITADEL about a token on every request puts it on the hot path, so the
+API keeps its answer for `INTROSPECTION_CACHE_SECONDS` (30 by default, at most
+300, 0 turns it off). Only an active token is kept, never past its own expiry.
+The price is that a revoked token, or a role granted or removed, takes effect
+after that long at most.
+
 {% if database %}## Database
 
 This API was generated with a PostgreSQL database. `moon run data:up` starts the
@@ -82,6 +105,26 @@ not check who answers. `?sslmode=verify-full` checks the server's certificate
 against the public CAs, or against your own with
 `&sslrootcert=/run/secrets/db-ca.pem` (mount that file into the container). The
 production image still builds, at about 17 MB.
+
+{% endif %}{% if events %}## Events
+
+This API sends events to the other APIs and hears from them over NATS JetStream
+(`NATS_URL` in `.env`; `moon run bus:up` starts the local server, and the `dev`
+and `test` tasks run it first). `src/events.rs` has everything:
+
+- `events::enqueue(&mut *tx, "campaign.changed", &payload)` writes the event to
+  the `outbox` table in the same transaction as the change, so the event exists
+  exactly when the change does. `main.rs` starts the relay that publishes the
+  outbox, oldest first; several replicas can run it at once.
+- `events::spawn_consumer(bus, "ads-campaigns", "campaign.*", handler)` receives
+  events by name. `durable` names the consumer, which replicas of one service
+  share, and it resumes where it stopped after a restart. A handler returns
+  `Failure::Retry` when the database was down and `Failure::Drop` for a payload
+  that will never parse.
+- Delivery is at least once. An event carries the new state of the thing and a
+  version, not the change, so a consumer can ignore an old one and run a handler
+  twice with the same result. A second publish with the same ID inside the
+  server's duplicate window is dropped.
 
 {% endif %}## Local ZITADEL setup
 

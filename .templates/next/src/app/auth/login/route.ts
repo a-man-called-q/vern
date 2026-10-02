@@ -5,6 +5,7 @@ import {
 	getAppUrl,
 	getOidcConfiguration,
 	getProjectAudienceScope,
+	RESOURCE_OWNER_SCOPE,
 } from "@/server/oidc.server";
 import { getAuthTransactionSession } from "@/server/session.server";
 
@@ -26,6 +27,7 @@ export async function GET() {
 				"email",
 				"offline_access",
 				getProjectAudienceScope(),
+				RESOURCE_OWNER_SCOPE,
 			].join(" "),
 			state,
 			nonce,

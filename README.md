@@ -13,7 +13,9 @@ against.
 | `.templates/next` | Next.js App Router app with the same sign-in, sessions, and API calls |
 | `.templates/axum` | Axum API that verifies access tokens through ZITADEL introspection |
 | `.templates/postgres` | Optional PostgreSQL for the APIs' own data, one database per API |
-| `apps/auth-server` | Local Docker Compose stack: ZITADEL, its Login App, PostgreSQL, and Redis |
+| `.templates/bus` | Optional NATS JetStream, the event bus between APIs generated with `--events` |
+| `.templates/storage` | Optional S3-compatible object store for uploads, with one bucket |
+| `apps/auth-server` | Local Docker Compose stack: ZITADEL, its Login App, PostgreSQL, Redis, and Mailpit (a local inbox for the email ZITADEL sends) |
 | `deploy` | Production Docker Compose stack for one server, with HTTPS |
 | `apps/storybook` | Storybook workbench for the shared UI components |
 | `packages/ui` | Shared shadcn components and design tokens (`@vern/ui`) |
@@ -81,7 +83,9 @@ moon run :dev
   secret), and an API application with a key for each Axum API. It fills in the
   project ID, client IDs, session secrets, key files, and each web app's
   `API_BASE_URL`: the only API there is, or the one named by `API_APP` in the
-  app's `.env` when there are several. It also creates the project roles listed
+  app's `.env` when there are several. An app that calls more lists them in
+  `API_APPS` (for example `API_APPS=billing,inventory`) and gets a variable with
+  each one's URL (`BILLING_API_URL`). It also creates the project roles listed
   in `roles.json`, and, locally, the test users in `seed-users.json` (see
   [Roles and users](#roles-and-users)). Run it again after generating another
   app; it keeps what already exists.
@@ -159,6 +163,34 @@ To have someone to sign in as while you build, list local test users in
 role must be one `roles.json` declares; a mistake stops `setup` before it starts
 a container, and `bun run project:doctor` checks the file too.
 
+A product where each company is a ZITADEL organization with several users lists
+them under `companies`. Each company becomes an organization that may use the
+project roles in its own `roles` (the company's project grant), and its users hold
+those roles plus their own:
+
+```json
+{
+  "companies": [
+    {
+      "name": "Acme Ads",
+      "roles": ["advertiser"],
+      "users": [
+        { "name": "owner", "givenName": "Ada", "familyName": "Owner", "roles": ["owner"] },
+        { "name": "member", "givenName": "Max", "familyName": "Member" }
+      ]
+    }
+  ]
+}
+```
+
+The users sign in as `<name>@<organization domain>`, such as
+`owner@acme-ads.localhost`; `setup` prints the logins it seeded. A token of such a
+user carries the organization's ID (the web apps ask for it with the
+`urn:zitadel:iam:user:resourceowner` scope), which the Axum template reads as
+`AuthenticatedUser::org_id`. A user is in the company that holds their roles;
+if a role is granted in the Console from another organization, the user still
+belongs to their own.
+
 - **Local only.** It never runs with `--deploy`, and it is skipped when
   `ZITADEL_ISSUER` is not `localhost`, `127.0.0.1`, or `[::1]`. In production,
   create users and grant roles in the Console or with the service account below.
@@ -183,11 +215,30 @@ bun run zitadel:service-account -- --app user-management
 ```
 
 The token is stored as `ZITADEL_USER_ADMIN_TOKEN`. It manages every user of the
-organization and can grant them project roles, so keep it on the server. Running the command again changes nothing while the token
-still works; to rotate it, remove the variable and run it again. For a
-production ZITADEL, pass an IAM Owner token and the issuer:
+organization and can grant them project roles, so keep it on the server. Running
+the command again changes nothing while the token still works; to rotate it,
+remove the variable and run it again. For a production ZITADEL, pass an IAM Owner
+token and the issuer:
 `ZITADEL_PAT=<token> bun run zitadel:service-account -- --app <name> --issuer https://auth.example.com`.
 `--help` lists the other options.
+
+A service that signs companies up creates organizations, which no organization
+role allows; it needs an instance role. `--instance-role IAM_ORG_MANAGER` grants
+it, and `--role none` skips the organization role:
+
+```sh
+bun run zitadel:service-account -- --app tenants --name tenants --role none \
+  --instance-role IAM_ORG_MANAGER --env-key ZITADEL_ORG_ADMIN_TOKEN
+```
+
+That token can create organizations, give them project roles, and create their
+users, and it can also create projects, roles, and applications in the default
+organization. ZITADEL has no narrower role that creates organizations, so treat
+the token like a database password: server only, one service, rotated on a
+schedule. It reaches every organization, your customers' included, so the service
+takes the organization from the caller's verified token, never from a request.
+A local `bun run setup` does this by itself for an Axum API whose `.env.example`
+declares `ZITADEL_ORG_ADMIN_TOKEN=`.
 
 ## Customize the login page
 
@@ -229,6 +280,23 @@ keeps its own. The Login App caches ZITADEL's settings for 15 minutes, so the
 sign-in pages follow a change within that time; restart the `zitadel-login`
 container to apply it at once. `bun run project:doctor` shows the current
 choice.
+
+## Email
+
+ZITADEL sends mail for invitations (a user created with an email code), email
+verification, and password resets. Locally the auth stack's Mailpit container
+catches it: a new database starts with ZITADEL pointed at it, and `bun run setup`
+does the same for one that predates that, then prints where to read the messages
+(<http://localhost:8025> by default). An invitation can be tried end to end: the
+link in the mail opens the sign-in pages, where the user verifies the address and
+chooses a password. If the Console already has a mail setup for another server,
+`setup` leaves it alone.
+
+In production, `SMTP_HOST`, `SMTP_FROM_ADDRESS`, and (when the server asks)
+`SMTP_USER` and `SMTP_PASSWORD` in `deploy/.env` configure it, and
+`bun run setup -- --deploy` applies them to the running ZITADEL; see
+[deploy/README.md](deploy/README.md). `bun run project:doctor` says when none is
+set.
 
 ## Building with a coding agent
 

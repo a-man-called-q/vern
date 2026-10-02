@@ -40,6 +40,14 @@ A service stores the user's ID (`sub`) next to the rows that user owns.
    Leave out `--database` for a service that keeps no data. With it, the service
    gets sqlx, `migrations/`, `db/init.sql` (its own database and login role,
    named after the service), and example `/api/notes` endpoints.
+   Add `--events` for a service that tells other services what changed or hears
+   from them. It sends events over NATS JetStream through an outbox table, and
+   needs the bus project once (`moon generate bus -- --name bus --port 4222`).
+   The service's README, section "Events", explains `src/events.rs`.
+   A service that keeps uploaded files needs the storage project once
+   (`moon generate storage -- --name storage --port 9000`): an S3-compatible
+   store with one bucket, whose settings the project's README lists for the
+   service's `.env`.
 4. **Provision it:**
 
    ```sh
@@ -68,26 +76,24 @@ A service stores the user's ID (`sub`) next to the rows that user owns.
 
 ## A web app that calls two services
 
-`fetchAuthenticatedApi` uses `API_BASE_URL`, one API. For a second one, add a
-setting (for example `BILLING_API_URL`) to the web app's `.env.example` and its
-`.env`, and write a second helper in a server module the way
-`fetchAuthenticatedApi` is written at the end of `src/server/api.server.ts`:
+`fetchAuthenticatedApi` uses `API_BASE_URL`, one API. For more, list the other
+Axum apps in `API_APPS` in the web app's `.env.example` (comma-separated, for
+example `API_APPS=billing,inventory`) and run `bun run setup`: it gives each a
+variable with its URL (`BILLING_API_URL`, `INVENTORY_API_URL`) and keeps one you
+set by hand. Make a client for each in the server module of that API:
 
 ```ts
-export async function fetchBillingApi(path: string, init: RequestInit = {}) {
-	const baseUrl = env.BILLING_API_URL;
-	if (!baseUrl) throw new Error("BILLING_API_URL is required");
-	const { dropRevokedSession, getApiAccessToken } = await import("./auth.server");
-	return createAuthenticatedApiFetcher({
-		baseUrl,
-		getAccessToken: getApiAccessToken,
-		onUnauthorized: dropRevokedSession,
-	})(path, init);
-}
+// src/server/billing.server.ts
+import { createApiClient } from "./api.server";
+
+const fetchBillingApi = createApiClient("BILLING_API_URL");
 ```
 
-The same access token works for every service of the project. `setup` does not
-fill in this second URL; locally it is `http://localhost:<the service's port>`.
+`fetchBillingApi(path, init)` works like `fetchAuthenticatedApi`. The same access
+token works for every service of the project. The variable is `<APP>_API_URL`,
+with the app's name in capitals and non-letters as `_` (`billing-api` becomes
+`BILLING_API_API_URL`). In a deployment, set the variable to the API's public
+HTTPS address; `deploy/` runs one API.
 
 ## A service that calls another service
 

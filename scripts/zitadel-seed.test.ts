@@ -35,16 +35,61 @@ describe("readSeedUsers", () => {
 				{ name: "publisher", givenName: "Demo", familyName: "Publisher", roles: ["publisher"] },
 				{ name: "nobody.1", givenName: "No", familyName: "Role", roles: [] },
 			],
+			companies: [],
 		});
 	});
 
 	test("a missing file or an empty one means nothing to seed", () => {
-		expect(readSeedUsers(seedFile(undefined), ROLES)).toEqual({ adminRoles: [], users: [] });
-		expect(readSeedUsers(seedFile("{}"), ROLES)).toEqual({ adminRoles: [], users: [] });
-		expect(readSeedUsers(seedFile('{"adminRoles":[],"users":[]}'), [])).toEqual({ adminRoles: [], users: [] });
+		expect(readSeedUsers(seedFile(undefined), ROLES)).toEqual({ adminRoles: [], users: [], companies: [] });
+		expect(readSeedUsers(seedFile("{}"), ROLES)).toEqual({ adminRoles: [], users: [], companies: [] });
+		expect(readSeedUsers(seedFile('{"adminRoles":[],"users":[]}'), [])).toEqual({ adminRoles: [], users: [], companies: [] });
+	});
+
+	test("reads the companies, each with its roles and users", () => {
+		const root = seedFile(
+			JSON.stringify({
+				companies: [
+					{
+						name: "Acme Ads",
+						roles: ["advertiser"],
+						users: [
+							{ name: "owner", givenName: "Ada", familyName: "Owner", roles: ["admin"] },
+							{ name: "member", givenName: "Max", familyName: "Member" },
+						],
+					},
+					{ name: "Empty Co" },
+				],
+			}),
+		);
+		expect(readSeedUsers(root, ROLES).companies).toEqual([
+			{
+				name: "Acme Ads",
+				roles: ["advertiser"],
+				users: [
+					{ name: "owner", givenName: "Ada", familyName: "Owner", roles: ["admin"] },
+					{ name: "member", givenName: "Max", familyName: "Member", roles: [] },
+				],
+			},
+			{ name: "Empty Co", roles: [], users: [] },
+		]);
 	});
 
 	const user = { name: "a", givenName: "A", familyName: "B", roles: ["publisher"] };
+	const company = { name: "Acme", roles: ["advertiser"], users: [user] };
+	test.each([
+		["companies that are not a list", '{"companies":{}}', "companies must be an array"],
+		["a company that is not an object", '{"companies":["a"]}', "each company must be an object"],
+		["a company key that does not exist", JSON.stringify({ companies: [{ ...company, domain: "x" }] }), "a company has unknown key: domain"],
+		["a company without a name", JSON.stringify({ companies: [{ ...company, name: "" }] }), "a company name must be a string"],
+		["a duplicate company", JSON.stringify({ companies: [company, company] }), 'company "Acme" is listed twice'],
+		["an undeclared company role", JSON.stringify({ companies: [{ ...company, roles: ["root"] }] }), 'lists "root", which roles.json does not declare'],
+		["an undeclared role of a company user", JSON.stringify({ companies: [{ ...company, users: [{ ...user, roles: ["root"] }] }] }), 'lists "root", which roles.json does not declare'],
+		["a duplicate user in a company", JSON.stringify({ companies: [{ ...company, users: [user, user] }] }), 'user "a" is listed twice'],
+		["an upper-case name in a company", JSON.stringify({ companies: [{ ...company, users: [{ ...user, name: "Ada" }] }] }), 'user name "Ada" must be lowercase'],
+	])("rejects %s", (_name, content, message) => {
+		expect(() => readSeedUsers(seedFile(content), ROLES)).toThrow(message);
+	});
+
 	test.each([
 		["not JSON", "{adminRoles", "seed-users.json is not valid JSON"],
 		["an array", "[]", "the file must be an object"],
@@ -138,6 +183,7 @@ describe("seedUsers", () => {
 			{ name: "publisher", givenName: "Demo", familyName: "Publisher", roles: ["publisher"] },
 			{ name: "advertiser", givenName: "Demo", familyName: "Advertiser", roles: ["advertiser"] },
 		],
+		companies: [],
 	};
 	function options(logs: string[], passwords: string[] = []) {
 		return {
@@ -200,7 +246,7 @@ describe("seedUsers", () => {
 		zitadel.grants.push({ id: "gadmin", userId: "admin1", projectId: "42", roleKeys: ["admin", "support"] });
 		const passwords: string[] = [];
 		const logs: string[] = [];
-		await seedUsers(zitadel.api, { adminRoles: ["admin"], users: [seed.users[0]] }, options(logs, passwords));
+		await seedUsers(zitadel.api, { adminRoles: ["admin"], users: [seed.users[0]], companies: [] }, options(logs, passwords));
 
 		expect(zitadel.created).toEqual([]);
 		expect(passwords).toEqual([]);
@@ -212,7 +258,7 @@ describe("seedUsers", () => {
 
 	test("a user without roles is created without a grant", async () => {
 		const zitadel = fakeZitadel([{ ...admin }]);
-		await seedUsers(zitadel.api, { adminRoles: [], users: [{ name: "nobody", givenName: "No", familyName: "Role", roles: [] }] }, options([]));
+		await seedUsers(zitadel.api, { adminRoles: [], users: [{ name: "nobody", givenName: "No", familyName: "Role", roles: [] }], companies: [] }, options([]));
 		expect(zitadel.users.map((user) => user.userName)).toEqual(["zitadel-admin@vern.localhost", "nobody@vern.localhost"]);
 		expect(zitadel.grants).toEqual([]);
 	});
@@ -220,14 +266,14 @@ describe("seedUsers", () => {
 	test("says so when the bootstrap admin does not exist", async () => {
 		const zitadel = fakeZitadel([]);
 		const logs: string[] = [];
-		await seedUsers(zitadel.api, { adminRoles: ["admin"], users: [] }, options(logs));
+		await seedUsers(zitadel.api, { adminRoles: ["admin"], users: [], companies: [] }, options(logs));
 		expect(logs).toEqual(["No user zitadel-admin@vern.localhost; not granting admin"]);
 		expect(zitadel.grants).toEqual([]);
 	});
 
 	test("refuses a service user that has a seeded login name", async () => {
 		const zitadel = fakeZitadel([{ id: "m1", userName: "publisher@vern.localhost", machine: {} }]);
-		await expect(seedUsers(zitadel.api, { adminRoles: [], users: [seed.users[0]] }, options([]))).rejects.toThrow(
+		await expect(seedUsers(zitadel.api, { adminRoles: [], users: [seed.users[0]], companies: [] }, options([]))).rejects.toThrow(
 			'"publisher@vern.localhost" exists but is a service user',
 		);
 		expect(zitadel.grants).toEqual([]);

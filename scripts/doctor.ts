@@ -13,6 +13,7 @@ import {
 import { ALLOW_REGISTER_KEY, parseAllowRegister } from "./zitadel-login-policy";
 import { readProjectRoles, ROLES_FILE } from "./zitadel-roles";
 import { readSeedUsers, SEED_FILE } from "./zitadel-seed";
+import { readSmtpSettings, SMTP_HOST_KEY } from "./zitadel-smtp";
 
 type Level = "OK" | "INFO" | "WARN" | "FAIL";
 const results: Array<{ level: Level; message: string }> = [];
@@ -137,8 +138,15 @@ function main(): void {
 		const seed = readSeedUsers(ROOT, roles.map((role) => role.key));
 		report(
 			"OK",
-			seed.users.length > 0 || seed.adminRoles.length > 0
-				? SEED_FILE + " seeds " + seed.users.length + " user(s) and " + seed.adminRoles.length + " admin role(s) locally."
+			seed.users.length > 0 || seed.adminRoles.length > 0 || seed.companies.length > 0
+				? SEED_FILE +
+						" seeds " +
+						seed.users.length +
+						" user(s), " +
+						seed.companies.length +
+						" company(ies), and " +
+						seed.adminRoles.length +
+						" admin role(s) locally."
 				: SEED_FILE + " seeds nothing.",
 		);
 	} catch (error) {
@@ -158,6 +166,25 @@ function main(): void {
 			else report("OK", ALLOW_REGISTER_KEY + "=false in " + file + ": accounts are created by an administrator.");
 		} catch (error) {
 			report("FAIL", error instanceof Error ? error.message : String(error));
+		}
+	}
+
+	// A deployment's mail settings: a half-filled set stops `setup --deploy`, and none at all means no mail.
+	{
+		const file = [".env", ".env.example"].map((name) => "deploy/" + name).find((path) => existsSync(resolve(ROOT, path)));
+		if (file) {
+			try {
+				const env = parseEnv(resolve(ROOT, file));
+				const smtp = readSmtpSettings(env, file, env.get("ZITADEL_ORG_NAME") || "Vern");
+				if (smtp) report("OK", SMTP_HOST_KEY + " in " + file + ": ZITADEL will send mail through " + smtp.host + ".");
+				else
+					report(
+						"INFO",
+						SMTP_HOST_KEY + " is not set in " + file + ": a deployment sends no invitations, email verification, or password resets until it is.",
+					);
+			} catch (error) {
+				report("FAIL", error instanceof Error ? error.message : String(error));
+			}
 		}
 	}
 

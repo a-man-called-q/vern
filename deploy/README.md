@@ -52,6 +52,15 @@ The sign-in pages cache ZITADEL's settings for 15 minutes; restart `zitadel-logi
 (`docker compose --env-file deploy/.env -f deploy/docker-compose.yml restart zitadel-login`)
 to apply a change at once.
 
+ZITADEL sends mail for invitations, email verification, and password resets, and
+it needs an SMTP server for that. Set `SMTP_HOST` (with the port) and
+`SMTP_FROM_ADDRESS` in `deploy/.env`, plus `SMTP_USER` and `SMTP_PASSWORD` when
+the server asks for them, and run `bun run setup -- --deploy` again; it creates
+the mail configuration in ZITADEL (described "Vern" in the Console) and sets the
+password again on every run, so a rotated password only needs a new run. Without
+`SMTP_HOST`, setup changes nothing and warns that no mail is sent, unless the
+Console already has a mail setup, which it then leaves alone.
+
 Back up `deploy/.env` in a secret manager: `ZITADEL_MASTERKEY` encrypts data in
 the database, and the database is useless without it. Back up the
 `postgres-data` volume as well.

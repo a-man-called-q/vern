@@ -20,6 +20,12 @@ pub enum ApiError {
     Forbidden(String),
     #[error("{0}")]
     NotFound(String),
+    /// The request is fine, but the thing is in a state that does not allow it:
+    /// a campaign that is not in review cannot be approved.
+    #[error("{0}")]
+    Conflict(String),
+    #[error("{0}")]
+    TooManyRequests(String),
     #[error("{0}")]
     Unavailable(String),
     /// Hides the cause from the client; log it where you create the error.
@@ -45,6 +51,8 @@ impl ApiError {
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::Forbidden(_) => StatusCode::FORBIDDEN,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
+            Self::Conflict(_) => StatusCode::CONFLICT,
+            Self::TooManyRequests(_) => StatusCode::TOO_MANY_REQUESTS,
             Self::Unavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -56,6 +64,8 @@ impl ApiError {
             Self::Unauthorized => "unauthorized",
             Self::Forbidden(_) => "forbidden",
             Self::NotFound(_) => "not_found",
+            Self::Conflict(_) => "conflict",
+            Self::TooManyRequests(_) => "too_many_requests",
             Self::Unavailable(_) => "unavailable",
             Self::Internal => "internal",
         }
@@ -115,6 +125,18 @@ mod tests {
         assert_eq!(
             (status, body["error"]["code"].as_str()),
             (400, Some("bad_request"))
+        );
+
+        let (status, body) = render(ApiError::Conflict("Already approved".into())).await;
+        assert_eq!(
+            (status, body["error"]["code"].as_str()),
+            (409, Some("conflict"))
+        );
+
+        let (status, body) = render(ApiError::TooManyRequests("Slow down".into())).await;
+        assert_eq!(
+            (status, body["error"]["code"].as_str()),
+            (429, Some("too_many_requests"))
         );
     }
 

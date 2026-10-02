@@ -43,6 +43,15 @@ own database. It needs the data project below.
 moon generate axum -- --name ads --port 4001 --database
 ```
 
+Add `--events` (with `--database`) for an API that tells other APIs what changed
+and hears from them, over NATS JetStream: an `outbox` table written in the same
+transaction as the data, a relay that publishes it, and durable consumers. It
+needs the bus project below.
+
+```sh
+moon generate axum -- --name inventory --port 4002 --database --events
+```
+
 ## PostgreSQL
 
 ```sh
@@ -55,6 +64,28 @@ A PostgreSQL for the data of your Axum APIs, apart from the one ZITADEL uses.
 generated with `--database`. Name the project `data`: the APIs' `dev` and
 `test` tasks start it as `data:up`, and their `.env.example` points at port
 5433.
+
+## Bus
+
+```sh
+moon generate bus -- --name bus --port 4222
+moon run bus:up
+```
+
+A local NATS server with JetStream, the event bus between the APIs. Name the
+project `bus`: an API generated with `--events` starts it as `bus:up` and its
+`.env.example` points at port 4222.
+
+## Storage
+
+```sh
+moon generate storage -- --name storage --port 9000
+moon run storage:up
+```
+
+A local S3-compatible object store (SeaweedFS) with one bucket (`media` unless
+you pass `--bucket`), for the API that handles uploads. Browsers upload to it
+with presigned URLs; the web apps' origins are listed in `S3_ALLOWED_ORIGINS`.
 
 After generation, create the app's `.env` and its ZITADEL application as the
 [quick start](../README.md#quick-start) describes, then run the workspace with

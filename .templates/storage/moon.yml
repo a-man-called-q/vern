@@ -1,0 +1,19 @@
+tasks:
+  up:
+    command: sh up.sh
+    description: Start the local S3 object store and create its bucket
+    deps:
+      - 'workspace:check-ports'
+    toolchains: system
+    options:
+      cache: false
+      envFile: true
+      persistent: false
+
+  down:
+    command: docker compose down
+    description: Stop the local S3 object store and keep its data
+    toolchains: system
+    options:
+      cache: false
+      envFile: true

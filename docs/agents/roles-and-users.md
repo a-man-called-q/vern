@@ -44,6 +44,13 @@ admin's is `ZITADEL_ADMIN_PASSWORD` in the same file.
 
 - Add one user per role, plus one without any role, so every access rule can be
   tried from both sides.
+- When each customer is a ZITADEL organization with several users, list them
+  under `companies` (`{ "name": "Acme Co", "roles": ["publisher"], "users": [...] }`).
+  `setup` creates the organization, grants it the project with the roles of the
+  company and its users, and creates each user inside it as
+  `<name>@<the organization's domain>`, here `owner@acme-co.localhost`. Seed at
+  least two companies, so a test can sign in as a user of one and ask for the
+  other's data.
 - Every role named here must be in `roles.json`; `setup` and
   `bun run project:doctor` stop on a mistake.
 - It is additive: an existing user only gets the roles it lacks.
@@ -76,3 +83,33 @@ It writes `ZITADEL_USER_ADMIN_TOKEN` to that app's `.env`.
 - Visitors cannot register themselves: `ZITADEL_ALLOW_REGISTER` is `false` in
   `apps/auth-server/.env` and `deploy/.env`. Leave it that way for a screen that
   manages users; a self-registered account has no roles.
+
+## A service that creates organizations
+
+When each customer is a ZITADEL organization with several users, a service has to
+create the organization, give it the project, and invite the first user. The
+organization-level token above cannot; this one can:
+
+```sh
+bun run zitadel:service-account -- --app tenants --name tenants --role none \
+  --instance-role IAM_ORG_MANAGER --env-key ZITADEL_ORG_ADMIN_TOKEN
+```
+
+A local `bun run setup` does the same for an API whose `.env.example` declares
+`ZITADEL_ORG_ADMIN_TOKEN=`: it creates the service user and writes its token to
+that API's `.env`. In production you run the command above, with an IAM Owner
+token, and give the service the result as a secret.
+
+Everything above applies, and more:
+
+- The token reaches **every** organization, your customers' included. Take the
+  organization from the caller's verified token (`user.org()?`), never from the
+  request body, path, or a header, and check the caller's role before each call.
+- Give it to the one service that onboards companies, not to the web apps.
+- A user's roles come from a project grant to their organization plus a user
+  grant made in that organization (the `x-zitadel-orgid` header). A role the
+  project grant does not carry cannot be given, so a company can never be made
+  an `admin`.
+- Usernames and organization names are unique across the instance, and so is the
+  domain made from a name. Make the user's email the username, and expect `409`
+  for a company name that is taken.

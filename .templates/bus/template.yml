@@ -1,0 +1,13 @@
+title: NATS JetStream message bus
+description: Generate a local NATS server with JetStream, the event bus between the APIs.
+destination: '/apps/[name | kebab_case]'
+variables:
+  name:
+    type: string
+    default: bus
+    required: true
+    prompt: Bus project name?
+  port:
+    type: number
+    required: true
+    prompt: Unique local port (1024-65535) for NATS? (4222 is its usual port)

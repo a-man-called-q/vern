@@ -45,6 +45,13 @@ export function getAppOrigin() {
 	return getAppBaseUrl().origin;
 }
 
+/**
+ * Puts the user's own organization in the access token, which the Axum template
+ * reads as `org_id`. The organization in the role claim is the one that owns the
+ * grant, not the user's, so it is not used for that.
+ */
+export const RESOURCE_OWNER_SCOPE = "urn:zitadel:iam:user:resourceowner";
+
 export function getProjectAudienceScope() {
 	const projectId = env.ZITADEL_PROJECT_ID;
 

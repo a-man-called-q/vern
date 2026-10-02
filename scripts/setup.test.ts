@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, wri
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { parseEnv } from "./env-files";
-import { findApps, setup } from "./setup";
+import { apiUrlKey, findApps, setup } from "./setup";
 
 const tempDirs: string[] = [];
 afterEach(() => {
@@ -58,8 +58,16 @@ function fakeZitadel() {
 			passwordCheckLifetime: "864000s",
 		},
 	};
+	// ZITADEL's JSON also leaves out a false flag and an empty string.
+	const smtp: Record<string, unknown>[] = [];
+	const smtpPasswords = new Map<string, string>();
+	let nextSmtp = 1;
+	const present = (body: Record<string, unknown>) =>
+		Object.fromEntries(Object.entries(body).filter(([, value]) => value !== false && value !== ""));
 	const flagsOnly = (settings: Record<string, unknown>) =>
 		JSON.stringify(Object.entries(settings).filter(([, value]) => value !== false).sort(([a], [b]) => a.localeCompare(b)));
+	const instanceMembers: { userId: string; roles: string[] }[] = [];
+	const tokens = new Map<string, string>();
 	let next = 100;
 	const json = (body: unknown, status = 200) =>
 		new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -88,6 +96,28 @@ function fakeZitadel() {
 		}
 		if (path === "/management/v1/users/_search") {
 			return json({ result: users.filter((u) => u.userName === body.queries[0].userNameQuery.userName) });
+		}
+		if (path === "/management/v1/users/machine") {
+			const user = { id: `machine${next++}`, userName: body.userName, machine: {} };
+			users.push(user as never);
+			return json({ userId: user.id });
+		}
+		const pat = path.match(/^\/management\/v1\/users\/([^/]+)\/pats$/);
+		if (pat && method === "POST") {
+			const token = `pat-${next++}`;
+			tokens.set(token, pat[1]);
+			return json({ token });
+		}
+		if (path === "/auth/v1/users/me") {
+			const userId = tokens.get(String(new Headers(init?.headers).get("Authorization")).replace("Bearer ", ""));
+			return userId ? json({ user: { id: userId } }) : json({ message: "invalid token" }, 401);
+		}
+		if (path === "/admin/v1/members/_search") {
+			return json({ result: instanceMembers.filter((m) => m.userId === body.queries[0].userIdQuery.userId) });
+		}
+		if (path === "/admin/v1/members" && method === "POST") {
+			instanceMembers.push({ userId: body.userId, roles: body.roles });
+			return json({});
 		}
 		if (path === "/v2/users/human") {
 			const user = { id: `user${next++}`, userName: body.username, password: body.password.password };
@@ -137,6 +167,30 @@ function fakeZitadel() {
 			const keyDetails = Buffer.from(JSON.stringify({ type: "application", keyId, key: "PEM", appId: key[1], clientId: "c1" })).toString("base64");
 			return json({ id: keyId, keyDetails });
 		}
+		if (path === "/admin/v1/smtp/_search") return json(smtp.length > 0 ? { result: smtp } : { details: {} });
+		if (path === "/admin/v1/smtp" && method === "POST") {
+			const { password, ...settings } = body;
+			const config = { id: `smtp${nextSmtp++}`, state: "SMTP_CONFIG_INACTIVE", ...present(settings) };
+			smtp.push(config);
+			if (password) smtpPasswords.set(config.id, String(password));
+			return json({ id: config.id });
+		}
+		const smtpRoute = path.match(/^\/admin\/v1\/smtp\/([^/]+)(?:\/(_activate|password))?$/);
+		if (smtpRoute) {
+			const config = smtp.find((item) => item.id === smtpRoute[1]);
+			if (!config) return json({ message: "not found" }, 404);
+			if (smtpRoute[2] === "_activate") {
+				for (const other of smtp) other.state = "SMTP_CONFIG_INACTIVE";
+				config.state = "SMTP_CONFIG_ACTIVE";
+			} else if (smtpRoute[2] === "password") {
+				smtpPasswords.set(String(config.id), body.password);
+			} else {
+				const { state, id } = config;
+				for (const key of Object.keys(config)) delete config[key];
+				Object.assign(config, { id, state, ...present(body) });
+			}
+			return json({});
+		}
 		if (path === "/admin/v1/policies/login" && method === "GET") {
 			return json({
 				policy: {
@@ -157,7 +211,7 @@ function fakeZitadel() {
 		}
 		return json({ message: `unexpected ${method} ${path}` }, 500);
 	}) as typeof fetch;
-	return { calls, fetcher, projects, apps, keys, roles, users, grants, loginPolicy };
+	return { calls, fetcher, projects, apps, keys, roles, users, grants, loginPolicy, smtp, smtpPasswords, instanceMembers, tokens };
 }
 
 function deps(root: string, zitadel: ReturnType<typeof fakeZitadel>, logs: string[] = []) {
@@ -204,6 +258,47 @@ describe("setup", () => {
 		expect(created?.body).toMatchObject({ redirectUris: ["http://localhost:3000/auth/callback"], devMode: true });
 	});
 
+	describe("an API that creates organizations", () => {
+		function tenants(): string {
+			const root = workspace();
+			write(
+				root,
+				"apps/tenants/.env.example",
+				"PORT=4003\nZITADEL_ISSUER=http://localhost:8081\nZITADEL_PROJECT_ID=replace-with-your-zitadel-project-id\nZITADEL_API_KEY_FILE=./secrets/zitadel-api-key.json\nZITADEL_ORG_ADMIN_TOKEN=\n",
+			);
+			return root;
+		}
+
+		test("gets a service user with the instance role and its token", async () => {
+			const root = tenants();
+			const zitadel = fakeZitadel();
+			const logs: string[] = [];
+			expect(await setup([], deps(root, zitadel, logs))).toBe(0);
+
+			const user = zitadel.users.find((item) => item.userName === "vern-tenants-orgs");
+			expect(user).toBeDefined();
+			expect(zitadel.instanceMembers).toEqual([{ userId: user!.id, roles: ["IAM_ORG_MANAGER"] }]);
+			const token = parseEnv(resolve(root, "apps/tenants/.env")).get("ZITADEL_ORG_ADMIN_TOKEN");
+			expect(zitadel.tokens.get(token!)).toBe(user!.id);
+			// An API that does not ask for the token does not get one.
+			expect(parseEnv(resolve(root, "apps/api/.env")).get("ZITADEL_ORG_ADMIN_TOKEN")).toBeUndefined();
+			expect(logs.join("\n")).not.toContain(token!);
+		});
+
+		test("keeps a token that still works when run again", async () => {
+			const root = tenants();
+			const zitadel = fakeZitadel();
+			await setup([], deps(root, zitadel));
+			const before = readFileSync(resolve(root, "apps/tenants/.env"), "utf8");
+
+			const logs: string[] = [];
+			await setup([], deps(root, zitadel, logs));
+			expect(readFileSync(resolve(root, "apps/tenants/.env"), "utf8")).toBe(before);
+			expect(zitadel.instanceMembers).toHaveLength(1);
+			expect(logs.join("\n")).toContain("keeping the token in ZITADEL_ORG_ADMIN_TOKEN");
+		});
+	});
+
 	describe("with several APIs", () => {
 		function twoApis(): string {
 			const root = workspace();
@@ -245,6 +340,51 @@ describe("setup", () => {
 			write(root, "apps/dashboard/.env", "API_APP=ads-api\nAPI_BASE_URL=https://api.acme.test\n");
 			await setup([], deps(root, fakeZitadel()));
 			expect(parseEnv(resolve(root, "apps/dashboard/.env")).get("API_BASE_URL")).toBe("https://api.acme.test");
+		});
+
+		test("gives every API in API_APPS a variable with its URL", async () => {
+			const root = twoApis();
+			write(root, "apps/dashboard/.env", "API_APPS=ads-api, api\n");
+			const logs: string[] = [];
+			expect(await setup([], deps(root, fakeZitadel(), logs))).toBe(0);
+			const env = parseEnv(resolve(root, "apps/dashboard/.env"));
+			expect(env.get("ADS_API_API_URL")).toBe("http://localhost:4001");
+			expect(env.get("API_API_URL")).toBe("http://localhost:4000");
+			// The app reaches its APIs by name, so it is not told that API_BASE_URL is missing.
+			expect(logs.some((line) => line.includes("API_BASE_URL is not set"))).toBe(false);
+		});
+
+		test("API_APPS comes from the example file too, and works next to API_APP", async () => {
+			const root = twoApis();
+			write(
+				root,
+				"apps/dashboard/.env.example",
+				"PORT=3000\nAPP_URL=http://localhost:3000\nZITADEL_CLIENT_ID=replace-with-your-zitadel-client-id\nSESSION_SECRET=\nAPI_APP=api\nAPI_BASE_URL=\nAPI_APPS=ads-api\n",
+			);
+			await setup([], deps(root, fakeZitadel()));
+			const env = parseEnv(resolve(root, "apps/dashboard/.env"));
+			expect(env.get("API_BASE_URL")).toBe("http://localhost:4000");
+			expect(env.get("ADS_API_API_URL")).toBe("http://localhost:4001");
+		});
+
+		test("keeps a variable that was set by hand, and fails on a name that is not an API", async () => {
+			const root = twoApis();
+			write(root, "apps/dashboard/.env", "API_APPS=ads-api\nADS_API_API_URL=https://ads.acme.test\n");
+			await setup([], deps(root, fakeZitadel()));
+			expect(parseEnv(resolve(root, "apps/dashboard/.env")).get("ADS_API_API_URL")).toBe("https://ads.acme.test");
+
+			write(root, "apps/dashboard/.env", "API_APPS=ads-api,billing\n");
+			await expect(setup([], deps(root, fakeZitadel()))).rejects.toThrow(
+				"apps/dashboard: API_APPS names billing, which is not an Axum API with a PORT under apps/ (found: ads-api, api)",
+			);
+		});
+	});
+
+	describe("apiUrlKey", () => {
+		test("makes a variable name from an app name", () => {
+			expect(apiUrlKey("inventory")).toBe("INVENTORY_API_URL");
+			expect(apiUrlKey("billing-api")).toBe("BILLING_API_API_URL");
+			expect(() => apiUrlKey("9lives")).toThrow("cannot be made into a variable name");
 		});
 	});
 
@@ -557,6 +697,113 @@ describe("setup", () => {
 			zitadel.loginPolicy.settings.allowRegister = true;
 			await setup(["--deploy"], { ...deps(root, zitadel), runCompose: () => {} });
 			expect(zitadel.loginPolicy.settings.allowRegister).toBeUndefined();
+		});
+	});
+
+	describe("mail", () => {
+		const smtpCalls = (zitadel: ReturnType<typeof fakeZitadel>) =>
+			zitadel.calls.filter((call) => call.path.startsWith("/admin/v1/smtp") && !call.path.endsWith("_search"));
+		const deployEnv =
+			"AUTH_DOMAIN=auth.acme.test\nAPP_DOMAIN=app.acme.test\nAPI_DOMAIN=api.acme.test\nACME_EMAIL=ops@acme.test\nWEB_APP=dashboard\nAPI_APP=api\n";
+
+		test("points ZITADEL at Mailpit locally, and says where to read the mail", async () => {
+			const root = workspace();
+			write(root, "apps/auth-server/.env", "ZITADEL_ORG_NAME=Vern\nMAIL_UI_PORT=8030\n");
+			const zitadel = fakeZitadel();
+			const logs: string[] = [];
+			await setup([], deps(root, zitadel, logs));
+
+			expect(zitadel.smtp).toEqual([
+				{
+					id: "smtp1",
+					state: "SMTP_CONFIG_ACTIVE",
+					senderAddress: "no-reply@vern.localhost",
+					senderName: "Vern",
+					host: "mailpit:1025",
+					description: "Vern",
+				},
+			]);
+			expect(logs).toContain("ZITADEL sends mail to Mailpit; read it at http://localhost:8030");
+		});
+
+		test("running it again leaves the configuration alone", async () => {
+			const root = workspace();
+			const zitadel = fakeZitadel();
+			await setup([], deps(root, zitadel));
+			zitadel.calls.length = 0;
+			const logs: string[] = [];
+			await setup([], deps(root, zitadel, logs));
+			expect(smtpCalls(zitadel)).toEqual([]);
+			expect(zitadel.smtp).toHaveLength(1);
+			expect(logs).toContain("ZITADEL sends mail to Mailpit; read it at http://localhost:8025");
+		});
+
+		test("does not replace a mail setup someone made in the Console", async () => {
+			const root = workspace();
+			const zitadel = fakeZitadel();
+			zitadel.smtp.push({ id: "console1", state: "SMTP_CONFIG_ACTIVE", host: "smtp.gmail.com:587", description: "Gmail" });
+			const logs: string[] = [];
+			await setup([], deps(root, zitadel, logs));
+			expect(zitadel.smtp).toHaveLength(1);
+			expect(smtpCalls(zitadel)).toEqual([]);
+			expect(logs).toContain("ZITADEL sends mail through smtp.gmail.com:587, set up in the Console; leaving it as it is.");
+		});
+
+		test("--deploy applies the SMTP_* of deploy/.env, password included", async () => {
+			const root = workspace();
+			write(
+				root,
+				"deploy/.env",
+				`${deployEnv}SMTP_HOST=smtp.acme.test:587\nSMTP_FROM_ADDRESS=hello@acme.test\nSMTP_FROM_NAME=Acme\nSMTP_USER=apikey\nSMTP_PASSWORD=s3cret\nSMTP_TLS=true\n`,
+			);
+			const zitadel = fakeZitadel();
+			const logs: string[] = [];
+			await setup(["--deploy"], { ...deps(root, zitadel, logs), runCompose: () => {} });
+
+			expect(zitadel.smtp).toEqual([
+				{
+					id: "smtp1",
+					state: "SMTP_CONFIG_ACTIVE",
+					senderAddress: "hello@acme.test",
+					senderName: "Acme",
+					tls: true,
+					host: "smtp.acme.test:587",
+					user: "apikey",
+					description: "Vern",
+				},
+			]);
+			expect(zitadel.smtpPasswords.get("smtp1")).toBe("s3cret");
+			expect(logs).toContain("ZITADEL sends mail through smtp.acme.test:587 as hello@acme.test");
+			expect(logs.join("\n")).not.toContain("s3cret");
+		});
+
+		test("--deploy replaces a Console configuration when SMTP_HOST is set", async () => {
+			const root = workspace();
+			write(root, "deploy/.env", `${deployEnv}SMTP_HOST=smtp.acme.test:25\nSMTP_FROM_ADDRESS=hello@acme.test\nSMTP_TLS=false\n`);
+			const zitadel = fakeZitadel();
+			zitadel.smtp.push({ id: "console1", state: "SMTP_CONFIG_ACTIVE", host: "smtp.gmail.com:587", description: "Gmail" });
+			await setup(["--deploy"], { ...deps(root, zitadel), runCompose: () => {} });
+			expect(zitadel.smtp.find((config) => config.state === "SMTP_CONFIG_ACTIVE")).toMatchObject({ host: "smtp.acme.test:25", description: "Vern" });
+		});
+
+		test("--deploy says out loud that there is no mail server", async () => {
+			const root = workspace();
+			write(root, "deploy/.env", deployEnv);
+			const zitadel = fakeZitadel();
+			const logs: string[] = [];
+			await setup(["--deploy"], { ...deps(root, zitadel, logs), runCompose: () => {} });
+			expect(zitadel.smtp).toEqual([]);
+			expect(logs.some((line) => line.startsWith("ZITADEL has no SMTP server") && line.includes("deploy/.env"))).toBe(true);
+		});
+
+		test("--deploy stops on a half-filled mail setup before starting anything", async () => {
+			const root = workspace();
+			write(root, "deploy/.env", `${deployEnv}SMTP_FROM_ADDRESS=hello@acme.test\n`);
+			let started = false;
+			await expect(
+				setup(["--deploy"], { ...deps(root, fakeZitadel()), runCompose: () => (started = true) as never }),
+			).rejects.toThrow("SMTP_FROM_ADDRESS set in deploy/.env without SMTP_HOST");
+			expect(started).toBe(false);
 		});
 	});
 

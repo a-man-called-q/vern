@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { parseEnv, readEffectiveEnv } from "./env-files";
+import { readConfig } from "./project-utils";
 import {
 	type ApiOptions,
 	buildOidcConfig,
@@ -26,6 +27,7 @@ import {
 import { ALLOW_REGISTER_KEY, ensureSelfRegistration, parseAllowRegister } from "./zitadel-login-policy";
 import { ensureProjectRoles, readProjectRoles, ROLES_FILE } from "./zitadel-roles";
 import { isLocalIssuer, readSeedUsers, SEED_FILE, SEED_PASSWORD_KEY, type SeedUsers, seedUsers } from "./zitadel-seed";
+import { ensureSmtp, readSmtpSettings, type SmtpSettings } from "./zitadel-smtp";
 
 const ROOT = resolve(import.meta.dir, "..");
 export const AUTH = "apps/auth-server";
@@ -89,6 +91,35 @@ function randomSecret(kind: "hex" | "base64" | "password", bytes: number): strin
 	if (kind === "base64") return value.toString("base64");
 	// ZITADEL's default password policy wants upper and lower case, a digit, and a symbol.
 	return `${value.toString("base64url")}Aa1!`;
+}
+
+/** The variable an API declares when it creates organizations, such as the service that signs companies up. */
+export const ORG_ADMIN_TOKEN_KEY = "ZITADEL_ORG_ADMIN_TOKEN";
+/** What creating organizations takes: no organization role reaches that far. */
+const ORG_ADMIN_ROLE = "IAM_ORG_MANAGER";
+
+/**
+ * Gives an API that declares ZITADEL_ORG_ADMIN_TOKEN a service user that may
+ * create organizations, and its token. The token is broader than the API's own key
+ * (it can also create projects, roles, and applications in the default
+ * organization): README explains it, and `bun run zitadel:service-account` does
+ * the same by hand against a production ZITADEL.
+ */
+async function provisionOrgAdmin(api: ApiOptions, root: string, app: App, log: Log): Promise<void> {
+	// Imported here: that module imports this one.
+	const { createToken, ensureInstanceRole, ensureServiceUser, tokenWorks } = await import("./zitadel-service-account");
+	const userName = `${readConfig(root)?.project.slug ?? "vern"}-${app.name}-orgs`;
+	const user = await ensureServiceUser(api, userName);
+	await ensureInstanceRole(api, user.id, ORG_ADMIN_ROLE);
+	const env = resolve(root, app.path, ".env");
+	const example = resolve(root, app.path, ".env.example");
+	const current = parseEnv(env).get(ORG_ADMIN_TOKEN_KEY);
+	if (current && (await tokenWorks(api, current, user.id))) {
+		log(`${app.path}: keeping the token in ${ORG_ADMIN_TOKEN_KEY}`);
+		return;
+	}
+	setEnvValue(env, example, ORG_ADMIN_TOKEN_KEY, await createToken(api, user.id));
+	log(`${app.path}: wrote a token for service user "${userName}" (${ORG_ADMIN_ROLE}) to ${ORG_ADMIN_TOKEN_KEY} in ${app.path}/.env`);
 }
 
 /** Generated apps, recognized by the variables in their `.env.example`. */
@@ -234,6 +265,33 @@ async function applySelfRegistration(api: ApiOptions, wanted: boolean | undefine
 	}
 }
 
+/**
+ * Points ZITADEL's outgoing mail at `wanted` and says where mail goes. Locally
+ * that is Mailpit, and a mail setup someone made in the Console stays; in a
+ * deployment it is the SMTP_* of deploy/.env, and without them nothing is
+ * changed but the missing mail server is said out loud, because invitations and
+ * password resets silently never arrive.
+ */
+async function applySmtp(
+	api: ApiOptions,
+	wanted: SmtpSettings | undefined,
+	options: { local: boolean; mailpitUrl: string; envFile: string },
+	log: Log,
+): Promise<void> {
+	const result = await ensureSmtp(api, wanted, { replaceOthers: !options.local });
+	if (result.action === "none") {
+		log(
+			`ZITADEL has no SMTP server, so invitations, email verification, and password resets are not sent. Set SMTP_HOST and SMTP_FROM_ADDRESS (and SMTP_USER and SMTP_PASSWORD) in ${options.envFile} and run this again.`,
+		);
+	} else if (result.action === "kept") {
+		log(`ZITADEL sends mail through ${result.host}, set up in the Console; leaving it as it is.`);
+	} else if (options.local) {
+		log(`ZITADEL sends mail to Mailpit; read it at ${options.mailpitUrl}`);
+	} else {
+		log(`ZITADEL sends mail through ${result.host} as ${wanted?.senderAddress}`);
+	}
+}
+
 /** Whether ZITADEL still has the key in this file, e.g. after a database reset. */
 async function keyIsKnown(api: ApiOptions, projectId: string, keyFile: string): Promise<boolean> {
 	let key: { appId?: string; keyId?: string };
@@ -327,12 +385,48 @@ function chooseApiUrl(
 		);
 	}
 	if (names.length === 1) return { url: apiUrls.get(names[0]) };
-	if (names.length > 1) {
+	// An app that lists its APIs in API_APPS reaches them by their own variables.
+	if (names.length > 1 && !appEnv.get("API_APPS")) {
 		return {
 			message: `${app.path}: API_BASE_URL is not set (${names.length} APIs found: ${names.join(", ")}). Set API_APP=<api> in ${app.path}/.env and run this again.`,
 		};
 	}
 	return {};
+}
+
+/** The variable that holds the URL of an Axum app: `inventory` becomes `INVENTORY_API_URL`. */
+export function apiUrlKey(name: string): string {
+	const key = `${name.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_API_URL`;
+	if (!/^[A-Z][A-Z0-9_]*$/.test(key)) throw new Error(`"${name}" cannot be made into a variable name`);
+	return key;
+}
+
+/**
+ * The APIs a web app calls besides `API_BASE_URL`: `API_APPS=inventory,media`
+ * lists Axum apps, and each gets a variable with its URL (`INVENTORY_API_URL`)
+ * unless the app already set one.
+ */
+function chooseNamedApiUrls(
+	app: App,
+	appEnv: Map<string, string>,
+	apiUrls: Map<string, string>,
+): [key: string, url: string][] {
+	const wanted = (appEnv.get("API_APPS") ?? "")
+		.split(",")
+		.map((name) => name.trim())
+		.filter(Boolean);
+	const names = [...apiUrls.keys()].sort();
+	return wanted.flatMap((name) => {
+		const url = apiUrls.get(name);
+		if (!url) {
+			throw new Error(
+				`${app.path}: API_APPS names ${name}, which is not an Axum API with a PORT under apps/` +
+					(names.length > 0 ? ` (found: ${names.join(", ")})` : ""),
+			);
+		}
+		const key = apiUrlKey(name);
+		return appEnv.get(key) ? [] : [[key, url] as [string, string]];
+	});
 }
 
 /**
@@ -349,7 +443,7 @@ async function seedLocal(
 	secret: (kind: "hex" | "base64" | "password", bytes: number) => string,
 	log: Log,
 ): Promise<void> {
-	if (seed.adminRoles.length === 0 && seed.users.length === 0) return;
+	if (seed.adminRoles.length === 0 && seed.users.length === 0 && seed.companies.length === 0) return;
 	if (!isLocalIssuer(api.issuer)) {
 		log(`Not seeding ${SEED_FILE}: ZITADEL_ISSUER (${api.issuer}) is not on this machine. Grant roles and create users in the Console.`);
 		return;
@@ -386,7 +480,7 @@ async function setupLocal(
 ): Promise<number> {
 	// A mistake in the file stops setup before a container starts.
 	const seed = values["no-seed"]
-		? { adminRoles: [], users: [] }
+		? { adminRoles: [], users: [], companies: [] }
 		: readSeedUsers(root, readProjectRoles(root).map((role) => role.key));
 	const apps = findApps(root);
 	for (const dir of ["", AUTH, ...apps.map((app) => app.path)]) copyIfMissing(root, dir, log);
@@ -412,6 +506,19 @@ async function setupLocal(
 	await applySelfRegistration(api, allowRegister, authEnvFile, log);
 
 	const authEnv = readEffectiveEnv(root, AUTH);
+	const localDomain = authEnv.get("ZITADEL_DOMAIN") || "localhost";
+	await applySmtp(
+		api,
+		{
+			// The Mailpit container of the auth stack, reached by its name on the stack's network.
+			host: "mailpit:1025",
+			senderAddress: `no-reply@${loginDomain(authEnv, localDomain)}`,
+			senderName: authEnv.get("ZITADEL_ORG_NAME") || "Vern",
+			tls: false,
+		},
+		{ local: true, mailpitUrl: `http://localhost:${authEnv.get("MAIL_UI_PORT") || "8025"}`, envFile: `${AUTH}/.env` },
+		log,
+	);
 	const project = await ensureProject(api, rootEnv.get("ZITADEL_PROJECT_ID"), authEnv.get("ZITADEL_ORG_NAME") || "Vern", log);
 	const projectId = project.id;
 	if (project.changed) {
@@ -438,6 +545,7 @@ async function setupLocal(
 			chmodSync(keyFile, 0o600);
 			log(`${app.path}: created a key for API application "${app.name}" in ${relative(root, keyFile)}`);
 		}
+		if (parseEnv(example).has(ORG_ADMIN_TOKEN_KEY)) await provisionOrgAdmin(api, root, app, log);
 		const port = appEnv.get("PORT");
 		if (port) apiUrls.set(app.name, `http://localhost:${port}`);
 	}
@@ -450,6 +558,7 @@ async function setupLocal(
 		const apiUrl = chooseApiUrl(app, appEnv, apiUrls);
 		if (apiUrl.url) setEnvValue(env, example, "API_BASE_URL", apiUrl.url);
 		if (apiUrl.message) log(apiUrl.message);
+		for (const [key, url] of chooseNamedApiUrls(app, appEnv, apiUrls)) setEnvValue(env, example, key, url);
 		const appUrl = appEnv.get("APP_URL");
 		if (!appUrl) throw new Error(`${app.path}: APP_URL is not set`);
 		const result = await provisionApplication({
@@ -515,6 +624,8 @@ async function setupDeploy(
 	}
 	env = parseEnv(envPath);
 	const allowRegister = parseAllowRegister(env.get(ALLOW_REGISTER_KEY), `${DEPLOY}/.env`);
+	// A half-filled mail setup stops here, before a container starts.
+	const smtp = readSmtpSettings(env, `${DEPLOY}/.env`, env.get("ZITADEL_ORG_NAME") || "Vern");
 
 	// COMPOSE_FILE adds overrides, such as deploy/docker-compose.local.yml.
 	const files = processEnv.COMPOSE_FILE?.split(":").filter(Boolean) ?? [`${DEPLOY}/docker-compose.yml`];
@@ -538,6 +649,7 @@ async function setupDeploy(
 	);
 
 	await applySelfRegistration(api, allowRegister, `${DEPLOY}/.env`, log);
+	await applySmtp(api, smtp, { local: false, mailpitUrl: "", envFile: `${DEPLOY}/.env` }, log);
 
 	const project = await ensureProject(api, env.get("ZITADEL_PROJECT_ID"), env.get("ZITADEL_ORG_NAME") || "Vern", log);
 	if (project.changed) set("ZITADEL_PROJECT_ID", project.id);

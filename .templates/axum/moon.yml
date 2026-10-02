@@ -7,6 +7,9 @@ tasks:
 {%- if database %}
       - 'data:up'
 {%- endif %}
+{%- if events %}
+      - 'bus:up'
+{%- endif %}
     toolchains: system
     preset: server
 
@@ -23,9 +26,14 @@ tasks:
   test:
     command: cargo test
     description: Run this Axum service's tests
-{%- if database %}
+{%- if database or events %}
     deps:
+{%- endif %}
+{%- if database %}
       - 'data:up'
+{%- endif %}
+{%- if events %}
+      - 'bus:up'
 {%- endif %}
     toolchains: system
 

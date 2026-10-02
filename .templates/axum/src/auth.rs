@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeSet, HashMap},
     sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use async_trait::async_trait;
@@ -12,17 +13,24 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use jsonwebtoken::errors::Error as JwtError;
+use moka::{Expiry, future::Cache};
 use serde::Deserialize;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use crate::{config::Config, error::ApiError};
 
 // ZITADEL puts the user's roles in the introspection response under these
-// claims when the web app asked for the `urn:zitadel:iam:org:projects:roles`
-// scope (the web templates do): an object keyed by role key. The second form
-// is scoped to one project.
+// claims for a token that carries the project audience scope (the web templates
+// ask for it): an object keyed by role key. The second form is scoped to one
+// project. The organizations inside it are the ones that own the grants, not
+// necessarily the user's, so they are not read as the user's organization.
 const ROLES_CLAIM: &str = "urn:zitadel:iam:org:project:roles";
+
+// The user's own organization, present when the web app asked for the
+// `urn:zitadel:iam:user:resourceowner` scope (the web templates do).
+const ORG_ID_CLAIM: &str = "urn:zitadel:iam:user:resourceowner:id";
 
 const PRIVATE_KEY_JWT_ASSERTION_TYPE: &str =
     "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
@@ -40,7 +48,13 @@ impl AppState {
     pub fn from_config(config: Config) -> Self {
         let issuer = config.issuer().to_owned();
         let project_id = config.project_id().to_owned();
-        let introspector: Arc<dyn TokenIntrospector> = Arc::new(ZitadelIntrospector { config });
+        let cache_ttl = config.introspection_cache_ttl();
+        let zitadel: Arc<dyn TokenIntrospector> = Arc::new(ZitadelIntrospector { config });
+        let introspector: Arc<dyn TokenIntrospector> = if cache_ttl.is_zero() {
+            zitadel
+        } else {
+            Arc::new(CachedIntrospector::new(zitadel, cache_ttl))
+        };
         Self::with_introspector(issuer, project_id, introspector)
     }
 
@@ -103,6 +117,10 @@ pub struct AuthenticatedUser {
     pub display_name: Option<String>,
     /// Role keys granted to the user in this project.
     pub roles: BTreeSet<String>,
+    /// The ZITADEL organization the user belongs to: the company that owns the
+    /// rows they may see. `None` when the token carries no organization (the
+    /// session began before the web app asked for it: sign in again).
+    pub org_id: Option<String>,
 }
 
 // Not every API checks roles; the template keeps both for the handlers you add.
@@ -110,6 +128,14 @@ pub struct AuthenticatedUser {
 impl AuthenticatedUser {
     pub fn has_role(&self, role: &str) -> bool {
         self.roles.contains(role)
+    }
+
+    /// The organization that owns the caller's rows. Answers 403 when the token
+    /// names none: `let org = user.org()?;` before the query.
+    pub fn org(&self) -> Result<&str, ApiError> {
+        self.org_id.as_deref().ok_or_else(|| {
+            ApiError::Forbidden("Your account does not belong to a company".to_owned())
+        })
     }
 
     /// Answers 403 unless the user holds `role`:
@@ -131,6 +157,19 @@ fn roles_from_claims(extra: &HashMap<String, Value>, project_id: &str) -> BTreeS
         .filter_map(|claim| extra.get(claim)?.as_object())
         .flat_map(|roles| roles.keys().cloned())
         .collect()
+}
+
+/// The user's own organization. It is not read from the role claims: the
+/// organization there owns the grant, so a role granted from the project's
+/// organization (the Console does that by default) would make a customer's user
+/// look like a member of the project's organization.
+fn org_id_from_claims(extra: &HashMap<String, Value>) -> Option<String> {
+    extra
+        .get(ORG_ID_CLAIM)?
+        .as_str()
+        .map(str::trim)
+        .filter(|org_id| !org_id.is_empty())
+        .map(str::to_owned)
 }
 
 struct ZitadelIntrospector {
@@ -173,6 +212,100 @@ impl TokenIntrospector for ZitadelIntrospector {
     }
 }
 
+/// How many tokens the cache keeps at most.
+const CACHE_CAPACITY: u64 = 10_000;
+
+/// Remembers what ZITADEL said about a token, so the hot path does not call it
+/// for every request. A revoked token, or a role granted or removed, takes effect
+/// when the entry expires: after `ttl` at the latest.
+///
+/// Only an active token is kept, and never past its own `exp`. A failed lookup is
+/// not kept, and requests for the same new token share one lookup.
+struct CachedIntrospector {
+    inner: Arc<dyn TokenIntrospector>,
+    cache: Cache<[u8; 32], CachedClaims>,
+    ttl: Duration,
+}
+
+#[derive(Clone)]
+struct CachedClaims {
+    claims: IntrospectionClaims,
+    ttl: Duration,
+}
+
+/// Gives each entry its own lifetime, which may be shorter than the cache's `ttl`.
+struct EntryExpiry;
+
+impl Expiry<[u8; 32], CachedClaims> for EntryExpiry {
+    fn expire_after_create(
+        &self,
+        _key: &[u8; 32],
+        value: &CachedClaims,
+        _created_at: std::time::Instant,
+    ) -> Option<Duration> {
+        Some(value.ttl)
+    }
+}
+
+enum Lookup {
+    Failed(IntrospectionError),
+    /// Answered, but not worth keeping: inactive, or already past `exp`.
+    Uncacheable(IntrospectionClaims),
+}
+
+impl CachedIntrospector {
+    fn new(inner: Arc<dyn TokenIntrospector>, ttl: Duration) -> Self {
+        let cache = Cache::builder()
+            .max_capacity(CACHE_CAPACITY)
+            .expire_after(EntryExpiry)
+            .build();
+        Self { inner, cache, ttl }
+    }
+}
+
+/// How long an answer may be kept: `max`, or until the token expires if sooner.
+/// `None` when it has expired already.
+fn cache_lifetime(
+    claims: &IntrospectionClaims,
+    max: Duration,
+    now: SystemTime,
+) -> Option<Duration> {
+    let Some(exp) = claims.extra.get("exp").and_then(Value::as_u64) else {
+        return Some(max);
+    };
+    let expires_at = UNIX_EPOCH + Duration::from_secs(exp);
+    let left = expires_at.duration_since(now).ok()?;
+    (!left.is_zero()).then_some(left.min(max))
+}
+
+#[async_trait]
+impl TokenIntrospector for CachedIntrospector {
+    async fn introspect(&self, token: &str) -> Result<IntrospectionClaims, IntrospectionError> {
+        // The key is a hash, so a token never sits in memory next to its answer.
+        let key: [u8; 32] = Sha256::digest(token.as_bytes()).into();
+        let lookup = self
+            .cache
+            .try_get_with(key, async {
+                let claims = self.inner.introspect(token).await.map_err(Lookup::Failed)?;
+                if !claims.active {
+                    return Err(Lookup::Uncacheable(claims));
+                }
+                match cache_lifetime(&claims, self.ttl, SystemTime::now()) {
+                    Some(ttl) => Ok(CachedClaims { claims, ttl }),
+                    None => Err(Lookup::Uncacheable(claims)),
+                }
+            })
+            .await;
+        match lookup {
+            Ok(cached) => Ok(cached.claims),
+            Err(error) => match error.as_ref() {
+                Lookup::Failed(error) => Err(error.clone()),
+                Lookup::Uncacheable(claims) => Ok(claims.clone()),
+            },
+        }
+    }
+}
+
 pub async fn require_bearer(
     State(state): State<AppState>,
     mut request: Request<Body>,
@@ -208,10 +341,12 @@ pub async fn require_bearer(
         return ApiError::Unauthorized.into_response();
     };
     let roles = roles_from_claims(&claims.extra, &state.0.project_id);
+    let org_id = org_id_from_claims(&claims.extra);
     request.extensions_mut().insert(AuthenticatedUser {
         sub,
         display_name: claims.name.or(claims.preferred_username),
         roles,
+        org_id,
     });
     next.run(request).await
 }
@@ -230,7 +365,14 @@ fn bearer_token(headers: &HeaderMap) -> Option<&str> {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, sync::Arc};
+    use std::{
+        collections::HashMap,
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+        time::{Duration, SystemTime, UNIX_EPOCH},
+    };
 
     use axum::{
         Extension, Router,
@@ -243,8 +385,9 @@ mod tests {
     use tower::ServiceExt;
 
     use super::{
-        AppState, Audience, AuthenticatedUser, IntrospectionClaims, IntrospectionError,
-        TokenIntrospector, require_bearer, roles_from_claims,
+        AppState, Audience, AuthenticatedUser, CachedIntrospector, IntrospectionClaims,
+        IntrospectionError, TokenIntrospector, cache_lifetime, org_id_from_claims, require_bearer,
+        roles_from_claims,
     };
     use crate::{app::router, error::ApiError};
 
@@ -490,7 +633,11 @@ mod tests {
     #[tokio::test]
     async fn me_reports_the_name_and_roles() {
         let mut claims = claims_with(json!({
-            "urn:zitadel:iam:org:project:roles": { "publisher": {}, "admin": {} }
+            "urn:zitadel:iam:org:project:roles": {
+                "publisher": { "org-1": "acme.localhost" },
+                "admin": { "org-1": "acme.localhost" }
+            },
+            "urn:zitadel:iam:user:resourceowner:id": "org-1"
         }));
         claims.name = Some("Ada Lovelace".to_owned());
         let mut replies = HashMap::new();
@@ -503,6 +650,7 @@ mod tests {
         let json: Value = serde_json::from_slice(&body).expect("body is JSON");
         assert_eq!(json["name"], "Ada Lovelace");
         assert_eq!(json["roles"], json!(["admin", "publisher"]));
+        assert_eq!(json["org_id"], "org-1");
     }
 
     #[tokio::test]
@@ -514,5 +662,197 @@ mod tests {
             .expect("response body is readable");
         let json: Value = serde_json::from_slice(&body).expect("body is JSON");
         assert_eq!(json["error"]["code"], "unauthorized");
+    }
+
+    #[test]
+    fn the_organization_is_the_users_own() {
+        let claims = extra(json!({
+            "urn:zitadel:iam:user:resourceowner:id": "org-1",
+            "urn:zitadel:iam:user:resourceowner:name": "Acme Co",
+            "urn:zitadel:iam:user:resourceowner:primary_domain": "acme.localhost"
+        }));
+        assert_eq!(org_id_from_claims(&claims).as_deref(), Some("org-1"));
+    }
+
+    #[test]
+    fn the_organization_in_the_role_claims_is_not_the_users() {
+        // A role granted from the project's organization (what the Console does by
+        // default) names that organization, whichever company the user is in.
+        let claims = extra(json!({
+            "urn:zitadel:iam:org:project:roles": {
+                "owner": { "project-org": "vern.localhost" }
+            },
+            "urn:zitadel:iam:org:project:shared-project-id:roles": {
+                "owner": { "project-org": "vern.localhost" }
+            }
+        }));
+        assert_eq!(org_id_from_claims(&claims), None);
+        let both = extra(json!({
+            "urn:zitadel:iam:org:project:roles": {
+                "owner": { "project-org": "vern.localhost" }
+            },
+            "urn:zitadel:iam:user:resourceowner:id": "company-org"
+        }));
+        assert_eq!(org_id_from_claims(&both).as_deref(), Some("company-org"));
+    }
+
+    #[test]
+    fn a_missing_or_malformed_resource_owner_means_no_organization() {
+        assert_eq!(org_id_from_claims(&HashMap::new()), None);
+        for value in [json!(""), json!("  "), json!(42), json!(["org"])] {
+            let claims = extra(json!({ "urn:zitadel:iam:user:resourceowner:id": value }));
+            assert_eq!(org_id_from_claims(&claims), None);
+        }
+    }
+
+    async fn call_org_route(claims: IntrospectionClaims) -> axum::response::Response {
+        async fn whose(Extension(user): Extension<AuthenticatedUser>) -> Result<String, ApiError> {
+            Ok(user.org()?.to_owned())
+        }
+        let mut replies = HashMap::new();
+        replies.insert("token".to_owned(), Ok(claims));
+        let state = make_state(replies);
+        let app = Router::new()
+            .route("/whose", get(whose))
+            .route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                require_bearer,
+            ))
+            .with_state(state);
+        let request = Request::builder()
+            .uri("/whose")
+            .header(header::AUTHORIZATION, "Bearer token")
+            .body(Body::empty())
+            .expect("request is valid");
+        app.oneshot(request).await.expect("router responds")
+    }
+
+    #[tokio::test]
+    async fn org_gives_each_caller_their_own_organization() {
+        for org in ["org-1", "org-2"] {
+            let claims = claims_with(json!({
+                "urn:zitadel:iam:user:resourceowner:id": org
+            }));
+            let response = call_org_route(claims).await;
+            assert_eq!(response.status(), StatusCode::OK);
+            let body = to_bytes(response.into_body(), usize::MAX)
+                .await
+                .expect("response body is readable");
+            assert_eq!(&body[..], org.as_bytes());
+        }
+    }
+
+    #[tokio::test]
+    async fn org_answers_403_when_the_token_names_none() {
+        let response = call_org_route(active_claims("user")).await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    /// Answers every lookup with the same reply and counts the calls.
+    struct CountingIntrospector {
+        calls: AtomicUsize,
+        reply: Result<IntrospectionClaims, IntrospectionError>,
+    }
+
+    impl CountingIntrospector {
+        fn new(reply: Result<IntrospectionClaims, IntrospectionError>) -> Arc<Self> {
+            Arc::new(Self {
+                calls: AtomicUsize::new(0),
+                reply,
+            })
+        }
+
+        fn calls(&self) -> usize {
+            self.calls.load(Ordering::SeqCst)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl TokenIntrospector for CountingIntrospector {
+        async fn introspect(
+            &self,
+            _token: &str,
+        ) -> Result<IntrospectionClaims, IntrospectionError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            self.reply.clone()
+        }
+    }
+
+    fn now_seconds() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock is after the epoch")
+            .as_secs()
+    }
+
+    #[tokio::test]
+    async fn a_repeated_token_is_looked_up_once() {
+        let inner = CountingIntrospector::new(Ok(active_claims("user")));
+        let cached = CachedIntrospector::new(inner.clone(), Duration::from_secs(30));
+        for _ in 0..3 {
+            let claims = cached.introspect("token").await.expect("answers");
+            assert_eq!(claims.sub.as_deref(), Some("user"));
+        }
+        assert_eq!(inner.calls(), 1);
+        cached.introspect("another-token").await.expect("answers");
+        assert_eq!(inner.calls(), 2);
+    }
+
+    #[tokio::test]
+    async fn the_answer_is_asked_again_after_the_ttl() {
+        let inner = CountingIntrospector::new(Ok(active_claims("user")));
+        let cached = CachedIntrospector::new(inner.clone(), Duration::from_millis(80));
+        cached.introspect("token").await.expect("answers");
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        cached.introspect("token").await.expect("answers");
+        assert_eq!(inner.calls(), 2);
+    }
+
+    #[tokio::test]
+    async fn inactive_tokens_and_failures_are_not_kept() {
+        let inactive = CountingIntrospector::new(Ok(IntrospectionClaims::default()));
+        let cached = CachedIntrospector::new(inactive.clone(), Duration::from_secs(30));
+        for _ in 0..2 {
+            let claims = cached.introspect("revoked").await.expect("answers");
+            assert!(!claims.active);
+        }
+        assert_eq!(inactive.calls(), 2);
+
+        let failing = CountingIntrospector::new(Err(IntrospectionError::Unavailable));
+        let cached = CachedIntrospector::new(failing.clone(), Duration::from_secs(30));
+        for _ in 0..2 {
+            assert!(cached.introspect("token").await.is_err());
+        }
+        assert_eq!(failing.calls(), 2);
+    }
+
+    #[test]
+    fn an_answer_is_never_kept_past_the_tokens_expiry() {
+        let now = UNIX_EPOCH + Duration::from_secs(1_000);
+        let max = Duration::from_secs(30);
+        let with_exp = |exp: u64| claims_with(json!({ "exp": exp }));
+
+        assert_eq!(cache_lifetime(&active_claims("user"), max, now), Some(max));
+        assert_eq!(cache_lifetime(&with_exp(1_500), max, now), Some(max));
+        assert_eq!(
+            cache_lifetime(&with_exp(1_010), max, now),
+            Some(Duration::from_secs(10))
+        );
+        assert_eq!(cache_lifetime(&with_exp(1_000), max, now), None);
+        assert_eq!(cache_lifetime(&with_exp(900), max, now), None);
+    }
+
+    #[tokio::test]
+    async fn a_token_about_to_expire_is_not_kept_longer_than_it_lives() {
+        let mut claims = active_claims("user");
+        claims
+            .extra
+            .insert("exp".to_owned(), json!(now_seconds() + 1));
+        let inner = CountingIntrospector::new(Ok(claims));
+        let cached = CachedIntrospector::new(inner.clone(), Duration::from_secs(30));
+        cached.introspect("token").await.expect("answers");
+        tokio::time::sleep(Duration::from_millis(2_100)).await;
+        cached.introspect("token").await.expect("answers");
+        assert_eq!(inner.calls(), 2);
     }
 }
