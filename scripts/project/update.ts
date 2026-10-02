@@ -1,0 +1,216 @@
+import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
+import { resolve } from "node:path";
+import { isTextBuffer, sha256, writeJson } from "../lib/files";
+import { git, gitTry, run } from "../lib/run";
+import { requireCargoEdit } from "./cargo-edit";
+import {
+	CONFIG_PATH,
+	type ProjectConfig,
+	readConfig,
+	UPDATE_STATE_PATH,
+} from "./config";
+import { updateDependencies, validateProject } from "./dependencies";
+import {
+	allChangedUpstreamPaths,
+	type Conflict,
+	mergeUpstreamFiles,
+	safeProjectPath,
+} from "./merge";
+
+interface UpdateState {
+	schemaVersion: 1;
+	branch: string;
+	previousSha: string;
+	targetSha: string;
+	phase: "conflicts" | "dependencies" | "validate";
+	conflicts: Conflict[];
+}
+
+export interface Options {
+	apply: boolean;
+	continueUpdate: boolean;
+}
+
+function readState(root: string): UpdateState | undefined {
+	const path = resolve(root, UPDATE_STATE_PATH);
+	if (!existsSync(path)) return undefined;
+	const state = JSON.parse(readFileSync(path, "utf8")) as UpdateState;
+	if (
+		state.schemaVersion !== 1 ||
+		!state.branch ||
+		!state.targetSha ||
+		!state.phase
+	) {
+		throw new Error(UPDATE_STATE_PATH + " is malformed.");
+	}
+	return state;
+}
+
+function writeState(root: string, state: UpdateState): void {
+	writeJson(resolve(root, UPDATE_STATE_PATH), state);
+}
+
+function fetchMain(root: string, config: ProjectConfig): string {
+	const ref = "refs/vern/upstream-main";
+	run(
+		"git",
+		[
+			"fetch",
+			"--no-tags",
+			config.upstream.url,
+			"+refs/heads/" + config.upstream.branch + ":" + ref,
+		],
+		{ cwd: root },
+	);
+	return git(root, "rev-parse", ref).stdout.trim();
+}
+
+function printPreview(root: string, from: string, to: string): void {
+	const files = allChangedUpstreamPaths(root, from, to);
+	console.log("Vern main: " + from.slice(0, 12) + " → " + to.slice(0, 12));
+	if (files.length === 0) console.log("No upstream file changes.");
+	else {
+		console.log("Changed upstream files (" + files.length + "):");
+		for (const path of files) console.log("  " + path);
+	}
+	console.log(
+		"Apply will also upgrade Bun and Rust dependencies, including major versions, then run workspace checks and tests.",
+	);
+}
+
+function checkUnresolved(root: string, state: UpdateState): void {
+	const unresolved: string[] = [];
+	for (const conflict of state.conflicts) {
+		const absolute = safeProjectPath(root, conflict.path);
+		const current =
+			existsSync(absolute) && statSync(absolute).isFile()
+				? readFileSync(absolute)
+				: undefined;
+		const currentHash = current ? sha256(current) : "<missing>";
+		if (currentHash === conflict.initialHash) {
+			unresolved.push(conflict.path);
+			continue;
+		}
+		if (current && isTextBuffer(current)) {
+			const text = new TextDecoder().decode(current);
+			if (/^(<<<<<<<|=======|>>>>>>>)(?: |$)/m.test(text))
+				unresolved.push(conflict.path);
+		}
+	}
+	if (unresolved.length > 0) {
+		throw new Error(
+			"Resolve these conflicts, then rerun --continue: " +
+				unresolved.join(", "),
+		);
+	}
+}
+
+function applyDependenciesAndValidation(
+	root: string,
+	config: ProjectConfig,
+	state: UpdateState,
+): void {
+	if (state.phase === "dependencies") {
+		updateDependencies(root);
+		config.upstream.lastSyncedSha = state.targetSha;
+		writeJson(resolve(root, CONFIG_PATH), config);
+		state.phase = "validate";
+		writeState(root, state);
+	}
+	validateProject(root);
+	rmSync(resolve(root, UPDATE_STATE_PATH), { force: true });
+	console.log(
+		"Vern files and dependencies are updated on branch " + state.branch + ".",
+	);
+}
+
+export function updateProject(root: string, options: Options): void {
+	const config = readConfig(root);
+	if (!config)
+		throw new Error(
+			"Run rename-project.ts first to create " + CONFIG_PATH + ".",
+		);
+
+	if (options.continueUpdate) {
+		const state = readState(root);
+		if (!state) throw new Error("There is no pending update to continue.");
+		const currentBranch = git(root, "branch", "--show-current").stdout.trim();
+		if (currentBranch !== state.branch)
+			throw new Error("Switch back to " + state.branch + " before continuing.");
+		if (state.phase === "conflicts") {
+			checkUnresolved(root, state);
+			state.phase = "dependencies";
+			writeState(root, state);
+		}
+		applyDependenciesAndValidation(root, config, state);
+		return;
+	}
+
+	if (readState(root))
+		throw new Error(
+			"A prior update is pending. Resolve it and run with --continue.",
+		);
+	const targetSha = fetchMain(root, config);
+	const ancestor = gitTry(
+		root,
+		"merge-base",
+		"--is-ancestor",
+		config.upstream.lastSyncedSha,
+		targetSha,
+	);
+	if (ancestor.status !== 0)
+		throw new Error(
+			"The saved upstream SHA is not an ancestor of Vern main. Check .vern/config.json.",
+		);
+	if (!options.apply) {
+		printPreview(root, config.upstream.lastSyncedSha, targetSha);
+		console.log(
+			"Preview only. Add --apply to create a review branch and apply the update.",
+		);
+		return;
+	}
+
+	const dirty = git(root, "status", "--porcelain").stdout.trim();
+	if (dirty)
+		throw new Error(
+			"Working tree must be clean before applying an upstream update.",
+		);
+	requireCargoEdit(root);
+	const branch = "vern/update-" + targetSha.slice(0, 8);
+	if (
+		gitTry(root, "show-ref", "--verify", "--quiet", "refs/heads/" + branch)
+			.status === 0
+	) {
+		throw new Error("Review branch already exists: " + branch);
+	}
+	git(root, "switch", "-c", branch);
+	const merged = mergeUpstreamFiles(
+		root,
+		config,
+		config.upstream.lastSyncedSha,
+		targetSha,
+	);
+	const state: UpdateState = {
+		schemaVersion: 1,
+		branch,
+		previousSha: config.upstream.lastSyncedSha,
+		targetSha,
+		phase: merged.conflicts.length > 0 ? "conflicts" : "dependencies",
+		conflicts: merged.conflicts,
+	};
+	writeState(root, state);
+	if (merged.conflicts.length > 0) {
+		console.error(
+			"Upstream merge has conflicts: " +
+				merged.conflicts.map((item) => item.path).join(", "),
+		);
+		console.error("Resolve them on " + branch + " and rerun with --continue.");
+		process.exitCode = 1;
+		return;
+	}
+	console.log(
+		"Merged upstream files: " +
+			(merged.updated.length ? merged.updated.join(", ") : "none"),
+	);
+	applyDependenciesAndValidation(root, config, state);
+}

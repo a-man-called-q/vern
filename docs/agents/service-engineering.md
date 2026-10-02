@@ -13,7 +13,7 @@ in one file.
 | `src/app.rs` | The router. Every route of the service is listed here | Yes, one line per route |
 | `src/<resource>.rs` | One resource: request and response types, handlers, tests | Yes, this is where the work is |
 | `src/error.rs` | `ApiError`, the only error a handler returns | Add a variant when a new status is needed |
-| `src/auth.rs`, `src/config.rs` | Token verification, `AuthenticatedUser`, roles | No. Build on them |
+| `src/auth/`, `src/config.rs` | Token verification, `AuthenticatedUser`, roles; the settings it checks at startup | No. Build on them |
 | `src/db.rs` | The pool, and applying migrations at startup | Rarely |
 | `migrations/` | The schema, one numbered SQL file per change | Add files; never edit one that has shipped |
 | `db/init.sql` | Creates the service's local database and role | No |
@@ -146,7 +146,7 @@ Cover, for each endpoint:
 ## Callers that are not signed-in users
 
 A device with its own token, or an event consumer, has no ZITADEL access token.
-Do not bend `auth.rs` for it: give it its own module (`src/device_auth.rs`) and
+Do not bend `src/auth/` for it: give it its own module (`src/device_auth.rs`) and
 its own router, next to `protected_routes` in `src/app.rs`, with the check in
 that module and limits on how often it can be called. Keep it away from the
 user routes, and let it write only what that kind of caller may write. Events

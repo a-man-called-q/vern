@@ -1,12 +1,10 @@
 use std::{env, fs, sync::Arc, time::Duration};
 
-use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
-use reqwest::{Client, Url, redirect::Policy};
-use serde::{Deserialize, Serialize};
+use jsonwebtoken::EncodingKey;
+use reqwest::Url;
+use serde::Deserialize;
 use thiserror::Error;
-use tokio::sync::OnceCell;
 
-const PRIVATE_KEY_JWT_TTL_SECONDS: i64 = 5 * 60;
 const DEFAULT_INTROSPECTION_CACHE_SECONDS: u64 = 30;
 // A revoked token or a removed role keeps working for this long at most, so the
 // setting has a ceiling.
@@ -20,12 +18,6 @@ pub enum ConfigError {
     InvalidIssuer,
     #[error("ZITADEL_PROJECT_ID must be set to the shared project ID")]
     InvalidProjectId,
-    #[error("ZITADEL_ISSUER discovery failed")]
-    Discovery(#[source] reqwest::Error),
-    #[error("ZITADEL discovery metadata did not match ZITADEL_ISSUER")]
-    IssuerMismatch,
-    #[error("ZITADEL discovery metadata has an invalid introspection endpoint")]
-    InvalidIntrospectionEndpoint,
     #[error("failed to read ZITADEL API key file")]
     KeyFileRead(#[source] std::io::Error),
     #[error("ZITADEL API key file is not valid JSON")]
@@ -34,29 +26,25 @@ pub enum ConfigError {
     InvalidKeyFile,
     #[error("ZITADEL API key file does not contain a valid RSA private key")]
     InvalidPrivateKey(#[source] jsonwebtoken::errors::Error),
-    #[error("failed to build HTTP client")]
-    HttpClient(#[source] reqwest::Error),
     #[error("INTROSPECTION_CACHE_SECONDS must be a whole number from 0 to 300")]
     InvalidIntrospectionCache,
 }
 
+/// The API's key from `bun run setup`: who it is to ZITADEL, and what it signs with.
+pub struct ApiKey {
+    pub client_id: String,
+    pub key_id: String,
+    pub signing_key: EncodingKey,
+}
+
+/// The service's settings, read from the environment and checked once at
+/// startup. A missing or malformed one stops the service before it listens.
 #[derive(Clone)]
 pub struct Config {
     issuer: String,
     project_id: String,
-    discovery_url: String,
-    introspection_endpoint: Arc<OnceCell<String>>,
-    client_id: String,
-    key_id: String,
-    signing_key: Arc<EncodingKey>,
-    http_client: Client,
+    api_key: Arc<ApiKey>,
     introspection_cache_ttl: Duration,
-}
-
-#[derive(Deserialize)]
-struct DiscoveryDocument {
-    issuer: String,
-    introspection_endpoint: String,
 }
 
 #[derive(Deserialize)]
@@ -67,13 +55,15 @@ struct ApiKeyFile {
     key: String,
 }
 
-#[derive(Serialize)]
-struct ClientAssertionClaims<'a> {
-    iss: &'a str,
-    sub: &'a str,
-    aud: &'a str,
-    iat: i64,
-    exp: i64,
+/// An absolute http(s) URL with a host and nothing else: no credentials, query,
+/// or fragment.
+pub fn is_plain_http_url(url: &Url) -> bool {
+    matches!(url.scheme(), "http" | "https")
+        && url.host_str().is_some()
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.query().is_none()
+        && url.fragment().is_none()
 }
 
 impl Config {
@@ -81,13 +71,7 @@ impl Config {
         let issuer = env::var("ZITADEL_ISSUER")
             .map_err(|_| ConfigError::MissingEnvironment("ZITADEL_ISSUER"))?;
         let issuer_url = Url::parse(&issuer).map_err(|_| ConfigError::InvalidIssuer)?;
-        if !matches!(issuer_url.scheme(), "http" | "https")
-            || issuer_url.host_str().is_none()
-            || !issuer_url.username().is_empty()
-            || issuer_url.password().is_some()
-            || issuer_url.query().is_some()
-            || issuer_url.fragment().is_some()
-        {
+        if !is_plain_http_url(&issuer_url) {
             return Err(ConfigError::InvalidIssuer);
         }
 
@@ -100,16 +84,6 @@ impl Config {
         {
             return Err(ConfigError::InvalidProjectId);
         }
-
-        let http_client = Client::builder()
-            .timeout(Duration::from_secs(5))
-            .redirect(Policy::none())
-            .build()
-            .map_err(ConfigError::HttpClient)?;
-        let discovery_url = format!(
-            "{}/.well-known/openid-configuration",
-            issuer.trim_end_matches('/')
-        );
 
         let key_path = env::var("ZITADEL_API_KEY_FILE")
             .map_err(|_| ConfigError::MissingEnvironment("ZITADEL_API_KEY_FILE"))?;
@@ -135,16 +109,16 @@ impl Config {
         Ok(Self {
             issuer: issuer.trim_end_matches('/').to_owned(),
             project_id,
-            discovery_url,
-            introspection_endpoint: Arc::new(OnceCell::new()),
-            client_id: key_file.client_id,
-            key_id: key_file.key_id,
-            signing_key: Arc::new(signing_key),
-            http_client,
+            api_key: Arc::new(ApiKey {
+                client_id: key_file.client_id,
+                key_id: key_file.key_id,
+                signing_key,
+            }),
             introspection_cache_ttl: Duration::from_secs(introspection_cache_ttl),
         })
     }
 
+    /// `ZITADEL_ISSUER` without a trailing slash: what tokens must name as `iss`.
     pub fn issuer(&self) -> &str {
         &self.issuer
     }
@@ -153,65 +127,12 @@ impl Config {
         &self.project_id
     }
 
+    pub fn api_key(&self) -> Arc<ApiKey> {
+        self.api_key.clone()
+    }
+
     /// How long an introspection answer may be reused. Zero turns the cache off.
     pub fn introspection_cache_ttl(&self) -> Duration {
         self.introspection_cache_ttl
-    }
-
-    pub async fn introspection_endpoint(&self) -> Result<&str, ConfigError> {
-        let endpoint = self
-            .introspection_endpoint
-            .get_or_try_init(|| async {
-                let metadata: DiscoveryDocument = self
-                    .http_client
-                    .get(&self.discovery_url)
-                    .send()
-                    .await
-                    .map_err(ConfigError::Discovery)?
-                    .error_for_status()
-                    .map_err(ConfigError::Discovery)?
-                    .json()
-                    .await
-                    .map_err(ConfigError::Discovery)?;
-                if metadata.issuer.trim_end_matches('/') != self.issuer {
-                    return Err(ConfigError::IssuerMismatch);
-                }
-
-                let introspection_url = Url::parse(&metadata.introspection_endpoint)
-                    .map_err(|_| ConfigError::InvalidIntrospectionEndpoint)?;
-                if !matches!(introspection_url.scheme(), "http" | "https")
-                    || introspection_url.host_str().is_none()
-                    || !introspection_url.username().is_empty()
-                    || introspection_url.password().is_some()
-                    || introspection_url.query().is_some()
-                    || introspection_url.fragment().is_some()
-                {
-                    return Err(ConfigError::InvalidIntrospectionEndpoint);
-                }
-                Ok(metadata.introspection_endpoint)
-            })
-            .await?;
-        Ok(endpoint.as_str())
-    }
-
-    pub fn http_client(&self) -> &Client {
-        &self.http_client
-    }
-
-    pub fn client_assertion(&self) -> Result<String, jsonwebtoken::errors::Error> {
-        let issued_at = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system clock must be after the Unix epoch")
-            .as_secs() as i64;
-        let claims = ClientAssertionClaims {
-            iss: &self.client_id,
-            sub: &self.client_id,
-            aud: &self.issuer,
-            iat: issued_at,
-            exp: issued_at + PRIVATE_KEY_JWT_TTL_SECONDS,
-        };
-        let mut header = Header::new(Algorithm::RS256);
-        header.kid = Some(self.key_id.clone());
-        encode(&header, &claims, self.signing_key.as_ref())
     }
 }

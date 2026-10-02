@@ -1,6 +1,9 @@
 title: Next.js app
 description: Generate a Next.js App Router app with OIDC login and server-side API calls.
 destination: '/apps/[name | kebab_case]'
+# Adds the files both web templates share (.templates/web-base); a file of
+# this template at the same path replaces the shared one.
+extends: ['web-base']
 variables:
   name:
     type: string

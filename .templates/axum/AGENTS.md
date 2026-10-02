@@ -7,7 +7,7 @@ Read [`../../AGENTS.md`](../../AGENTS.md) first. Before adding an endpoint, read
   verified `AuthenticatedUser`; a route outside it is public.
 - **One module per resource** in `src/<resource>.rs`: types, handlers, and tests
   together.{% if database %} `src/notes.rs` is the example to copy and then replace.{% endif %}
-- **`src/auth.rs` and `src/config.rs` verify tokens.** Build on
+- **`src/auth/` and `src/config.rs` verify tokens.** Build on
   `AuthenticatedUser`, `require_role`, and `has_role`; do not change how tokens
   are checked.
 - **Handlers return `ApiError`** (`src/error.rs`). Log the cause of a failure

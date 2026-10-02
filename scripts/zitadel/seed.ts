@@ -1,0 +1,210 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { errorMessage } from "../lib/errors";
+import { type ApiOptions, assertProjectId, callApi } from "./client";
+import { ensureCompanyUserGrant, ensureGrant, ensureProjectGrant } from "./grants";
+import { LOOPBACK_HOSTS } from "./oidc";
+import { ensureCompanyUser, ensureOrg } from "./orgs";
+import { assertPerson, findUser } from "./users";
+
+/** Where a project lists the users and grants that `bun run setup` seeds locally. */
+export const SEED_FILE = "seed-users.json";
+/** The variable in apps/auth-server/.env that holds the password of the seeded users. */
+export const SEED_PASSWORD_KEY = "ZITADEL_SEED_PASSWORD";
+
+export type SeedUser = { name: string; givenName: string; familyName: string; roles: string[] };
+/**
+ * A company is a ZITADEL organization. Its `roles` are what the company may use
+ * and what every one of its users holds; a user's own `roles` come on top (such
+ * as `owner`) and are granted to the company too.
+ */
+export type SeedCompany = { name: string; roles: string[]; users: SeedUser[] };
+export type SeedUsers = { adminRoles: string[]; users: SeedUser[]; companies: SeedCompany[] };
+
+type Log = (message: string) => void;
+
+const MAX_LENGTH = 200;
+// The part of a login name before the @: plain characters that survive a URL and a shell.
+const USER_NAME = /^[a-z0-9][a-z0-9._-]{0,62}$/;
+
+function fail(message: string): never {
+	throw new Error(`${SEED_FILE}: ${message}`);
+}
+
+function object(value: unknown, label: string): Record<string, unknown> {
+	if (!value || typeof value !== "object" || Array.isArray(value)) fail(`${label} must be an object`);
+	return value as Record<string, unknown>;
+}
+
+function noOtherKeys(source: Record<string, unknown>, allowed: string[], label: string): void {
+	const unknown = Object.keys(source).filter((key) => !allowed.includes(key));
+	if (unknown.length > 0) fail(`${label} has unknown ${unknown.length > 1 ? "keys" : "key"}: ${unknown.join(", ")}`);
+}
+
+function text(value: unknown, label: string): string {
+	if (typeof value !== "string" || value.trim().length < 1 || value.length > MAX_LENGTH) {
+		fail(`${label} must be a string of 1-${MAX_LENGTH} characters`);
+	}
+	return value;
+}
+
+function roleList(value: unknown, label: string, known: string[]): string[] {
+	if (value === undefined) return [];
+	if (!Array.isArray(value)) fail(`${label} must be an array of role keys`);
+	const keys: string[] = [];
+	for (const entry of value) {
+		const key = text(entry, `a role of ${label}`);
+		if (!known.includes(key)) fail(`${label} lists "${key}", which roles.json does not declare`);
+		if (keys.includes(key)) fail(`${label} lists "${key}" twice`);
+		keys.push(key);
+	}
+	return keys;
+}
+
+function readUsers(value: unknown, label: string, known: string[]): SeedUser[] {
+	if (value !== undefined && !Array.isArray(value)) fail(`${label} must be an array`);
+	const users: SeedUser[] = [];
+	for (const entry of (value as unknown[] | undefined) ?? []) {
+		const source = object(entry, "each user");
+		noOtherKeys(source, ["name", "givenName", "familyName", "roles"], "a user");
+		const name = text(source.name, "a user name");
+		if (!USER_NAME.test(name)) {
+			fail(`user name "${name}" must be lowercase letters, digits, and . _ - (it starts the login name before the @)`);
+		}
+		if (users.some((user) => user.name === name)) fail(`user "${name}" is listed twice`);
+		users.push({
+			name,
+			givenName: text(source.givenName, `the givenName of "${name}"`),
+			familyName: text(source.familyName, `the familyName of "${name}"`),
+			roles: roleList(source.roles, `the roles of "${name}"`, known),
+		});
+	}
+	return users;
+}
+
+/**
+ * Reads seed-users.json: `{ "adminRoles": [...], "users": [{ "name", "givenName",
+ * "familyName", "roles" }], "companies": [{ "name", "roles", "users": [...] }] }`.
+ * Every role must be one roles.json declares (`knownRoles`), so a typo stops
+ * setup before it calls ZITADEL. A missing file means nothing to seed.
+ */
+export function readSeedUsers(root: string, knownRoles: string[]): SeedUsers {
+	const path = resolve(root, SEED_FILE);
+	if (!existsSync(path)) return { adminRoles: [], users: [], companies: [] };
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(readFileSync(path, "utf8"));
+	} catch (error) {
+		throw new Error(`${SEED_FILE} is not valid JSON: ${errorMessage(error)}`);
+	}
+	const file = object(parsed, "the file");
+	noOtherKeys(file, ["adminRoles", "users", "companies"], "the file");
+	const adminRoles = roleList(file.adminRoles, "adminRoles", knownRoles);
+	const users = readUsers(file.users, "users", knownRoles);
+
+	if (file.companies !== undefined && !Array.isArray(file.companies)) fail("companies must be an array");
+	const companies: SeedCompany[] = [];
+	for (const entry of (file.companies as unknown[] | undefined) ?? []) {
+		const source = object(entry, "each company");
+		noOtherKeys(source, ["name", "roles", "users"], "a company");
+		const name = text(source.name, "a company name");
+		if (companies.some((company) => company.name === name)) fail(`company "${name}" is listed twice`);
+		companies.push({
+			name,
+			roles: roleList(source.roles, `the roles of company "${name}"`, knownRoles),
+			users: readUsers(source.users, `the users of company "${name}"`, knownRoles),
+		});
+	}
+	return { adminRoles, users, companies };
+}
+
+/** Whether the issuer is this machine, the only place seeded users are allowed. */
+export function isLocalIssuer(issuer: string): boolean {
+	try {
+		return LOOPBACK_HOSTS.has(new URL(issuer).hostname);
+	} catch {
+		return false;
+	}
+}
+
+export type SeedOptions = {
+	projectId: string;
+	/** Login domain of the organization: what follows the @ in a login name. */
+	domain: string;
+	/** Login name of the bootstrap admin ZITADEL created. */
+	adminName: string;
+	/** The password for a user that has to be created; not called when none is. */
+	password: () => string;
+	log: Log;
+};
+
+/**
+ * Grants `adminRoles` to the bootstrap admin and creates the listed users with
+ * their roles. A user that already exists is left as it is (profile, password,
+ * state) and only gets the roles it is missing, so running it again changes
+ * nothing.
+ */
+export async function seedUsers(api: ApiOptions, seed: SeedUsers, options: SeedOptions): Promise<string[]> {
+	const { projectId, log } = options;
+	assertProjectId(projectId);
+
+	if (seed.adminRoles.length > 0) {
+		const admin = await findUser(api, options.adminName);
+		if (!admin) {
+			log(`No user ${options.adminName}; not granting ${seed.adminRoles.join(", ")}`);
+		} else {
+			const grant = await ensureGrant(api, admin.id, projectId, seed.adminRoles);
+			if (grant.added.length > 0) log(`Granted ${grant.added.join(", ")} to ${options.adminName}`);
+		}
+	}
+
+	const logins: string[] = [];
+	for (const user of seed.users) {
+		const login = `${user.name}@${options.domain}`;
+		logins.push(login);
+		const found = await findUser(api, login);
+		assertPerson(found, login);
+		let id = found?.id;
+		if (!id) {
+			const created = await callApi(api, "POST", "/v2/users/human", {
+				username: login,
+				profile: {
+					givenName: user.givenName,
+					familyName: user.familyName,
+					displayName: `${user.givenName} ${user.familyName}`,
+				},
+				// The address is not real: it is verified up front so no mail is needed.
+				email: { email: login, isVerified: true },
+				password: { password: options.password(), changeRequired: false },
+			});
+			id = String(created.userId);
+			log(`Created user ${login}`);
+		}
+		const grant = await ensureGrant(api, id, projectId, user.roles);
+		if (grant.added.length > 0) log(`Granted ${grant.added.join(", ")} to ${login}`);
+	}
+
+	for (const company of seed.companies) {
+		const { org, created } = await ensureOrg(api, company.name);
+		if (created) log(`Created company ${company.name}`);
+		// The company may use every role one of its users holds.
+		const usable = [...new Set([...company.roles, ...company.users.flatMap((user) => user.roles)])];
+		const projectGrant = await ensureProjectGrant(api, projectId, org.id, usable);
+		if (projectGrant.added.length > 0) log(`Allowed ${company.name} to use ${projectGrant.added.join(", ")}`);
+		for (const user of company.users) {
+			const login = `${user.name}@${org.primaryDomain}`;
+			logins.push(login);
+			const member = await ensureCompanyUser(api, org.id, {
+				login,
+				givenName: user.givenName,
+				familyName: user.familyName,
+				password: options.password,
+			});
+			if (member.created) log(`Created user ${login}`);
+			const roles = [...new Set([...company.roles, ...user.roles])];
+			const grant = await ensureCompanyUserGrant(api, org.id, member.id, projectId, projectGrant.id, roles);
+			if (grant.added.length > 0) log(`Granted ${grant.added.join(", ")} to ${login}`);
+		}
+	}
+	return logins;
+}
