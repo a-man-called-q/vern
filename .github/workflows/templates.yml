@@ -186,6 +186,9 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          # `moon run` compares against main.
+          fetch-depth: 0
 
       - name: Install the pinned toolchain
         uses: moonrepo/setup-toolchain@v0
