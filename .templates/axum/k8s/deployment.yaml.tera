@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ name | kebab_case }}
+  labels:
+    app.kubernetes.io/name: {{ name | kebab_case }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ name | kebab_case }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ name | kebab_case }}
+        app.kubernetes.io/component: api
+    spec:
+      # The API finishes the requests in flight on SIGTERM.
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: api
+          # The overlay sets the registry and the tag.
+          image: {{ name | kebab_case }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 4000
+          envFrom:
+            # ZITADEL_ISSUER and ZITADEL_PROJECT_ID, the same for every app.
+            - configMapRef:
+                name: identity
+            # Settings of this API only, such as ZITADEL_ORG_ADMIN_TOKEN.
+            - secretRef:
+                name: {{ name | kebab_case }}
+                optional: true
+          env:
+            - name: ZITADEL_API_KEY_FILE
+              value: /run/secrets/zitadel-api-key.json
+{%- if database %}
+            # This API's own database; see deploy/k8s/README.md.
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ name | kebab_case }}-database
+                  key: url
+{%- endif %}
+{%- if events %}
+            # The event bus; see deploy/k8s/README.md.
+            - name: NATS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: bus
+                  key: url
+{%- endif %}
+          volumeMounts:
+            # The API application's key from `bun run setup -- --kubernetes`.
+            - name: key
+              mountPath: /run/secrets
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: key
+          secret:
+            secretName: {{ name | kebab_case }}-key

@@ -425,7 +425,13 @@ bun run setup -- --deploy
 ```
 
 The same stack runs on your machine with local certificates, which CI uses to
-sign in through it on every change. For other platforms, build the images with
+sign in through it on every change.
+
+For several web apps and APIs, or replicas, [`deploy/k8s/`](deploy/k8s/README.md)
+runs the product on Kubernetes with Kustomize: every app gets its own manifests
+and HTTPS hostname, and `bun run setup -- --kubernetes production` creates them
+all in ZITADEL. `deploy/k8s/local-cluster.sh` runs the same overlay on a kind
+cluster on your machine. For other platforms, build the images with
 `moon run <app>:docker` and run them with the settings from the app's README
 and its production checklist. For more on running ZITADEL itself, see ZITADEL's
 [self-hosting guide](https://zitadel.com/docs/self-hosting/deploy/overview).

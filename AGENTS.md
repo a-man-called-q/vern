@@ -16,7 +16,7 @@ the product on top of them; do not rebuild them.
 | `.templates/` | The generators behind `moon generate` |
 | `scripts/` | Setup, provisioning, doctor, rename, and update |
 | `roles.json`, `seed-users.json` | The product's roles, and local test users |
-| `deploy/` | The production Docker Compose stack |
+| `deploy/` | The production Docker Compose stack, and `deploy/k8s/` for Kubernetes |
 
 ## Recipes
 
@@ -29,6 +29,7 @@ Read the one that matches the task before writing code. Each is short.
 | Add an endpoint, a table, or a rule to a service | [docs/agents/service-engineering.md](docs/agents/service-engineering.md) |
 | Protect a page, or call an API from a web app | [docs/agents/web-to-api.md](docs/agents/web-to-api.md) |
 | Add a role, a test user, or a screen that manages users | [docs/agents/roles-and-users.md](docs/agents/roles-and-users.md) |
+| Deploy to Kubernetes, or change how an app runs there | [docs/agents/kubernetes.md](docs/agents/kubernetes.md) |
 
 Each generated app also has its own `AGENTS.md` and a README that covers its
 code and its production checklist.

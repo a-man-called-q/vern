@@ -1,0 +1,5 @@
+# ZITADEL's PostgreSQL, with the password in the generated `zitadel-db` Secret.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - postgres.yaml

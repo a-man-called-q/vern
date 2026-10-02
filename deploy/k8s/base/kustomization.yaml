@@ -1,0 +1,6 @@
+# Written by `bun run setup -- --kubernetes`: the identity stack, then every web
+# app and API of the project. Run it again after generating one.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - identity

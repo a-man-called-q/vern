@@ -1,5 +1,6 @@
+import { relative } from "node:path";
 import type { App } from "../lib/projects";
-import { envFiles, parseEnv, setEnvValue } from "../lib/env";
+import { type EnvFiles, envFiles, parseEnv, setEnvValue } from "../lib/env";
 import { readConfig } from "../project/config";
 import type { ApiOptions } from "../zitadel/client";
 import { ensureMemberRole } from "../zitadel/members";
@@ -23,16 +24,22 @@ export function wantsOrgAdmin(root: string, app: App): boolean {
  * organization): README explains it, and `bun run zitadel:service-account` does
  * the same by hand against a production ZITADEL.
  */
-export async function provisionOrgAdmin(api: ApiOptions, root: string, app: App, log: Log): Promise<void> {
+export async function provisionOrgAdmin(
+	api: ApiOptions,
+	root: string,
+	app: App,
+	log: Log,
+	/** Where the token goes: the app's .env, or a Kubernetes Secret's file. */
+	files: EnvFiles = envFiles(root, app.path),
+): Promise<void> {
 	const userName = `${readConfig(root)?.project.slug ?? "vern"}-${app.name}-orgs`;
 	const user = await ensureServiceUser(api, userName);
 	await ensureMemberRole(api, "instance", user.id, ORG_ADMIN_ROLE);
-	const files = envFiles(root, app.path);
 	const current = parseEnv(files.env).get(ORG_ADMIN_TOKEN_KEY);
 	if (current && (await tokenWorks(api, current, user.id))) {
 		log(`${app.path}: keeping the token in ${ORG_ADMIN_TOKEN_KEY}`);
 		return;
 	}
 	setEnvValue(files, ORG_ADMIN_TOKEN_KEY, await createToken(api, user.id));
-	log(`${app.path}: wrote a token for service user "${userName}" (${ORG_ADMIN_ROLE}) to ${ORG_ADMIN_TOKEN_KEY} in ${app.path}/.env`);
+	log(`${app.path}: wrote a token for service user "${userName}" (${ORG_ADMIN_ROLE}) to ${ORG_ADMIN_TOKEN_KEY} in ${relative(root, files.env)}`);
 }

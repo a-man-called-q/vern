@@ -44,6 +44,8 @@ function shouldSkipUpstreamPath(
 		path === UPDATE_STATE_PATH ||
 		path === CONFIG_PATH ||
 		path === "bun.lock" ||
+		// `bun run setup -- --kubernetes` writes the project's own list of apps.
+		path === "deploy/k8s/base/kustomization.yaml" ||
 		path.endsWith("/bun.lock") ||
 		path.endsWith("/Cargo.lock")
 	)

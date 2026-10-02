@@ -126,7 +126,19 @@ and `test` tasks run it first). `src/events.rs` has everything:
   twice with the same result. A second publish with the same ID inside the
   server's duplicate window is dropped.
 
-{% endif %}## Local ZITADEL setup
+{% endif %}## Production
+
+- The image (`moon run {{ name | kebab_case }}:docker`) listens on port 4000 and
+  reads `ZITADEL_ISSUER`, `ZITADEL_PROJECT_ID`, and the key at
+  `/run/secrets/zitadel-api-key.json`{% if database %}, plus `DATABASE_URL`{% endif %}{% if events %} and `NATS_URL`{% endif %}.
+- `GET /healthz` is public and calls nothing: point load balancers and probes at
+  it.
+- On SIGTERM (`docker stop`, a rolling update) the API stops accepting
+  connections and finishes the requests in flight first.
+- On Kubernetes, `k8s/` holds this API's Deployment and Service, which
+  `deploy/k8s` lists and configures; see `deploy/k8s/README.md`.
+
+## Local ZITADEL setup
 
 From the repository root, run:
 
