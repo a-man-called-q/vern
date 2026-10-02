@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { renderPackageTemplate } from "./package-template";
 import {
 	fitLogoText,
 	type ProjectConfig,
@@ -381,7 +382,7 @@ describe("update-project", () => {
 			"apps/auth-server/conflict.txt": "shared line\n",
 			"packages/ui/token.txt": "color: violet\n",
 			".templates/tanstack/package.json.tera":
-				'{\n  "name": "{{ name | kebab_case }}",\n  "dependencies": {\n    "@acme/ui": "workspace:*",\n    "demo": "^1.0.0"\n  }\n}\n',
+				'{\n  "name": "{{ name | kebab_case }}",\n  "dependencies": {\n{% if include_demos %}    "chart": "^1.0.0",\n{% endif %}    "@acme/ui": "workspace:*",\n    "demo": "^1.0.0"\n  }\n}\n',
 			".templates/next/package.json.tera":
 				'{\n  "name": "{{ name | kebab_case }}",\n  "dependencies": {\n    "@acme/ui": "workspace:*",\n    "demo": "^1.0.0"\n  }\n}\n',
 			".templates/axum/Cargo.toml.tera":
@@ -490,12 +491,18 @@ describe("update-project", () => {
 		expect(
 			readFileSync(resolve(consumer, "apps/service/Cargo.toml"), "utf8"),
 		).toContain('async-trait = "0.2"');
-		const tanstackTemplate = JSON.parse(
-			readFileSync(
-				resolve(consumer, ".templates/tanstack/package.json.tera"),
-				"utf8",
-			),
+		const tanstackTemplateText = readFileSync(
+			resolve(consumer, ".templates/tanstack/package.json.tera"),
+			"utf8",
 		);
+		// The demo-only dependency keeps its conditional block.
+		expect(tanstackTemplateText).toContain(
+			'{% if include_demos %}    "chart": "^1.0.0",\n{% endif %}    "demo": "^3.0.0",',
+		);
+		const tanstackTemplate = JSON.parse(
+			renderPackageTemplate(tanstackTemplateText, false),
+		);
+		expect(tanstackTemplate.dependencies.chart).toBeUndefined();
 		expect(tanstackTemplate.name).toBe("{{ name | kebab_case }}");
 		expect(tanstackTemplate.dependencies["@acme/ui"]).toBe("workspace:*");
 		expect(tanstackTemplate.dependencies.demo).toBe("^3.0.0");

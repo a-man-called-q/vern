@@ -12,7 +12,14 @@ moon generate tanstack -- --name dashboard --port 3000
 Demo routes and examples are included by default. Omit them with
 `--no-include_demos` and the app starts from a minimal signed-in shell: a
 sidebar with working links, a header with the app name, a menu with only "Sign
-out", and an empty dashboard page, with no sample data.
+out", and an empty dashboard page, with no sample data. Its `package.json` lists
+only what that shell imports: the libraries the demos use (tables, charts, forms,
+drag and drop, toasts) are left out.
+
+In both web templates, a dependency that only a demo imports goes inside the
+`{% if include_demos %}` block at the top of `dependencies` in
+`package.json.tera`. `bun test scripts` generates each template with and without
+demos and fails on a dependency nothing imports, or an import that is not listed.
 
 ## Next.js
 

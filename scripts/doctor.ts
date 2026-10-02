@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseEnv } from "./env-files";
+import { renderPackageTemplate } from "./package-template";
 import {
 	CONFIG_PATH,
 	gitTry,
@@ -253,14 +254,18 @@ function main(): void {
 			);
 			if (!existsSync(templatePackage)) continue;
 			try {
-				const rendered = readFileSync(templatePackage, "utf8").replace(
+				const named = readFileSync(templatePackage, "utf8").replace(
 					'"name": "{{ name | kebab_case }}"',
 					'"name": "doctor-template"',
 				);
-				JSON.parse(rendered);
+				// Both ways `moon generate` can render it: with the demo-only
+				// dependencies and without them.
+				for (const includeDemos of [true, false])
+					JSON.parse(renderPackageTemplate(named, includeDemos));
 				report(
 					"OK",
-					label + " package template is valid JSON after rendering its name.",
+					label +
+						" package template is valid JSON with and without its demo dependencies.",
 				);
 			} catch (error) {
 				report(
