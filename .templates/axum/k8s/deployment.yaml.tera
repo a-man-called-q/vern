@@ -1,3 +1,78 @@
+{% if worker -%}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ name | kebab_case }}
+  labels:
+    app.kubernetes.io/name: {{ name | kebab_case }}
+    app.kubernetes.io/component: worker
+spec:
+  # More replicas share the work when it comes from the bus: each event reaches
+  # one of them.
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ name | kebab_case }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ name | kebab_case }}
+        app.kubernetes.io/component: worker
+    spec:
+      # The worker stops on SIGTERM; an event it had not finished is delivered again.
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: worker
+          # The overlay sets the registry and the tag.
+          image: {{ name | kebab_case }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            # Only /healthz answers here. Nothing routes to it: a worker has no
+            # Service and no hostname.
+            - name: http
+              containerPort: 4000
+{%- if database or events %}
+          env:
+{%- endif %}
+{%- if database %}
+            # This worker's own database; see deploy/base/README.md.
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ name | kebab_case }}-database
+                  key: url
+{%- endif %}
+{%- if events %}
+            # The event bus; see deploy/base/README.md.
+            - name: NATS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: bus
+                  key: url
+{%- endif %}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+{%- else -%}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -84,3 +159,4 @@ spec:
         - name: key
           secret:
             secretName: {{ name | kebab_case }}-key
+{%- endif %}

@@ -1,6 +1,19 @@
 ---
 skip: {{ not database }}
 ---
+{% if worker -%}
+-- What this worker has handled, by the event's ID, so that a second delivery of
+-- the same event changes nothing. Replace it with your own model, or add to it.
+--
+-- Migrations are embedded in the binary and applied when the worker starts. Add
+-- the next one as a new file in migrations/; never edit one that has shipped.
+
+CREATE TABLE processed_events (
+    id           text        PRIMARY KEY,
+    name         text        NOT NULL,
+    processed_at timestamptz NOT NULL DEFAULT now()
+);
+{%- else -%}
 -- The table the example /api/notes endpoints use. Replace it with your own
 -- model. Users live in ZITADEL, so owner_sub is a ZITADEL user ID.
 --
@@ -15,3 +28,4 @@ CREATE TABLE notes (
 );
 
 CREATE INDEX notes_owner_idx ON notes (owner_sub, created_at DESC);
+{%- endif %}

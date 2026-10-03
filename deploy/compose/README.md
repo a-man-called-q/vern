@@ -86,8 +86,8 @@ the same command without service names.
 
 ## More apps
 
-The stack deploys one web app and one API. For several of each, or more than
-one replica, use [Kubernetes](../base/README.md): `bun run setup -- --kubernetes
+The stack deploys one web app and one API, and no worker (a service generated
+with `--worker`). For several of each, a worker, or more than one replica, use [Kubernetes](../base/README.md): `bun run setup -- --kubernetes
 prod` provisions every web app and API. For another app, copy the `web` or
 `api` service with its own hostname (add it to the `traefik` aliases) and give
 it its own ZITADEL application: in the Console, or with `bun run zitadel:app`

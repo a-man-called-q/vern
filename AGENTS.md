@@ -10,7 +10,7 @@ the product on top of them; do not rebuild them.
 | Path | What it is |
 | --- | --- |
 | `apps/<name>` | One web app each (TanStack Start or Next.js), generated from `.templates/`, and Storybook. Product code lives here |
-| `services/<name>` | One Axum API each, generated from `.templates/axum`. Product code lives here |
+| `services/<name>` | One Axum API each, or a worker that serves no API (`--worker`), generated from `.templates/axum`. Product code lives here |
 | `packages/<name>` | What the web apps share: `ui` (shadcn components and design tokens, `@vern/ui`), `web-auth` (sign-in, the session, and API calls as the user, `@vern/web-auth`), and `app-shell` (the dashboard's sidebar and header, the public pages' header and footer, `@vern/app-shell`) |
 | `crates/<name>` | What the APIs share, as crates of the Cargo workspace at the root: `svc-auth` (the token check), `svc-http` (`ApiError`, `/healthz`), `svc-boot` (startup and shutdown), `svc-db` (the database pool), `svc-events` (the outbox and the bus) |
 | `.templates/` | The generators behind `moon generate` |

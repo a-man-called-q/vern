@@ -129,9 +129,9 @@ function readBacking(root: string): Backing {
 	return { data: has("data"), bus: has("bus"), storage };
 }
 
-/** Each app's hostname, and what it needs from the cluster. */
+/** Each app's hostname (a worker has none), and what it needs from the cluster. */
 function describeApps(root: string, apps: App[], settings: KubeSettings, log: Log): KubeApp[] {
-	const host = (app: App) => `${app.name}.${settings.domain}`;
+	const host = (app: App) => (app.kind === "worker" ? "" : `${app.name}.${settings.domain}`);
 	const apiUrls = new Map(apps.filter((app) => app.kind === "api").map((app) => [app.name, `https://${host(app)}`]));
 	return apps.map((app) => {
 		if (host(app) === settings.authHost) throw new Error(`${app.path}: its hostname ${host(app)} is ZITADEL's`);
@@ -139,8 +139,8 @@ function describeApps(root: string, apps: App[], settings: KubeSettings, log: Lo
 		const kubeApp: KubeApp = {
 			...app,
 			host: host(app),
-			database: app.kind === "api" && example.has("DATABASE_URL"),
-			events: app.kind === "api" && example.has("NATS_URL"),
+			database: app.kind !== "web" && example.has("DATABASE_URL"),
+			events: app.kind !== "web" && example.has("NATS_URL"),
 			secretEnv: app.kind === "api" && wantsOrgAdmin(root, app),
 			apiUrls: [],
 		};
@@ -192,7 +192,7 @@ function ensureSecrets(
 		if (app.kind === "web") {
 			keep(`${app.name}.env`, "SESSION_SECRET", () => secret("base64", 32));
 			if (!parseEnv(join(secrets, `${app.name}.env`)).has("ZITADEL_CLIENT_ID")) setSecret(join(secrets, `${app.name}.env`), "ZITADEL_CLIENT_ID", "");
-		} else {
+		} else if (app.kind === "api") {
 			// Until setup creates the key, the API stops at startup with a clear error.
 			if (!existsSync(join(secrets, `${app.name}-key.json`))) writePrivate(join(secrets, `${app.name}-key.json`), "{}\n");
 			if (app.secretEnv && !existsSync(join(secrets, `${app.name}.env`))) writePrivate(join(secrets, `${app.name}.env`), "");
@@ -259,7 +259,11 @@ function writeManifests(
 export function generateAppManifests(root: string, app: KubeApp): void {
 	const temp = mkdtempSync(join(realpathSync(tmpdir()), "vern-k8s-"));
 	try {
-		const flags = [...(app.database ? ["--database"] : []), ...(app.events ? ["--events"] : [])];
+		const flags = [
+			...(app.database ? ["--database"] : []),
+			...(app.events ? ["--events"] : []),
+			...(app.kind === "worker" ? ["--worker"] : []),
+		];
 		run(
 			"moon",
 			[
@@ -293,7 +297,8 @@ function readNamespace(root: string, dir: string): string {
 /**
  * The Kubernetes flow: settings, Secrets, and manifests for the overlay in
  * deploy/<environment>; then the cluster, ZITADEL's project, an application per web app
- * and a key per API; then the manifests again with what ZITADEL created.
+ * and a key per API (a worker gets neither); then the manifests again with what
+ * ZITADEL created.
  */
 export async function setupKubernetes(
 	overlay: Overlay,
@@ -310,10 +315,10 @@ export async function setupKubernetes(
 	const apps = describeApps(root, findApps(root), settings, log);
 	const backing = readBacking(root);
 	if (apps.some((app) => app.database) && !backing.data && overlay === "local") {
-		throw new Error("An API has a database, but there is no data project: moon generate postgres -- --name data --port 5433");
+		throw new Error("A service has a database, but there is no data project: moon generate postgres -- --name data --port 5433");
 	}
 	if (apps.some((app) => app.events) && !backing.bus && overlay === "local") {
-		throw new Error("An API uses the bus, but there is no bus project: moon generate bus -- --name bus --port 4222");
+		throw new Error("A service uses the bus, but there is no bus project: moon generate bus -- --name bus --port 4222");
 	}
 	for (const app of apps.filter((item) => !existsSync(resolve(root, item.path, "k8s/kustomization.yaml")))) {
 		(deps.generateAppManifests ?? generateAppManifests)(root, app);
@@ -363,7 +368,7 @@ export async function setupKubernetes(
 		if (app.kind === "web") {
 			const clientId = await ensureWebApplication(api, projectId, app, `https://${app.host}`, log);
 			setSecret(join(secrets, `${app.name}.env`), "ZITADEL_CLIENT_ID", clientId);
-		} else {
+		} else if (app.kind === "api") {
 			await ensureApiKey(api, projectId, app, join(secrets, `${app.name}-key.json`), { file: 0o600, dir: 0o700 }, root, log);
 			if (app.secretEnv) {
 				const target = join(secrets, `${app.name}.env`);

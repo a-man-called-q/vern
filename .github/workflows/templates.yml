@@ -156,6 +156,7 @@ jobs:
 
   # An API generated with --database --events: its outbox is tested against the
   # data project's PostgreSQL, and an event goes through the bus project's NATS.
+  # Beside it, a worker with the same flags (it serves no API), and a bare one.
   axum-events:
     runs-on: ubuntu-24.04
     steps:
@@ -169,18 +170,23 @@ jobs:
         with:
           auto-install: true
 
-      - name: Generate the data project, the bus, and the API
+      - name: Generate the data project, the bus, the API, and the workers
         run: |
           moon generate postgres -- --name data --port 5433
           moon generate bus -- --name bus --port 4222
           moon generate axum -- --name api --port 4000 --database --events
-          cp services/api/.env.example services/api/.env
+          moon generate axum -- --name ingest --port 4001 --database --events --worker
+          moon generate axum -- --name tick --port 4002 --worker
+          for service in api ingest tick; do cp "services/$service/.env.example" "services/$service/.env"; done
 
       - name: Check and test the API
         run: moon run api:check api:test
 
-      - name: Build the production image
-        run: moon run api:docker
+      - name: Check and test the workers
+        run: moon run ingest:check ingest:test tick:check tick:test
+
+      - name: Build the production images
+        run: moon run api:docker ingest:docker
 
   # The object store: its bucket is created and takes a signed request.
   storage:
@@ -268,6 +274,7 @@ jobs:
           moon generate next -- --name admin --port 3001 --no-include_demos
           moon generate axum -- --name api --port 4000 --database
           moon generate axum -- --name billing --port 4001 --database --events
+          moon generate axum -- --name ingest --port 4002 --database --events --worker
           printf 'API_APP=api\n' >> apps/web/.env.example
           printf 'API_APP=api\nAPI_APPS=billing\n' >> apps/admin/.env.example
 
