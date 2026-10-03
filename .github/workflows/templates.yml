@@ -185,8 +185,11 @@ jobs:
       - name: Check and test the workers
         run: moon run ingest:check ingest:test tick:check tick:test
 
+      # One after the other: both builds use the same cargo cache mounts.
       - name: Build the production images
-        run: moon run api:docker ingest:docker
+        run: |
+          moon run api:docker
+          moon run ingest:docker
 
   # The object store: its bucket is created and takes a signed request.
   storage:
