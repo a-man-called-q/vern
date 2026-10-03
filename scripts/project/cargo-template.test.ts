@@ -23,6 +23,14 @@ describe("cargo template", () => {
 		);
 	});
 
+	test("strips a condition that leaves a dependency out, too", () => {
+		expect(
+			stripCargoConditions(
+				"[dependencies]\n{% if not worker %}axum = { workspace = true }\n{% endif %}tokio = { workspace = true }\n",
+			),
+		).toBe("[dependencies]\naxum = { workspace = true }\ntokio = { workspace = true }\n");
+	});
+
 	test("refuses a marker that is not one conditional dependency line", () => {
 		expect(() =>
 			stripCargoConditions(

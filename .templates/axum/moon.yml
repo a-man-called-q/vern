@@ -2,8 +2,12 @@ tasks:
   dev:
     command: cargo run
     description: Run this Axum service in development mode
+{%- if not worker or database or events %}
     deps:
+{%- endif %}
+{%- if not worker %}
       - 'auth-server:up'
+{%- endif %}
 {%- if database %}
       - 'data:up'
 {%- endif %}

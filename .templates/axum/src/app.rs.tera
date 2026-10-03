@@ -1,3 +1,6 @@
+---
+skip: {{ worker }}
+---
 {% if database %}use axum::{Router, routing::get};
 {% else %}use axum::Router;
 {% endif %}use svc_auth::{AppState, routes::api_router};

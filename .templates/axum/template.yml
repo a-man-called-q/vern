@@ -19,3 +19,7 @@ variables:
     type: boolean
     default: false
     prompt: Send and receive events over NATS (needs --database and the bus project, moon generate bus)?
+  worker:
+    type: boolean
+    default: false
+    prompt: A worker instead of an API? It serves only /healthz and gets no ZITADEL application.

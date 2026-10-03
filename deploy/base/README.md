@@ -10,7 +10,7 @@ overlay on this base, in its own folder under `deploy/`.
 
 | Path | What it is |
 | --- | --- |
-| `apps/<name>/k8s`, `services/<name>/k8s` | Each app's Deployment and Service, written by `moon generate` |
+| `apps/<name>/k8s`, `services/<name>/k8s` | Each app's Deployment and Service (a worker has only a Deployment), written by `moon generate` |
 | `deploy/base/identity` | ZITADEL, its Login App, and the sign-in pages (`auth-pages`) |
 | `deploy/base/kustomization.yaml` | The identity stack and every app; `setup` rewrites it |
 | `deploy/local` | The overlay for a laptop cluster (kind): everything, the databases included |
@@ -23,7 +23,9 @@ overlay on this base, in its own folder under `deploy/`.
 Each web app and API gets the hostname `<name>.<DOMAIN>`, and ZITADEL
 `auth.<DOMAIN>`. An app reaches ZITADEL and its APIs by those public HTTPS
 hostnames, from inside the cluster too, because the apps refuse plain HTTP in
-production.
+production. A worker (`moon generate axum -- --worker`) serves no API, so it
+gets no hostname, no Service, and no ZITADEL key: only its Deployment, with its
+database and bus settings.
 
 ## On your machine
 
@@ -119,6 +121,7 @@ secret manager instead of the files.
 | --- | --- | --- |
 | ZITADEL, Login App, sign-in pages | 1 replica | 1 replica |
 | Web apps and APIs | 1 replica each | 1 replica each in staging, 2 in production |
+| Workers | 1 replica each | 1 replica each; change `replicas` in the worker's `k8s/deployment.yaml` |
 | ZITADEL's PostgreSQL, Redis | in the cluster | your `zitadel-database` and `redis` Secrets |
 | `deploy/dev/data`, `deploy/dev/bus`, `deploy/dev/storage` | in the cluster | your `<api>-database` and `bus` Secrets |
 | Certificates | a local authority | cert-manager |

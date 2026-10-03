@@ -79,15 +79,32 @@ export function projectPath(root: string, name: string): string {
 	return (found[0] as Project).path;
 }
 
-export type App = { name: string; path: string; kind: "web" | "api" };
+/**
+ * What a generated app is to ZITADEL and to a deployment: a `web` app signs
+ * users in, an `api` verifies their tokens, and a `worker` serves no API (it
+ * reads the bus, or works on a schedule), so it has no ZITADEL application, no
+ * key, and no hostname.
+ */
+export type AppKind = "web" | "api" | "worker";
+export type App = { name: string; path: string; kind: AppKind };
 
-/** Generated apps, recognized by the variables in their `.env.example`. */
+/**
+ * Generated apps. A web app and an API are recognized by the ZITADEL variable
+ * in their `.env.example`; a Cargo crate under `services/` without one is a
+ * worker.
+ */
 export function findApps(root: string): App[] {
 	const apps: App[] = [];
 	for (const project of listProjects(root)) {
 		const example = parseEnv(resolve(root, project.path, ".env.example"));
-		if (example.has("ZITADEL_CLIENT_ID")) apps.push({ name: project.name, path: project.path, kind: "web" });
-		else if (example.has("ZITADEL_API_KEY_FILE")) apps.push({ name: project.name, path: project.path, kind: "api" });
+		const kind: AppKind | undefined = example.has("ZITADEL_CLIENT_ID")
+			? "web"
+			: example.has("ZITADEL_API_KEY_FILE")
+				? "api"
+				: project.root === "services" && existsSync(resolve(root, project.path, "Cargo.toml"))
+					? "worker"
+					: undefined;
+		if (kind) apps.push({ name: project.name, path: project.path, kind });
 	}
 	return apps;
 }

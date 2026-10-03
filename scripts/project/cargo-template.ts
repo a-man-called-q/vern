@@ -1,10 +1,11 @@
 // The Axum template names its dependencies and leaves their versions to the
 // Cargo workspace at the repository root: `axum = { workspace = true }`. A
-// dependency only some APIs need has its line wrapped in a Tera condition:
-// `{% if database %}sqlx = { workspace = true }\n{% endif %}`.
+// dependency only some services need has its line wrapped in a Tera condition:
+// `{% if database %}sqlx = { workspace = true }\n{% endif %}`, or
+// `{% if not worker %}axum = { workspace = true }\n{% endif %}`.
 
 const CONDITIONAL_LINE =
-	/\{% if (\w+) %\}([A-Za-z0-9_-]+) = [^\n]*\n\{% endif %\}/g;
+	/\{% if (?:not )?\w+ %\}[A-Za-z0-9_-]+ = [^\n]*\n\{% endif %\}/g;
 const SECTION_HEADER = /^\[([^\]]+)\]\s*$/;
 const DEPENDENCY_LINE = /^([A-Za-z0-9_-]+) = (.*)$/;
 
@@ -15,7 +16,7 @@ const DEPENDENCY_LINE = /^([A-Za-z0-9_-]+) = (.*)$/;
  */
 export function stripCargoConditions(template: string): string {
 	const stripped = template.replace(CONDITIONAL_LINE, (block) =>
-		block.replace(/^\{% if \w+ %\}/, "").replace(/\{% endif %\}$/, ""),
+		block.replace(/^\{% if (?:not )?\w+ %\}/, "").replace(/\{% endif %\}$/, ""),
 	);
 	const leftover = stripped.split("\n").find((line) => line.includes("{%"));
 	if (leftover !== undefined)
