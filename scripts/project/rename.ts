@@ -139,6 +139,8 @@ export function renameProject(root: string, options: Options): string[] {
 	const branch = existing?.upstream.branch ?? UPSTREAM_BRANCH;
 	const baseline = existing?.upstream.lastSyncedSha ?? resolveBase(root, upstreamUrl, branch, options.base);
 	const config: ProjectConfig = {
+		// A second rename keeps what else the project recorded, such as its environments.
+		...existing,
 		schemaVersion: 1,
 		project: to,
 		upstream: { url: upstreamUrl, branch, lastSyncedSha: baseline },

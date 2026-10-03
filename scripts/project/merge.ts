@@ -13,6 +13,7 @@ import { isTextBuffer, sha256, writeFileSafely } from "../lib/files";
 import { listProjects } from "../lib/projects";
 import { git, run } from "../lib/run";
 import { CONFIG_PATH, type ProjectConfig, UPDATE_STATE_PATH } from "./config";
+import { type Environments, isUsed } from "./environments";
 import { isVernScript, readGitFile } from "./files";
 import { rebrandText } from "./identity";
 
@@ -42,7 +43,10 @@ function generatedProjectDirs(root: string, upstreamFiles: Set<string>[]): Set<s
 function shouldSkipUpstreamPath(
 	path: string,
 	generatedDirs: Set<string>,
+	environments: Environments | undefined,
 ): boolean {
+	// A way to run an environment that the project does not use stays out.
+	if (!isUsed(path, environments)) return true;
 	if (
 		path === UPDATE_STATE_PATH ||
 		path === CONFIG_PATH ||
@@ -73,7 +77,7 @@ function rebrand(data: Buffer, path: string, config: ProjectConfig): Buffer {
  * the merge compares like with like. Scripts are never rebranded (see
  * isVernScript).
  */
-function rebrandSnapshot(
+export function rebrandSnapshot(
 	path: string,
 	data: Buffer,
 	config: ProjectConfig,
@@ -215,7 +219,7 @@ export function mergeUpstreamFiles(
 	// leaves the working tree as it was.
 	const plans: { path: string; absolute: string; ours?: Buffer; plan: Plan }[] = [];
 	for (const path of allChangedUpstreamPaths(root, from, to)) {
-		if (shouldSkipUpstreamPath(path, generatedDirs)) continue;
+		if (shouldSkipUpstreamPath(path, generatedDirs, config.environments)) continue;
 		const absolute = safeProjectPath(root, path);
 		const versions = snapshots(root, config, from, to, path);
 		const ours = readWorkingFile(absolute);

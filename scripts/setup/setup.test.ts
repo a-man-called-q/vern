@@ -992,6 +992,35 @@ describe("setup", () => {
 		);
 	});
 
+	test("--env runs an environment the way the project chose, before anything is set up there", async () => {
+		const root = workspace();
+		write(root, "deploy/compose/.env.example", COMPOSE_EXAMPLE);
+		write(
+			root,
+			".vern/config.json",
+			JSON.stringify({
+				schemaVersion: 1,
+				project: { name: "Acme", slug: "acme" },
+				upstream: { url: "https://example.test/vern.git", branch: "main", lastSyncedSha: "0".repeat(40) },
+				environments: { local: "none", staging: "compose", prod: "kubernetes" },
+			}),
+		);
+		const run = (...args: string[]) => setup(args, { ...deps(root, fakeZitadel()), runCompose: () => {} });
+		// No .env or settings.env yet: the choice says Docker Compose.
+		await expect(run("--env", "staging")).rejects.toThrow("Created deploy/staging/.env");
+		await expect(run("--env", "local")).rejects.toThrow(
+			"This project has no local environment (.vern/config.json). Add it with `bun run project:stack -- --local compose`, or `kubernetes`.",
+		);
+		// The files of the other way are not in the project.
+		await expect(run("--compose", "prod")).rejects.toThrow(
+			"prod runs on Kubernetes in this project (.vern/config.json), so the files for Docker Compose are not here. Change it with `bun run project:stack -- --prod compose`.",
+		);
+		await expect(run("--kubernetes", "staging", "--manifests-only")).rejects.toThrow(
+			"staging runs with Docker Compose in this project (.vern/config.json), so the files for Kubernetes are not here.",
+		);
+		await expect(run("--kubernetes", "local")).rejects.toThrow("This project has no local environment");
+	});
+
 	test("waits for the issuer to answer before calling it", async () => {
 		const root = workspace();
 		const zitadel = fakeZitadel();
@@ -1025,22 +1054,26 @@ describe("setup", () => {
 	});
 });
 
-describe("setup --kubernetes", () => {
-	/** The workspace, with deploy/k8s and the auth stack's brand files as Vern ships them. */
+/** What the tests below take from the checkout: the overlays and the auth stack's brand files, as Vern ships them. */
+const KUBERNETES_FILES = [
+	"deploy/base/kustomization.yaml",
+	"deploy/local/kustomization.yaml",
+	"deploy/local/settings.env.example",
+	"deploy/prod/kustomization.yaml",
+	"deploy/prod/settings.env.example",
+	"deploy/staging/kustomization.yaml",
+	"deploy/staging/settings.env.example",
+	"deploy/dev/auth-server/nginx.conf",
+	"deploy/dev/auth-server/brand/brand.json",
+	"deploy/dev/auth-server/brand/favicon.svg",
+];
+
+// A project that runs an environment another way has no overlay for it
+// (`bun run project:stack`), so there is nothing here to test.
+describe.skipIf(!KUBERNETES_FILES.every((path) => existsSync(resolve(ROOT, path))))("setup --kubernetes", () => {
 	function kubeWorkspace(): string {
 		const root = workspace();
-		for (const path of [
-			"deploy/base/kustomization.yaml",
-			"deploy/local/kustomization.yaml",
-			"deploy/local/settings.env.example",
-			"deploy/prod/kustomization.yaml",
-			"deploy/prod/settings.env.example",
-			"deploy/staging/kustomization.yaml",
-			"deploy/staging/settings.env.example",
-			"deploy/dev/auth-server/nginx.conf",
-			"deploy/dev/auth-server/brand/brand.json",
-			"deploy/dev/auth-server/brand/favicon.svg",
-		]) {
+		for (const path of KUBERNETES_FILES) {
 			write(root, path, templateIdentity(readFileSync(resolve(ROOT, path), "utf8")));
 		}
 		return root;

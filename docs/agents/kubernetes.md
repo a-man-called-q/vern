@@ -6,6 +6,12 @@ Kustomize, and each environment (`deploy/local`, `deploy/staging`,
 [deploy/base/README.md](../../deploy/base/README.md) is the full guide; this is
 what to know before changing it.
 
+A project keeps only the way its environments run. When `deploy/base` is not
+there, no environment of this project runs on Kubernetes: `bun run
+project:stack` shows the choice, and `bun run project:stack -- --prod
+kubernetes` (or `--staging`, `--local`) brings the files back. Ask the user
+before changing how an environment runs.
+
 ## Where things are
 
 - **An app's own manifests** are `apps/<name>/k8s/` or `services/<name>/k8s/`:
