@@ -60,6 +60,10 @@ repository, tagged `<zitadel-version>-<commit>`. The stock
 `ghcr.io/zitadel/zitadel-login:<ZITADEL_VERSION>` image also works, without the
 Vern shell and `brand/`.
 
+`.env` is copied from `.env.example` once. When an update moves the example to a
+new release, `bun run project:doctor` names the lines to copy into `.env`; then
+start the stack again with `moon run auth-server:up`.
+
 ## Brand
 
 `brand/brand.json` sets the text and images of the sign-in shell, and the files
