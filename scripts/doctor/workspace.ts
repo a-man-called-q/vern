@@ -53,7 +53,7 @@ export function checkLayout(root: string, report: Report): void {
  * members of, and the Axum template that relies on its versions.
  */
 function checkCargoWorkspace(root: string, report: Report): void {
-	const cargoTemplate = resolve(root, ".templates/axum/Cargo.toml.tera");
+	const cargoTemplate = resolve(root, ".vern/templates/axum/Cargo.toml.tera");
 	if (!existsSync(cargoTemplate)) return;
 	const manifest = resolve(root, "Cargo.toml");
 	if (!existsSync(manifest)) {
@@ -139,7 +139,7 @@ export function checkWorkspace(root: string, report: Report): void {
 		for (const { template, label } of WEB_TEMPLATES) {
 			const templatePackage = resolve(
 				root,
-				".templates",
+				".vern/templates",
 				template,
 				"package.json.tera",
 			);

@@ -19,4 +19,4 @@ projects:
 
 generator:
   templates:
-    - './.templates'
+    - './.vern/templates'

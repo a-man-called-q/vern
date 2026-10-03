@@ -9,12 +9,12 @@ against.
 
 | Path | Purpose |
 | --- | --- |
-| `.templates/tanstack` | TanStack Start app with OIDC sign-in, Redis sessions, and server-side API calls |
-| `.templates/next` | Next.js App Router app with the same sign-in, sessions, and API calls |
-| `.templates/axum` | Axum API that verifies access tokens through ZITADEL introspection |
-| `.templates/postgres` | Optional PostgreSQL for the APIs' own data, one database per API |
-| `.templates/bus` | Optional NATS JetStream, the event bus between APIs generated with `--events` |
-| `.templates/storage` | Optional S3-compatible object store for uploads, with one bucket |
+| `.vern/templates/tanstack` | TanStack Start app with OIDC sign-in, Redis sessions, and server-side API calls |
+| `.vern/templates/next` | Next.js App Router app with the same sign-in, sessions, and API calls |
+| `.vern/templates/axum` | Axum API that verifies access tokens through ZITADEL introspection |
+| `.vern/templates/postgres` | Optional PostgreSQL for the APIs' own data, one database per API |
+| `.vern/templates/bus` | Optional NATS JetStream, the event bus between APIs generated with `--events` |
+| `.vern/templates/storage` | Optional S3-compatible object store for uploads, with one bucket |
 | `deploy/dev/auth-server` | Local Docker Compose stack: ZITADEL, its Login App, PostgreSQL, Redis, and Mailpit (a local inbox for the email ZITADEL sends) |
 | `deploy` | How the product is run, one folder per environment: `dev`, `local`, `staging`, and `prod`, on one server with Docker Compose or on Kubernetes |
 | `apps/storybook` | Storybook workbench for the shared UI components |
@@ -133,7 +133,7 @@ moon run ads:dev    # starts the database first, creating the API's own
 
 The API gets sqlx, migrations in `migrations/` that run when it starts, and
 `#[sqlx::test]` tests that each use a throwaway database. The
-[template README](.templates/README.md#postgresql) and the API's own README
+[template README](.vern/templates/README.md#postgresql) and the API's own README
 cover the rest, including TLS to a production database.
 
 ## Roles and users
@@ -315,7 +315,7 @@ set.
 [`AGENTS.md`](AGENTS.md) tells a coding agent (Claude Code, Codex, Cursor, and
 others that read the file) what the project already provides, the rules that
 keep sign-in and access control intact, and how to check its own work. It points
-at short recipes in [`docs/agents/`](docs/agents) for adding a web app, adding an
+at short recipes in [`.vern/agents/`](.vern/agents) for adding a web app, adding an
 API service, building inside a service, calling an API from a web app, and roles
 and users. Each generated app carries its own `AGENTS.md` for its stack.
 
@@ -472,18 +472,29 @@ edit on the review branch and run `bun run project:update -- --continue`.
   `packages/app-shell`, and `crates/` keep working as they are, each with its
   own copy of that code, which no update reaches. To move one over, generate a
   fresh app or API from the template and carry your own pages, handlers, and
-  migrations into it; `docs/agents/new-app.md` and `docs/agents/new-service.md`
+  migrations into it; `.vern/agents/new-app.md` and `.vern/agents/new-service.md`
   say what a generated folder holds now.
   One thing is not optional for an API: `deploy/compose` and the image workflow
   now build an API from the repository root, with the Cargo workspace. The
   update rewrites the `Dockerfile` and the `docker` task of an older API for
   that (`bun run project:update -- --migrate` does only this). If you had
   changed them, it names the file and leaves it: copy `Dockerfile` and
-  `Dockerfile.dockerignore` from `.templates/axum/`, put the API's name where
+  `Dockerfile.dockerignore` from `.vern/templates/axum/`, put the API's name where
   the template has `{{ name | kebab_case }}`, and in `moon.yml` make the
   `docker` task run `docker build -f services/<name>/Dockerfile -t <name> .`
   with `runFromWorkspaceRoot: true`. Then run `cargo check` once and commit the
   `Cargo.lock` at the root.
+- **The templates and the recipes, in `.vern/`.** `.templates/` is now
+  `.vern/templates/` and `docs/agents/` is `.vern/agents/`. The update that
+  brings the move runs the project's old updater, which writes the two folders
+  with the template's names in them instead of your project's. Before that
+  update, delete `|| path.startsWith(".vern/")` from `rebrandSnapshot` in
+  `scripts/project/merge.ts` and commit; the files then arrive renamed. The old
+  updater also leaves `.templates/` and `docs/agents/` behind as empty folders
+  to delete, and a template or recipe you changed yourself stays there as a
+  conflict, for you to carry over to its new place. The `AGENTS.md` of an app
+  or API generated earlier links to `../../docs/agents/`: change that to
+  `../../.vern/agents/`.
 - **Biome 2.5** reports each app's `biome.json` as out of date. These are
   notes, not failures; `bunx biome migrate --write` in the app's folder brings
   the file up to date.
