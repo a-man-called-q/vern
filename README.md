@@ -436,6 +436,41 @@ project), change `result.status > 1` to `result.status > 127` and
 `result.status === 1` to `result.status > 0`, commit, and apply the update
 again.
 
+### Edits an update asks for
+
+The update upgrades each generated app's packages but not its source, so an
+upgrade that changes a package's types stops at `moon run :check`. Make the
+edit on the review branch and run `bun run project:update -- --continue`.
+
+- **`redis` 6** (`Promise<RedisClientType<…>>` is not assignable, then
+  `'client' is possibly 'undefined'`). In each web app's
+  `src/server/session-record.server.ts` (`src/server/session.server.ts` in an
+  older app), take the client's type from the call that creates it:
+
+  ```ts
+  function newRedisClient(url: string) {
+  	return createClient({ url });
+  }
+  type RedisClient = ReturnType<typeof newRedisClient>;
+  ```
+
+  and create the client with `newRedisClient(url)` in `getRedisClient`.
+- **Biome 2.5** reports each app's `biome.json` as out of date. These are
+  notes, not failures; `bunx biome migrate --write` in the app's folder brings
+  the file up to date.
+- **The logos, on the update that moves the auth stack to `deploy/dev/`.** That
+  update runs the project's old updater, which writes
+  `deploy/dev/auth-server/brand/logo-light.svg` and `logo-dark.svg` without
+  fitting the product's name to the logo's width. Restore the fitted ones from
+  the old folder, with the branch you were on in place of `main`:
+
+  ```sh
+  git show main:apps/auth-server/brand/logo-light.svg > deploy/dev/auth-server/brand/logo-light.svg
+  git show main:apps/auth-server/brand/logo-dark.svg > deploy/dev/auth-server/brand/logo-dark.svg
+  ```
+
+  (`infra/auth-server/` when the stack was there.)
+
 ## Deploy
 
 [`deploy/`](deploy/README.md) says how the product is run, with one folder per

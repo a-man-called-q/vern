@@ -3,7 +3,7 @@ tasks:
     command: cargo run
     description: Run this Axum service in development mode
     deps:
-      - 'auth-server:dev'
+      - 'auth-server:up'
 {%- if database %}
       - 'data:up'
 {%- endif %}

@@ -2,8 +2,8 @@ import type { AuthUser } from "../types/auth";
 import { AuthenticationRequiredError } from "./auth-error";
 import { readAppSession } from "./session.server";
 
-export { AuthenticationRequiredError };
 export { dropRevokedSession, getApiAccessToken } from "./auth-flow.server";
+export { AuthenticationRequiredError };
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
 	const session = await readAppSession();

@@ -25,7 +25,7 @@ describe("parseAllowRegister", () => {
 });
 
 // The login policy request must use the route and the fields that the ZITADEL
-// release in apps/auth-server/.env.example defines. CI downloads that release's
+// release in deploy/dev/auth-server/.env.example defines. CI downloads that release's
 // proto files into ZITADEL_PROTO_DIR (see zitadel-app.test.ts); without it this
 // suite is skipped.
 const protoDir = process.env.ZITADEL_PROTO_DIR ?? "";

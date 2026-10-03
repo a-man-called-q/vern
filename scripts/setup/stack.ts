@@ -62,8 +62,8 @@ export function authStack(root: string): { compose: string[]; resetHint: string 
 }
 
 export function startAuthStack(root: string): void {
-	const result = spawnSync("moon", ["run", "auth-server:dev"], { cwd: root, stdio: "inherit" });
-	if (result.status !== 0) throw new Error("Starting the auth stack failed (moon run auth-server:dev).");
+	const result = spawnSync("moon", ["run", "auth-server:up"], { cwd: root, stdio: "inherit" });
+	if (result.status !== 0) throw new Error("Starting the auth stack failed (moon run auth-server:up).");
 }
 
 export function runCompose(root: string, args: string[]): void {

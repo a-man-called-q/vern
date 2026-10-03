@@ -19,9 +19,15 @@ From the repository root:
 
 ```sh
 cp deploy/dev/auth-server/.env.example deploy/dev/auth-server/.env
-moon run auth-server:dev    # start in the background and wait until healthy
+moon run auth-server:up     # start in the background and wait until healthy
 moon run auth-server:down   # stop, keeping the data
 ```
+
+Every generated app's `dev` task starts the stack as `auth-server:up`. A test
+that needs this Redis or a running ZITADEL gets them the same way: add
+`- 'auth-server:up'` to the `deps` of the app's `test` task in its `moon.yml`.
+`auth-server:dev` is the older name of the same task. It still works, but a
+`test` task cannot depend on it: Moon does not run a task named `dev` in CI.
 
 | URL | |
 | --- | --- |

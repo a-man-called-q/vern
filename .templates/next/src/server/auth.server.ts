@@ -5,8 +5,8 @@ import type { AuthUser } from "../types/auth";
 import { AuthenticationRequiredError } from "./auth-error";
 import { readAppSession } from "./session.server";
 
-export { AuthenticationRequiredError };
 export { dropRevokedSession, getApiAccessToken } from "./auth-flow.server";
+export { AuthenticationRequiredError };
 
 /** Deduplicated per request, so the header and a page can both call it. */
 export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {

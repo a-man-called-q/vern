@@ -40,11 +40,11 @@
     "openid-client": "^6.8.8",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "redis": "^5.8.2",
+    "redis": "^6.3.0",
     "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.5",
+    "@biomejs/biome": "2.5.15",
     "@tailwindcss/typography": "^0.5.16",
     "@tanstack/devtools-vite": "^0.8.5",
     "@tanstack/router-cli": "^1.132.0",
