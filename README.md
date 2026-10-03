@@ -352,6 +352,10 @@ cd apps/dashboard
 bunx --bun shadcn@latest add <name>
 ```
 
+The CLI writes the file in its own style. `moon run ui:check` formats and lints
+`packages/ui` with Biome, so format the new file once:
+`bunx biome check --write` in `packages/ui`.
+
 Storybook runs at
 <http://localhost:6006>; see [its README](apps/storybook/README.md).
 

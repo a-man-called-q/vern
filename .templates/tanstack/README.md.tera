@@ -164,6 +164,9 @@ cd apps/{{ name | kebab_case }}
 bunx --bun shadcn@latest add card
 ```
 
+Then run `bunx biome check --write` in `packages/ui`, which formats the new file
+the way `moon run ui:check` expects.
+
 
 
 ## Routing
@@ -279,7 +282,7 @@ export const Route = createFileRoute('/api/hello')({
 
 ## Data Fetching
 
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
+There are multiple ways to fetch data in your application. {% if include_demos %}You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.{% else %}Use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered. The app has no client-side data library; the demos (`moon generate tanstack` without `--no-include_demos`) show TanStack Query set up in `src/router.tsx`.{% endif %}
 
 For example:
 

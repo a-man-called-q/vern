@@ -33,5 +33,5 @@ the setup command from this directory and follow its instructions:
 bunx storybook skills setup
 ```
 
-Stories live beside their components in `src/stories/`. The shared preview,
-global styles, and MSW handlers are in `.storybook/`.
+Stories live in `src/stories/`. The shared preview and global styles are in
+`.storybook/`.

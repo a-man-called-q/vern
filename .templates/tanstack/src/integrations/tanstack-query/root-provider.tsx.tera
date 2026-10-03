@@ -1,3 +1,6 @@
+---
+skip: {{ not include_demos }}
+---
 import { QueryClient } from "@tanstack/react-query";
 
 export function getContext() {
@@ -7,4 +10,3 @@ export function getContext() {
 		queryClient,
 	};
 }
-export default function TanstackQueryProvider() {}

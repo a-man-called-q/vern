@@ -1,7 +1,13 @@
 import { TanStackDevtools } from "@tanstack/react-devtools";
+{%- if include_demos %}
 import type { QueryClient } from "@tanstack/react-query";
+{%- endif %}
 import {
+{%- if include_demos %}
 	createRootRouteWithContext,
+{%- else %}
+	createRootRoute,
+{%- endif %}
 	HeadContent,
 	Scripts,
 	useRouterState,
@@ -13,12 +19,17 @@ import Header from "../components/Header";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 {%- endif %}
 import appCss from "../styles.css?url";
+{%- if include_demos %}
 
 interface MyRouterContext {
 	queryClient: QueryClient;
 }
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
+{%- else %}
+
+export const Route = createRootRoute({
+{%- endif %}
 	head: () => ({
 		meta: [
 			{

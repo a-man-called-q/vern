@@ -1,10 +1,10 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { readEffectiveEnv } from "../lib/env";
-import { AUTH_SERVER, listProjects } from "../lib/projects";
+import { mergeEnv, parseEnv, readEffectiveEnv } from "../lib/env";
+import { AUTH_SERVER, DEV_STACKS, listProjects } from "../lib/projects";
 
 /**
- * What is wrong with the local ports: a project without a valid PORT, two
+ * What is wrong with the local ports: a project without a valid port, two
  * projects on one port, or a URL that points at a different port than the
  * service it names. Empty when everything is fine.
  */
@@ -68,6 +68,20 @@ export function checkPorts(root: string): string[] {
 		if (!existsSync(resolve(root, entry.path, "moon.yml"))) continue;
 
 		const appEnv = readEffectiveEnv(root, entry.path);
+		// A Compose stack names its ports (POSTGRES_PORT, NATS_PORT): a `dev` task
+		// that starts it may carry the PORT of the app it was started for. A stack
+		// generated before that has the one PORT.
+		const stackPorts =
+			entry.root === DEV_STACKS
+				? [...mergeEnv(parseEnv(resolve(root, entry.path, ".env.example")), parseEnv(resolve(root, entry.path, ".env")))].filter(([key]) =>
+						key.endsWith("_PORT"),
+					)
+				: [];
+		if (stackPorts.length > 0) {
+			for (const [key, value] of stackPorts) addPort(`${entry.name} (${key}=${value})`, value);
+			continue;
+		}
+
 		const appPort = appEnv.get("PORT");
 		addPort(`${entry.name} (${appPort ?? "missing PORT"})`, appPort);
 

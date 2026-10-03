@@ -9,7 +9,7 @@ moon run {{ name | kebab_case }}:up      # start it and create the APIs' databas
 moon run {{ name | kebab_case }}:down    # stop it, keeping the data
 ```
 
-It listens on `127.0.0.1:{{ port }}` (`PORT` in `.env.example`; Moon checks it
+It listens on `127.0.0.1:{{ port }}` (`POSTGRES_PORT` in `.env.example`; Moon checks it
 against the other services' ports) and keeps its data in a Docker volume named
 after this repository folder, so several projects on one machine stay apart.
 `docker compose down -v` in this folder deletes the data.

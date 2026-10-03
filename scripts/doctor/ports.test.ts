@@ -68,6 +68,25 @@ describe("checkPorts", () => {
 		]);
 	});
 
+	test("reads a Compose stack's ports by their own names", () => {
+		const root = workspace({
+			"apps/web/moon.yml": "",
+			"apps/web/.env.example": "PORT=5433\n",
+			"deploy/dev/data/moon.yml": "",
+			"deploy/dev/data/.env.example": "POSTGRES_PORT=5433\nPOSTGRES_PASSWORD=postgres\n",
+			"deploy/dev/storage/moon.yml": "",
+			"deploy/dev/storage/.env.example": "S3_PORT=8333\n",
+			"deploy/dev/storage/.env": "S3_PORT=80\n",
+			// A stack generated before the ports had names.
+			"deploy/dev/bus/moon.yml": "",
+			"deploy/dev/bus/.env.example": "PORT=4222\n",
+		});
+		expect(checkPorts(root)).toEqual([
+			'storage (S3_PORT=80) has invalid PORT "80"; use an integer from 1024 to 65535.',
+			"Port 5433 is assigned to multiple projects: data (POSTGRES_PORT=5433), web (5433).",
+		]);
+	});
+
 	test("describes the errors the way the command prints them", () => {
 		expect(describePortErrors(["One.", "Two."])).toBe(
 			"Local port configuration has errors:\n- One.\n- Two.\nSet distinct ports in the root or per-project .env files, then run moon run workspace:check-ports.",

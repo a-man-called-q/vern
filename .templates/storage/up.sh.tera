@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 
 docker compose up --detach --wait
 
-port="${PORT:-{{ port }}}"
+port="${S3_PORT:-{{ port }}}"
 status=$(curl -s -o /dev/null -w '%{http_code}' \
   --aws-sigv4 "aws:amz:us-east-1:s3" --user "local-access-key:local-secret-key" \
   -X PUT "http://127.0.0.1:${port}/{{ bucket }}")

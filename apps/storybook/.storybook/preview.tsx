@@ -1,8 +1,6 @@
 import type { Preview } from '@storybook/react-vite'
 import { useEffect } from 'react'
-import { mswLoader } from 'msw-storybook-addon/csf3'
 import '../src/index.css'
-import { mswHandlers } from './msw-handlers'
 
 const preview: Preview = {
   globalTypes: {
@@ -41,10 +39,6 @@ const preview: Preview = {
       // 'off' - skip a11y checks entirely
       test: 'todo'
     }
-  },
-  loaders: [mswLoader()],
-  beforeEach({ msw }) {
-    msw.use(...mswHandlers)
   },
 };
 
