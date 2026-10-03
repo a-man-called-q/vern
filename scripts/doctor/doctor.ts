@@ -1,5 +1,6 @@
 import { errorMessage } from "../lib/errors";
 import { checkAccess } from "./access";
+import { checkEnvironments } from "./environments";
 import { checkIdentity } from "./identity";
 import { checkKubernetes } from "./kubernetes";
 import { checkPorts, describePortErrors, PORTS_OK } from "./ports";
@@ -24,6 +25,7 @@ export function runDoctor(root: string, log: (message: string) => void = console
 	checkAccess(root, report);
 	checkWorkspace(root, report);
 	checkKubernetes(root, report);
+	checkEnvironments(root, report);
 	checkReleases(root, report);
 
 	try {

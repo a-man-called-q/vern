@@ -34,14 +34,51 @@ An environment's folder holds only what differs from the others, so staging
 cannot drift from production: both are the same Compose file, or the same
 `base/`, with other hostnames and secrets.
 
+## Keep only what you use
+
+A new project carries both ways. Say how each environment runs, and the project
+keeps only that:
+
+```sh
+bun run project:stack -- --local kubernetes --staging none --prod kubernetes
+```
+
+| Environment | Choices |
+| --- | --- |
+| `local` | `none`, `compose`, `kubernetes` (a kind cluster) |
+| `staging` | `none`, `compose`, `kubernetes` |
+| `prod` | `compose`, `kubernetes` |
+
+`create-vern` asks the same three questions when it creates the project. The
+choice is saved in `.vern/config.json`, and this is what goes:
+
+| When | Removed |
+| --- | --- |
+| No environment uses Docker Compose | `compose/` |
+| No environment uses Kubernetes | `base/`, every app's `k8s/` and the templates' (so `moon generate` writes none), and `.github/workflows/images.yml` |
+| An environment does not run on Kubernetes | Its overlay: the files of its folder that are in Git. With `none`, the folder itself |
+
+What `setup` wrote into an environment's folder (`.env`, `settings.env`,
+`secrets/`, `generated/`, `certs/`) is never deleted: Git ignores it, and it may
+hold a key that cannot be recreated. The command lists what is left, for you to
+delete. It refuses to delete a file with changes that are not committed.
+
+Run it again with another choice (only the environments that change need
+naming) and Vern's files come back, from the release the project is on.
+`bun run project:update` leaves out upstream's files of a way the project does
+not use, and `bun run project:doctor` says when the project and the choice have
+drifted apart. `dev/` is not a choice: it is always Docker Compose for what the
+apps depend on, with the apps running from source.
+
 Nothing that `setup` writes there is in Git: `.env`, `settings.env`, `secrets/`,
 `generated/`, and `local/certs/`. Back up the ones of `staging` and `prod` in a
 secret manager; each guide says which hold a key that cannot be recreated.
 
 ## Run it again
 
-Once an environment has been set up, these run it again the same way (`setup`
-tells Docker Compose from Kubernetes by the settings file in the folder):
+These set an environment up, or run it again the same way (`setup` takes the
+way from the project's choice, or else tells Docker Compose from Kubernetes by
+the settings file in the folder):
 
 ```sh
 moon run deploy:local

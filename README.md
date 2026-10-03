@@ -337,6 +337,7 @@ above it are updated by `bun run project:update`.
 | `moon run workspace:check-ports` | Check that no two services share a port |
 | `bun run zitadel:app -- --app <name>` | Create or update an app's ZITADEL application |
 | `bun run zitadel:service-account -- --app <name>` | Create a service user that manages users, and store its token in the app's `.env` |
+| `bun run project:stack -- --local <how> --staging <how> --prod <how>` | Choose how each environment runs (`none`, `compose`, `kubernetes`), and keep only the files of that way |
 | `bun run project:doctor` | Check the tools, configuration, and ports |
 | `bun test scripts` | Test the workspace scripts |
 
@@ -514,6 +515,23 @@ environment:
 
 `local`, `staging`, and `prod` each run in one of two ways, and an environment
 folder holds only its own settings.
+
+A project holds only the way it uses. `create-vern` asks how each environment
+runs when it creates the project, and `project:stack` asks again later:
+
+```sh
+bun run project:stack -- --local none --staging none --prod compose
+```
+
+Each takes `none`, `compose` (Docker Compose), or `kubernetes`; production
+always runs. The choice is saved in `.vern/config.json`, and what no environment
+uses is deleted: `deploy/compose` without Docker Compose; `deploy/base`, the
+apps' `k8s/`, and the workflow that pushes images without Kubernetes; and the
+overlay of an environment that does not run on Kubernetes. `moon generate` then
+writes no `k8s/`, `project:update` no longer brings those files in, and
+`bun run setup -- --env <environment>` knows the way without being told. Run it
+again with another choice and the files come back from Vern. A project that has
+never chosen keeps both.
 
 [`deploy/compose`](deploy/compose/README.md) runs ZITADEL, one web app, and one
 API on a single server with Docker, behind Traefik with Let's Encrypt

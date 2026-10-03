@@ -74,6 +74,7 @@ code and its production checklist.
 | `moon run :dev` | Run everything. `moon run <app>:dev` runs one app and what it needs |
 | `moon run <app>:check` | Type-check one app (and lint it, for a web app) |
 | `moon run <app>:test` | Run one app's tests |
+| `bun run project:stack` | Show how each environment runs (Docker Compose, Kubernetes, or none); with `--local`, `--staging`, `--prod`, change it and keep only the files of that way |
 | `bun run project:doctor` | Check the tools, configuration, roles, and ports |
 
 ## Done means

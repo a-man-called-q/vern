@@ -11,6 +11,30 @@ permissions:
   contents: read
 
 jobs:
+  # A project that chose how its environments run (`bun run project:stack`)
+  # holds only the files of those ways, so the jobs that deploy one run only
+  # where the project can. The template itself has made no choice and runs all.
+  ways:
+    runs-on: ubuntu-24.04
+    outputs:
+      compose: ${{ steps.find.outputs.compose }}
+      kubernetes: ${{ steps.find.outputs.kubernetes }}
+      kind: ${{ steps.find.outputs.kind }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Find how the local environment runs
+        id: find
+        run: |
+          local="$(jq -r '.environments.local // "any"' .vern/config.json 2>/dev/null || echo any)"
+          answer() { if [ "$2" = true ] && [ -e "$3" ]; then echo "$1=true"; else echo "$1=false"; fi >> "$GITHUB_OUTPUT"; }
+          case "$local" in any | compose) rehearses=true ;; *) rehearses=false ;; esac
+          answer compose "$rehearses" deploy/compose/docker-compose.yml
+          answer kubernetes true deploy/base/identity/kustomization.yaml
+          case "$local" in any | kubernetes) rehearses=true ;; *) rehearses=false ;; esac
+          answer kind "$rehearses" deploy/local/kind.yaml
+
   scripts:
     runs-on: ubuntu-24.04
     steps:
@@ -215,6 +239,8 @@ jobs:
   # describes, and signs in through it.
   deploy:
     name: deploy (${{ matrix.template }})
+    needs: ways
+    if: needs.ways.outputs.compose == 'true'
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -256,8 +282,10 @@ jobs:
 
   # A project with two web apps and two APIs: the overlays of deploy/local,
   # deploy/staging, and deploy/prod render, and every object matches the
-  # Kubernetes schemas.
+  # Kubernetes schemas. A project renders the overlays it has.
   kubernetes:
+    needs: ways
+    if: needs.ways.outputs.kubernetes == 'true'
     runs-on: ubuntu-24.04
     steps:
       - name: Check out source
@@ -285,10 +313,12 @@ jobs:
         run: |
           for environment in staging prod; do
             settings="deploy/$environment/settings.env"
+            [ -e "$settings.example" ] || continue
             cp "$settings.example" "$settings"
             sed -i -e "s/^DOMAIN=.*/DOMAIN=$environment.acme.test/" -e 's|^IMAGE_REGISTRY=.*|IMAGE_REGISTRY=ghcr.io/acme/product|' "$settings"
           done
           for environment in local staging prod; do
+            [ -e "deploy/$environment/kustomization.yaml" ] || continue
             bun run setup -- --kubernetes "$environment" --manifests-only
           done
 
@@ -301,15 +331,20 @@ jobs:
       - name: Render and validate every overlay
         run: |
           for environment in local staging prod; do
+            [ -e "deploy/$environment/kustomization.yaml" ] || continue
             kubectl kustomize "deploy/$environment" > "$RUNNER_TEMP/$environment.yaml"
             kubeconform -strict -summary -kubernetes-version 1.34.0 "$RUNNER_TEMP/$environment.yaml"
           done
-          kubeconform -strict -summary -kubernetes-version 1.34.0 deploy/local/traefik.yaml
+          if [ -e deploy/local/traefik.yaml ]; then
+            kubeconform -strict -summary -kubernetes-version 1.34.0 deploy/local/traefik.yaml
+          fi
 
   # The overlay of deploy/local on a kind cluster, the way deploy/base/README.md
   # describes it, and a sign-in through it.
   kubernetes-kind:
     name: kubernetes (kind)
+    needs: ways
+    if: needs.ways.outputs.kind == 'true'
     runs-on: ubuntu-24.04
     steps:
       - name: Check out source

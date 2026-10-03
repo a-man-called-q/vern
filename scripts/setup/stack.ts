@@ -3,6 +3,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { AUTH_SERVER } from "../lib/projects";
+import { CONFIG_PATH, readConfig } from "../project/config";
+import { ENVIRONMENTS, type Environment, METHOD_LABELS, type Method } from "../project/environments";
 import type { Log, SetupDeps } from "./context";
 
 /** The local ZITADEL, Redis, and Mailpit stack. */
@@ -14,13 +16,7 @@ export const COMPOSE = `${DEPLOY}/compose`;
 /** The Kubernetes manifests every overlay shares. */
 export const BASE = `${DEPLOY}/base`;
 
-/**
- * The environments that run the whole product, each in `deploy/<name>`: a
- * rehearsal on this machine, staging, and production. (`deploy/dev` is not one
- * of them: it runs only what the apps depend on, and the apps from source.)
- */
-export const ENVIRONMENTS = ["local", "staging", "prod"] as const;
-export type Environment = (typeof ENVIRONMENTS)[number];
+export { ENVIRONMENTS, type Environment, type Method };
 
 export function environmentOf(flag: string, value: string | undefined): Environment {
 	const found = ENVIRONMENTS.find((name) => name === value);
@@ -28,16 +24,24 @@ export function environmentOf(flag: string, value: string | undefined): Environm
 	return found;
 }
 
-/** What runs an environment. */
-export type Method = "compose" | "kubernetes";
+/** The command that changes how an environment runs. */
+const stackHint = (environment: Environment, method: string) => `bun run project:stack -- --${environment} ${method}`;
 
 /**
- * How `--env <name>` runs the environment: with what has been set up there
+ * How `--env <name>` runs the environment: the way the project chose for it
+ * (`project:stack`, in .vern/config.json), else with what has been set up there
  * before, told by its settings file (`.env` for Compose, `settings.env` for
  * Kubernetes).
  */
 export function methodOf(root: string, environment: Environment): Method {
 	const dir = `${DEPLOY}/${environment}`;
+	const chosen = readConfig(root)?.environments?.[environment];
+	if (chosen === "none") {
+		throw new Error(
+			`This project has no ${environment} environment (${CONFIG_PATH}). Add it with \`${stackHint(environment, "compose")}\`, or \`kubernetes\`.`,
+		);
+	}
+	if (chosen) return chosen;
 	const compose = existsSync(resolve(root, dir, ".env"));
 	const kubernetes = existsSync(resolve(root, dir, "settings.env"));
 	if (compose !== kubernetes) return compose ? "compose" : "kubernetes";
@@ -47,6 +51,21 @@ export function methodOf(root: string, environment: Environment): Method {
 			: `${dir} is not set up yet. Start with --compose ${environment} (one server with Docker) or --kubernetes ${environment}.`,
 	);
 }
+
+/**
+ * Refuses a way the project did not choose for the environment: its files are
+ * not in the project. A project that has not chosen keeps both ways.
+ */
+export function checkChosen(root: string, environment: Environment, method: Method): void {
+	const chosen = readConfig(root)?.environments?.[environment];
+	if (!chosen || chosen === method) return;
+	throw new Error(
+		chosen === "none"
+			? `This project has no ${environment} environment (${CONFIG_PATH}). Add it with \`${stackHint(environment, method)}\`.`
+			: `${environment} runs ${chosen === "compose" ? "with" : "on"} ${METHOD_LABELS[chosen]} in this project (${CONFIG_PATH}), so the files for ${METHOD_LABELS[method]} are not here. Change it with \`${stackHint(environment, method)}\`.`,
+	);
+}
+
 const ADMIN_PAT_PATH = "/zitadel/bootstrap/admin.pat";
 
 export function composeArgs(root: string, envFile: string, files: string[]): string[] {

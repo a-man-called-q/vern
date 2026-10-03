@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { checkKubernetes } from "../doctor/kubernetes";
 import { ROOT } from "../lib/paths";
@@ -107,7 +107,8 @@ describe("Kubernetes manifests", () => {
 		expect(documents[1]?.metadata.annotations?.["traefik.ingress.kubernetes.io/router.priority"]).toBe("1");
 	});
 
-	test("run the images the Compose stacks run", () => {
+	// A project whose local environment does not run on Kubernetes has no deploy/local/backing.
+	test.skipIf(!existsSync(resolve(ROOT, "deploy/local/backing")))("run the images the Compose stacks run", () => {
 		const image = (path: string) => readFileSync(resolve(ROOT, path), "utf8").match(/image: (\S+)/)?.[1];
 		for (const [manifest, template] of [
 			["deploy/local/backing/zitadel-db/postgres.yaml", ".templates/postgres/docker-compose.yml"],

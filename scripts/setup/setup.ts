@@ -6,7 +6,7 @@ import type { SetupDeps } from "./context";
 import { setupCompose } from "./compose";
 import { setupKubernetes } from "./kubernetes";
 import { setupLocal } from "./local";
-import { type Environment, environmentOf, type Method, methodOf } from "./stack";
+import { checkChosen, type Environment, environmentOf, type Method, methodOf } from "./stack";
 
 const USAGE = `Configure ZITADEL for the generated apps.
 
@@ -18,7 +18,9 @@ Usage: bun run setup [-- options]
   --kubernetes <env> Set up the environment <env> with its Kustomize overlay
                      in deploy/<env>, on the cluster kubectl points at (see
                      deploy/base/README.md)
-  --env <env>        Set up the environment <env> the way it was set up before
+  --env <env>        Set up the environment <env> the way the project chose
+                     for it (bun run project:stack), or the way it was set up
+                     before
   --manifests-only   With --kubernetes: write the manifests and Secrets only,
                      without the cluster or ZITADEL
   --pat-file <path>  Token of a service user with the IAM Owner role
@@ -80,6 +82,7 @@ export async function setup(argv: string[], deps: SetupDeps = {}): Promise<numbe
 	}
 	if (values["manifests-only"] && method !== "kubernetes") throw new Error("--manifests-only goes with --kubernetes");
 	if (!method || !environment) return setupLocal(values, root, log, processEnv, deps);
+	checkChosen(root, environment, method);
 	return method === "kubernetes"
 		? setupKubernetes(environment, values, root, log, processEnv, deps)
 		: setupCompose(environment, values, root, log, processEnv, deps);
