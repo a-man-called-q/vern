@@ -9,7 +9,7 @@ moon run {{ name | kebab_case }}:up      # start it and create the bucket
 moon run {{ name | kebab_case }}:down    # stop it, keeping the data
 ```
 
-The S3 API listens on `127.0.0.1:{{ port }}` (`PORT` in `.env.example`; Moon checks
+The S3 API listens on `127.0.0.1:{{ port }}` (`S3_PORT` in `.env.example`; Moon checks
 it against the other services' ports). Its data is in a Docker volume named after
 this repository folder; `docker compose down -v` here deletes it.
 

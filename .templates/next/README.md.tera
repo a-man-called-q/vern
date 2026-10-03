@@ -184,6 +184,9 @@ cd apps/{{ name | kebab_case }}
 bunx --bun shadcn@latest add card
 ```
 
+Then run `bunx biome check --write` in `packages/ui`, which formats the new file
+the way `moon run ui:check` expects.
+
 
 
 ## Routing
@@ -253,8 +256,10 @@ export function GET() {
 
 Fetch data directly in async Server Components, or call
 `getDashboardData` / `fetchAuthenticatedApi` from `src/server` for
-authenticated API calls. For client-side data, this project includes
-[TanStack Query](https://tanstack.com/query) through `src/components/Providers.tsx`.
+authenticated API calls.{% if include_demos %} For client-side data, this project includes
+[TanStack Query](https://tanstack.com/query) through `src/components/Providers.tsx`.{% else %} The app has no client-side data library; the demos
+(`moon generate next` without `--no-include_demos`) show
+[TanStack Query](https://tanstack.com/query) set up in `src/components/Providers.tsx`.{% endif %}
 
 ```tsx
 export default async function People() {

@@ -18,9 +18,11 @@ services:
       - -s3.allowedOrigins=${S3_ALLOWED_ORIGINS:-http://localhost:3001,http://localhost:3003}
       - -volume.max=20
       - -master.volumeSizeLimitMB=512
-    # PORT is what scripts/check-ports.ts reads, so it also checks this service.
+    # A name of its own, not PORT: a task that starts this stack as a dependency
+    # may run with the PORT of the app it was started for. scripts/check-ports.ts
+    # reads every *_PORT of a stack.
     ports:
-      - "127.0.0.1:${PORT:-{{ port }}}:8333"
+      - "127.0.0.1:${S3_PORT:-{{ port }}}:8333"
     healthcheck:
       test:
         - CMD-SHELL

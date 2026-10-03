@@ -9,7 +9,7 @@ moon run {{ name | kebab_case }}:up      # start it
 moon run {{ name | kebab_case }}:down    # stop it, keeping the data
 ```
 
-It listens on `127.0.0.1:{{ port }}` (`PORT` in `.env.example`; Moon checks it
+It listens on `127.0.0.1:{{ port }}` (`NATS_PORT` in `.env.example`; Moon checks it
 against the other services' ports) and keeps its streams in a Docker volume
 named after this repository folder. `docker compose down -v` in this folder
 deletes them.

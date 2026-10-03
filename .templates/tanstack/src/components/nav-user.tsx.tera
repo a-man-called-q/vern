@@ -63,7 +63,7 @@ export function NavUser({
 									<AvatarImage src={user.avatar} alt={user.name} />
 								)}
 								<AvatarFallback className="rounded-lg">
-									{initials || "V"}
+									{initials || "?"}
 								</AvatarFallback>
 							</Avatar>
 							<div className="grid flex-1 text-left text-sm leading-tight">
@@ -88,7 +88,7 @@ export function NavUser({
 										<AvatarImage src={user.avatar} alt={user.name} />
 									)}
 									<AvatarFallback className="rounded-lg">
-										{initials || "V"}
+										{initials || "?"}
 									</AvatarFallback>
 								</Avatar>
 								<div className="grid flex-1 text-left text-sm leading-tight">

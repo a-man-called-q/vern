@@ -94,10 +94,11 @@ are inside the binary.
 The default build has no TLS support, so it connects in plain text. Note that
 `sslmode=prefer`, the default, does so silently, and `sslmode=require` fails
 with "built without TLS support". That is fine on a private network; over the
-internet add TLS in `Cargo.toml`:
+internet add the TLS feature to `sqlx`, which keeps its version and its other
+features as `Cargo.toml` has them:
 
-```toml
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "migrate", "macros", "chrono", "tls-rustls-aws-lc-rs"] }
+```sh
+cargo add sqlx --features tls-rustls-aws-lc-rs
 ```
 
 and ask for it in the URL. `?sslmode=require` encrypts the connection but does
