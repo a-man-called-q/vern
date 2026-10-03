@@ -1,19 +1,19 @@
-title: Next.js app
-description: Generate a Next.js App Router app with OIDC login and server-side API calls.
+title: TanStack app
+description: Generate a TanStack Start app with OIDC login and server-side API calls.
 destination: '/apps/[name | kebab_case]'
-# Adds the files both web templates share (.templates/web-base); a file of
+# Adds the files both web templates share (.vern/templates/web-base); a file of
 # this template at the same path replaces the shared one.
 extends: ['web-base']
 variables:
   name:
     type: string
-    default: next
+    default: tanstack
     required: true
-    prompt: Next.js project name?
+    prompt: TanStack project name?
   port:
     type: number
     required: true
-    prompt: Unique local port (1024-65535) for this Next.js app?
+    prompt: Unique local port (1024-65535) for this TanStack app?
   include_demos:
     type: boolean
     default: true

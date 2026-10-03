@@ -120,8 +120,8 @@ describe("API images", () => {
 	});
 
 	test("the Axum template has the files the migration writes", () => {
-		expect(readFileSync(resolve(ROOT, ".templates/axum/Dockerfile.dockerignore"), "utf8")).toBe(API_DOCKERIGNORE);
-		const dockerfile = readFileSync(resolve(ROOT, ".templates/axum/Dockerfile"), "utf8");
+		expect(readFileSync(resolve(ROOT, ".vern/templates/axum/Dockerfile.dockerignore"), "utf8")).toBe(API_DOCKERIGNORE);
+		const dockerfile = readFileSync(resolve(ROOT, ".vern/templates/axum/Dockerfile"), "utf8");
 		expect(dockerfile).toContain("\nCOPY Cargo.toml Cargo.lock ./\nCOPY crates crates\nCOPY services services\n");
 		expect(dockerfile).toContain("cargo build --release -p {{ name | kebab_case }} && \\\n");
 	});

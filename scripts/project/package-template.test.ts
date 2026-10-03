@@ -148,7 +148,7 @@ describe("web template dependencies", () => {
 				expect(manifestText).toBe(
 					renderPackageTemplate(
 						readFileSync(
-							resolve(ROOT, ".templates", template, "package.json.tera"),
+							resolve(ROOT, ".vern/templates", template, "package.json.tera"),
 							"utf8",
 						),
 						includeDemos,
@@ -186,7 +186,7 @@ describe("web template dependencies", () => {
 	test("the updater's format leaves the templates as they are", () => {
 		for (const template of ["tanstack", "next"]) {
 			const text = readFileSync(
-				resolve(ROOT, ".templates", template, "package.json.tera"),
+				resolve(ROOT, ".vern/templates", template, "package.json.tera"),
 				"utf8",
 			);
 			expect(demoDependencies(text).length).toBeGreaterThan(0);

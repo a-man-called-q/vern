@@ -76,7 +76,7 @@ function updateBunTemplate(
 	template: string,
 	label: string,
 ): void {
-	const path = resolve(root, ".templates", template, "package.json.tera");
+	const path = resolve(root, ".vern/templates", template, "package.json.tera");
 	if (!existsSync(path)) return;
 	const tempRoot = mkTemp("vern-" + template + "-template-");
 	try {

@@ -110,6 +110,6 @@ you pass `--bucket`), for the API that handles uploads. Browsers upload to it
 with presigned URLs; the web apps' origins are listed in `S3_ALLOWED_ORIGINS`.
 
 After generation, create the app's `.env` and its ZITADEL application as the
-[quick start](../README.md#quick-start) describes, then run the workspace with
+[quick start](../../README.md#quick-start) describes, then run the workspace with
 `moon run :dev`. Moon checks that app, ZITADEL, Redis, and Storybook ports do
 not conflict before starting the local stack.
