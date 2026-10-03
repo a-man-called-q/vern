@@ -9,7 +9,7 @@
     "format": "biome format",
     "lint": "biome lint",
     "check": "next typegen && tsc --noEmit && biome check",
-    "test": "bun test"
+    "test": "bun test --pass-with-no-tests"
   },
   "dependencies": {
 {% if include_demos %}    "@dnd-kit/core": "^6.3.1",
@@ -27,13 +27,12 @@
     "sonner": "^2.0.8",
     "zod": "^4.6.5",
 {% endif %}    "@tabler/icons-react": "^3.48.0",
+    "@vern/app-shell": "workspace:*",
     "@vern/ui": "workspace:*",
-    "iron-session": "^9.0.1",
+    "@vern/web-auth": "workspace:*",
     "next": "^16.3.7",
-    "openid-client": "^6.8.8",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "redis": "^6.3.0",
     "server-only": "^0.0.1",
     "tailwindcss": "^4.1.18"
   },

@@ -1,0 +1,22 @@
+tasks:
+  check:
+    command: bun run check
+    description: Type-check and lint the shared sign-in package
+    deps:
+      - 'workspace:install'
+    toolchains: system
+    inputs:
+      - 'src/**/*'
+      - 'package.json'
+      - 'tsconfig.json'
+      - 'biome.json'
+
+  test:
+    command: bun run test
+    description: Run the shared sign-in package's tests
+    deps:
+      - 'workspace:install'
+    toolchains: system
+    inputs:
+      - 'src/**/*'
+      - 'package.json'

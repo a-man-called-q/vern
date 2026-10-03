@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { startLogout } from "../server/auth-flow.server";
+import { auth } from "../server/auth.server";
 
 export const Route = createFileRoute("/auth/logout")({
 	server: {
 		handlers: {
-			POST: ({ request }) => startLogout(request),
+			POST: ({ request }) => auth.startLogout(request),
 		},
 	},
 });

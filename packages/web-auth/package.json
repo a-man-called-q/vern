@@ -1,0 +1,52 @@
+{
+	"name": "@vern/web-auth",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"description": "Sign-in, the session, and API calls as the signed-in user, for the web apps",
+	"exports": {
+		".": "./src/index.ts",
+		"./next": "./src/next/index.ts",
+		"./tanstack": "./src/tanstack/index.ts"
+	},
+	"scripts": {
+		"check": "tsc --noEmit && biome check",
+		"format": "biome format",
+		"lint": "biome lint",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"iron-session": "^9.0.1",
+		"openid-client": "^6.8.8",
+		"redis": "^6.3.0",
+		"server-only": "^0.0.1"
+	},
+	"peerDependencies": {
+		"@tanstack/react-router": "^1.170.41",
+		"@tanstack/react-start": "^1.168.60",
+		"next": "^16.3.7",
+		"react": "^19.0.0"
+	},
+	"peerDependenciesMeta": {
+		"@tanstack/react-router": {
+			"optional": true
+		},
+		"@tanstack/react-start": {
+			"optional": true
+		},
+		"next": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.15",
+		"@tanstack/react-router": "1.170.41",
+		"@tanstack/react-start": "1.168.60",
+		"@types/bun": "^1.4.2",
+		"@types/node": "^22.10.2",
+		"@types/react": "^19.2.0",
+		"next": "^16.3.7",
+		"react": "^19.2.0",
+		"typescript": "^6.0.2"
+	}
+}

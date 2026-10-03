@@ -1,7 +1,7 @@
-import { startLogout } from "@/server/auth-flow.server";
+import { auth } from "@/server/auth.server";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-	return startLogout(request);
+	return auth.startLogout(request);
 }

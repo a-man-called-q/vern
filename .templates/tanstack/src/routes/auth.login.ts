@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { startLogin } from "../server/auth-flow.server";
+import { auth } from "../server/auth.server";
 
 export const Route = createFileRoute("/auth/login")({
 	server: {
 		handlers: {
-			GET: () => startLogin(),
+			GET: () => auth.startLogin(),
 		},
 	},
 });

@@ -1,7 +1,7 @@
-import { startLogin } from "@/server/auth-flow.server";
+import { auth } from "@/server/auth.server";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-	return startLogin();
+	return auth.startLogin();
 }

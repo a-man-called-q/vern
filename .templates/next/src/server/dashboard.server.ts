@@ -1,10 +1,13 @@
 import "server-only";
 import { env } from "node:process";
-import { redirect } from "next/navigation";
+import { logAuthWarning } from "@vern/web-auth/next";
 import type { DashboardData } from "../types/auth";
 import { fetchAuthenticatedApi } from "./api.server";
-import { AuthenticationRequiredError, requireUser } from "./auth.server";
-import { logAuthWarning } from "./log.server";
+import {
+	AuthenticationRequiredError,
+	redirectToLogin,
+	requireUser,
+} from "./auth.server";
 
 export async function getDashboardData(): Promise<DashboardData> {
 	const user = await requireUser();
@@ -39,7 +42,7 @@ export async function getDashboardData(): Promise<DashboardData> {
 	} catch (error) {
 		// The session is gone (revoked token); a page that needs the API cannot
 		// render without it, so sign in again.
-		if (error instanceof AuthenticationRequiredError) redirect("/auth/login");
+		if (error instanceof AuthenticationRequiredError) redirectToLogin();
 		logAuthWarning("api /api/me", error);
 		return { user, apiStatus: "unavailable" };
 	}

@@ -13,11 +13,13 @@ import {
 	useRouterState,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
-import Footer from "../components/Footer";
-import Header from "../components/Header";
+import { SiteLayout } from "@vern/app-shell/tanstack/site-layout";
 {%- if include_demos %}
+import { SiteNav } from "../components/site-nav";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 {%- endif %}
+import { SITE_NAME } from "../lib/site";
+import { getCurrentUserFn } from "../server/auth";
 import appCss from "../styles.css?url";
 {%- if include_demos %}
 
@@ -40,7 +42,7 @@ export const Route = createRootRoute({
 				content: "width=device-width, initial-scale=1",
 			},
 			{
-				title: "{{ name | kebab_case }}",
+				title: SITE_NAME,
 			},
 		],
 		links: [
@@ -67,9 +69,30 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 				<HeadContent />
 			</head>
 			<body className="font-sans antialiased [overflow-wrap:anywhere] selection:bg-primary/20">
-				{!isDashboard && <Header />}
-				{children}
-				{!isDashboard && <Footer />}
+				{isDashboard ? (
+					children
+{%- if include_demos %}
+				) : (
+					<SiteLayout
+						siteName={SITE_NAME}
+						getUser={getCurrentUserFn}
+						nav={<SiteNav />}
+						footerNote={
+							<p className="m-0 text-xs">
+								A full stack starter for modern applications.
+							</p>
+						}
+					>
+						{children}
+					</SiteLayout>
+				)}
+{%- else %}
+				) : (
+					<SiteLayout siteName={SITE_NAME} getUser={getCurrentUserFn}>
+						{children}
+					</SiteLayout>
+				)}
+{%- endif %}
 				<TanStackDevtools
 					config={% raw %}{{
 						position: "bottom-right",

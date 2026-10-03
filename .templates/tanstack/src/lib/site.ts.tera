@@ -1,2 +1,0 @@
-/** Display name shown in the header, footer, and dashboard. */
-export const SITE_NAME = "{{ name }}";

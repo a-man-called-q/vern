@@ -15,6 +15,11 @@ tasks:
       - 'workspace:install'
       - 'ui:build'
     toolchains: system
+    # The shared packages are compiled from source with the app.
+    inputs:
+      - '**/*'
+      - '/packages/*/src/**/*'
+      - '/packages/*/package.json'
 
   check:
     command: bun run check
@@ -22,6 +27,11 @@ tasks:
     deps:
       - 'workspace:install'
     toolchains: system
+    # The shared packages are compiled from source with the app.
+    inputs:
+      - '**/*'
+      - '/packages/*/src/**/*'
+      - '/packages/*/package.json'
 
   test:
     command: bun run test
@@ -29,6 +39,11 @@ tasks:
     deps:
       - 'workspace:install'
     toolchains: system
+    # The shared packages are compiled from source with the app.
+    inputs:
+      - '**/*'
+      - '/packages/*/src/**/*'
+      - '/packages/*/package.json'
 
   docker:
     command: docker build -f apps/{{ name | kebab_case }}/Dockerfile -t {{ name | kebab_case }} .

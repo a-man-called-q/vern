@@ -19,8 +19,11 @@ The flow follows ZITADEL's
 [Authorization Code + PKCE guide](https://zitadel.com/docs/guides/integrate/login/oidc/login-users).
 
 The login, callback, and logout endpoints are Route Handlers under
-`src/app/auth` that call `src/server/auth-flow.server.ts`, where the flow is
-written. The short-lived PKCE state between redirects lives in a sealed
+`src/app/auth`. They call the sign-in that `src/server/auth.server.ts` makes
+with `createWebAuth` from `@vern/web-auth`: the flow is written once, in
+`packages/web-auth` at the repository root, for every web app of the project.
+The header, the footer, and the dashboard's sidebar come from
+`packages/app-shell` the same way. The short-lived PKCE state between redirects lives in a sealed
 cookie (`SESSION_SECRET`), and the session cookies are named after this app so
 several apps can run on `localhost` side by side.
 
@@ -79,7 +82,7 @@ callbacks or sessions.
   the short-lived sign-in cookie, so rotating it interrupts in-flight sign-ins
   but not signed-in users.
 - Signed-in sessions live in Redis for at most eight hours. They carry a schema
-  version (`SESSION_VERSION` in `src/server/session-record.server.ts`); after a release
+  version (`SESSION_VERSION` in `packages/web-auth/src/core/session-record.ts`); after a release
   changes the stored shape, bump it and users simply sign in again.
 - Name and email are read from the ID token, or from the userinfo endpoint when
   the ID token omits them. Enabling **Include user's profile info in the ID
@@ -285,12 +288,12 @@ Files prefixed with `demo` and the `src/app/(site)/demo` routes can be safely de
 # The dashboard shell
 
 `src/app/dashboard/layout.tsx` wraps every page under `/dashboard` in a sidebar
-and a header, and signs the user in first. The page at `/dashboard` is empty.
-To add a page, create `src/app/dashboard/<name>/page.tsx` (start it with
-`await requireUser()`) and add an item to `navItems` in
-`src/components/app-sidebar.tsx`. The items live in that client component
-because icons are functions, which a Server Component cannot pass down as props.
-The sidebar marks the item whose path matches the current page.
+and a header (`DashboardShell` from `@vern/app-shell`), and signs the user in
+first. The page at `/dashboard` is empty. To add a page, create
+`src/app/dashboard/<name>/page.tsx` (start it with `await requireUser()`) and
+add an item to `navGroups` in `src/components/dashboard-nav.tsx`. An item's icon
+is a rendered element (`<IconDashboard />`), which a Server Component can pass
+down. The sidebar marks the item whose path matches the current page.
 {%- endif %}
 
 

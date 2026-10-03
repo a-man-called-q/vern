@@ -18,8 +18,13 @@ and otherwise from the userinfo endpoint.
 The flow follows ZITADEL's
 [Authorization Code + PKCE guide](https://zitadel.com/docs/guides/integrate/login/oidc/login-users).
 
-The login, callback, and logout endpoints are the `src/routes/auth.*` routes,
-which call `src/server/auth-flow.server.ts`, where the flow is written.
+The login, callback, and logout endpoints are the `src/routes/auth.*` routes.
+They call the sign-in that `src/server/auth.server.ts` makes with
+`createWebAuth` from `@vern/web-auth`: the flow is written once, in
+`packages/web-auth` at the repository root, for every web app of the project.
+The header, the footer, and the dashboard's sidebar come from
+`packages/app-shell` the same way. The session cookies are named after this app
+so several apps can run on `localhost` side by side.
 
 ### Local setup
 
@@ -76,7 +81,7 @@ callbacks or sessions.
   the short-lived sign-in cookie, so rotating it interrupts in-flight sign-ins
   but not signed-in users.
 - Signed-in sessions live in Redis for at most eight hours. They carry a schema
-  version (`SESSION_VERSION` in `src/server/session-record.server.ts`); after a release
+  version (`SESSION_VERSION` in `packages/web-auth/src/core/session-record.ts`); after a release
   changes the stored shape, bump it and users simply sign in again.
 - Name and email are read from the ID token, or from the userinfo endpoint when
   the ID token omits them. Enabling **Include user's profile info in the ID
@@ -320,11 +325,11 @@ Files prefixed with `demo` can be safely deleted. They are there to provide a st
 # The dashboard shell
 
 `src/routes/dashboard.tsx` wraps every route under `/dashboard` in a sidebar and
-a header, and signs the user in first. The route at `/dashboard`
-(`dashboard.index.tsx`) is empty. To add a page, create
-`src/routes/dashboard.<name>.tsx` and add an item to `navItems` in
-`src/components/app-sidebar.tsx`. The sidebar marks the item whose path matches
-the current page.
+a header (`DashboardShell` from `@vern/app-shell`), and signs the user in first.
+The route at `/dashboard` (`dashboard.index.tsx`) is empty. To add a page,
+create `src/routes/dashboard.<name>.tsx` and add an item to `navGroups` in
+`src/components/dashboard-nav.tsx`. The sidebar marks the item whose path
+matches the current page.
 {%- endif %}
 
 
