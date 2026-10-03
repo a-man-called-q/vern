@@ -3,6 +3,7 @@ import { checkAccess } from "./access";
 import { checkIdentity } from "./identity";
 import { checkKubernetes } from "./kubernetes";
 import { checkPorts, describePortErrors, PORTS_OK } from "./ports";
+import { checkReleases } from "./releases";
 import type { Level } from "./report";
 import { checkTools } from "./tools";
 import { checkWorkspace } from "./workspace";
@@ -23,6 +24,7 @@ export function runDoctor(root: string, log: (message: string) => void = console
 	checkAccess(root, report);
 	checkWorkspace(root, report);
 	checkKubernetes(root, report);
+	checkReleases(root, report);
 
 	try {
 		const portErrors = checkPorts(root);

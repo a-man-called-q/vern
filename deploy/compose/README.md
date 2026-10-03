@@ -82,7 +82,8 @@ docker compose --env-file deploy/prod/.env -f deploy/compose/docker-compose.yml 
 
 To move to a new ZITADEL release, set `ZITADEL_VERSION` and
 `ZITADEL_LOGIN_IMAGE` together (see `deploy/dev/auth-server/.env.example`), then run
-the same command without service names.
+the same command without service names. `bun run project:doctor` warns when an
+environment's `.env` is behind `deploy/compose/.env.example`.
 
 ## More apps
 
