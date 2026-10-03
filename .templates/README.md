@@ -9,6 +9,15 @@ storage stacks to `deploy/dev/<name>`.
 Next.js templates share, and both extend it. Change a shared file there once; a
 file in `tanstack/` or `next/` at the same path replaces the shared one.
 
+A template holds only what differs from one app to the next: its name, its
+port, its routes, its settings. Code that would be the same in every generated
+app is not in a template, because a generated app is never updated: it is in
+`packages/` for the web apps (`web-auth`, `app-shell`, `ui`) and in `crates/`
+for the APIs (`svc-auth`, `svc-http`, `svc-boot`, `svc-db`, `svc-events`), which
+the generated apps depend on. Put new plumbing there, and keep the templates
+thin. The Axum template's `Cargo.toml.tera` names its dependencies with
+`{ workspace = true }`; their versions are in the `Cargo.toml` at the root.
+
 ## TanStack
 
 ```sh

@@ -19,6 +19,9 @@ against.
 | `deploy` | How the product is run, one folder per environment: `dev`, `local`, `staging`, and `prod`, on one server with Docker Compose or on Kubernetes |
 | `apps/storybook` | Storybook workbench for the shared UI components |
 | `packages/ui` | Shared shadcn components and design tokens (`@vern/ui`) |
+| `packages/web-auth` | Sign-in, the session, and API calls as the signed-in user, for every web app (`@vern/web-auth`) |
+| `packages/app-shell` | The frame every web app shares: the dashboard's sidebar and header, the public pages' header and footer, the theme toggle (`@vern/app-shell`) |
+| `crates/` | What the Axum APIs share, as crates of the Cargo workspace at the root (`Cargo.toml`): the token check, the error type, startup and shutdown, the database pool, and events |
 | `scripts/` | Project tools: setup, provisioning, rename, update, and doctor |
 
 Projects are generated from the templates by kind: web apps into
@@ -27,6 +30,11 @@ storage stacks into `deploy/dev/<name>`, next to the auth stack. Each app and AP
 a production Dockerfile. The web apps keep OAuth tokens on the server in Redis;
 the browser only gets an HTTP-only session cookie. Each generated app's README
 covers its code and a production checklist.
+
+A generated app or API is thin. What every one of them does the same way is not
+copied into it: the web apps import it from `packages/`, and the APIs build with
+the crates in `crates/`. A fix made there, here or by `project:update`, reaches
+every app of the project; a generated folder holds only what is the app's own.
 
 ## Requirements
 
@@ -449,7 +457,8 @@ edit on the review branch and run `bun run project:update -- --continue`.
 - **`redis` 6** (`Promise<RedisClientType<…>>` is not assignable, then
   `'client' is possibly 'undefined'`). In each web app's
   `src/server/session-record.server.ts` (`src/server/session.server.ts` in an
-  older app), take the client's type from the call that creates it:
+  older app; an app generated since has no such file, the code is in
+  `packages/web-auth`), take the client's type from the call that creates it:
 
   ```ts
   function newRedisClient(url: string) {
@@ -459,6 +468,22 @@ edit on the review branch and run `bun run project:update -- --continue`.
   ```
 
   and create the client with `newRedisClient(url)` in `getRedisClient`.
+- **Shared packages and crates.** Apps and APIs generated before `packages/web-auth`,
+  `packages/app-shell`, and `crates/` keep working as they are, each with its
+  own copy of that code, which no update reaches. To move one over, generate a
+  fresh app or API from the template and carry your own pages, handlers, and
+  migrations into it; `docs/agents/new-app.md` and `docs/agents/new-service.md`
+  say what a generated folder holds now.
+  One thing is not optional for an API: `deploy/compose` and the image workflow
+  now build an API from the repository root, with the Cargo workspace. The
+  update rewrites the `Dockerfile` and the `docker` task of an older API for
+  that (`bun run project:update -- --migrate` does only this). If you had
+  changed them, it names the file and leaves it: copy `Dockerfile` and
+  `Dockerfile.dockerignore` from `.templates/axum/`, put the API's name where
+  the template has `{{ name | kebab_case }}`, and in `moon.yml` make the
+  `docker` task run `docker build -f services/<name>/Dockerfile -t <name> .`
+  with `runFromWorkspaceRoot: true`. Then run `cargo check` once and commit the
+  `Cargo.lock` at the root.
 - **Biome 2.5** reports each app's `biome.json` as out of date. These are
   notes, not failures; `bunx biome migrate --write` in the app's folder brings
   the file up to date.
