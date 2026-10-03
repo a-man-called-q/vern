@@ -11,7 +11,7 @@ against.
 | --- | --- |
 | `.templates/tanstack` | TanStack Start app with OIDC sign-in, Redis sessions, and server-side API calls |
 | `.templates/next` | Next.js App Router app with the same sign-in, sessions, and API calls |
-| `.templates/axum` | Axum API that verifies access tokens through ZITADEL introspection |
+| `.templates/axum` | Axum API that verifies access tokens through ZITADEL introspection, or with `--worker` a service that serves no API |
 | `.templates/postgres` | Optional PostgreSQL for the APIs' own data, one database per API |
 | `.templates/bus` | Optional NATS JetStream, the event bus between APIs generated with `--events` |
 | `.templates/storage` | Optional S3-compatible object store for uploads, with one bucket |

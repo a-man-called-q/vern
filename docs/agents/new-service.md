@@ -14,7 +14,8 @@ already has a service is a new module there
 ([service-engineering.md](service-engineering.md)), not a new service. Every
 service adds a port, a ZITADEL application, a key, a database, and an image to
 deploy, so add one when the data and rules are really separate, and say so to
-the user when the choice is not obvious.
+the user when the choice is not obvious. A service that only works in the
+background is a [worker](#a-worker-a-service-with-no-api).
 
 There is no users service. Users, passwords, and role grants live in ZITADEL.
 A service stores the user's ID (`sub`) next to the rows that user owns.
@@ -81,6 +82,35 @@ A service stores the user's ID (`sub`) next to the rows that user owns.
    the pattern. Turn them into the service's first real resource, following
    [service-engineering.md](service-engineering.md). Edit `0001_init.sql` in
    place only while it has never been deployed.
+
+## A worker: a service with no API
+
+Work that no user asks for directly (handling the events other services
+publish, a job on a schedule) goes in a worker, not behind an endpoint:
+
+```sh
+moon generate axum -- --name ingest --port 4100 --database --events --worker
+bun run setup
+moon run ingest:dev
+```
+
+A worker answers only `/healthz` on its port, for a probe. It verifies no token,
+so `setup` creates its `.env` and nothing in ZITADEL: no application, no key,
+and no `ZITADEL_*` lines in its `.env.example`, which is how the scripts tell it
+from an API. On Kubernetes it gets a Deployment with its database and bus
+settings, and no Service or Ingress; `deploy/compose` does not run workers.
+`--database` and `--events` mean what they mean for an API. With `--events`,
+`src/events.rs` is the example handler: it records the ID of each event it
+handled, because an event can be delivered twice.
+
+A worker has no caller. When its work concerns a user or a company, it takes the
+`sub` or `org_id` from the event or the row, which the API that wrote it took
+from a verified token. Never add an endpoint to a worker: a request from a user
+belongs in an API.
+
+An existing service that kept the `ZITADEL_*` lines only to be set up and
+deployed becomes a worker by removing them from its `.env.example` and `.env`,
+and the key mount from its `k8s/deployment.yaml`.
 
 ## A web app that calls two services
 

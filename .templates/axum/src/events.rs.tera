@@ -1,0 +1,82 @@
+---
+skip: {{ not worker or not events }}
+---
+//! The example handler: it records each event it has handled, so a second
+//! delivery of the same event changes nothing. Replace it with this worker's
+//! own work; the pattern is the point. Delivery is at least once, so a handler
+//! must reach the same result when it runs twice for one event.
+
+use sqlx::PgPool;
+use svc_events::{Event, Failure, Handler, async_trait};
+
+pub struct Record {
+    pub pool: PgPool,
+}
+
+#[async_trait]
+impl Handler for Record {
+    async fn handle(&self, event: &Event) -> Result<(), Failure> {
+        // The ID is the same on every delivery of one event.
+        let id = event
+            .id
+            .as_deref()
+            .ok_or_else(|| Failure::Drop(format!("{} has no ID", event.name)))?;
+        let recorded = sqlx::query(
+            "INSERT INTO processed_events (id, name) VALUES ($1, $2) \
+             ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(id)
+        .bind(&event.name)
+        .execute(&self.pool)
+        .await
+        // The database was unavailable: the event comes back later.
+        .map_err(|error| Failure::Retry(error.to_string()))?;
+        if recorded.rows_affected() == 0 {
+            // Handled before.
+            return Ok(());
+        }
+
+        // Do the work for a new event here. When it writes to the database, do
+        // it in one transaction with the row above, so both happen or neither.
+        // `event.json::<T>()` reads the payload.
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn event(id: Option<&str>) -> Event {
+        Event {
+            name: "example.changed".to_owned(),
+            id: id.map(str::to_owned),
+            payload: b"{}".to_vec(),
+        }
+    }
+
+    #[sqlx::test]
+    async fn an_event_delivered_twice_is_recorded_once(pool: PgPool) {
+        let handler = Record { pool: pool.clone() };
+        for _ in 0..2 {
+            handler
+                .handle(&event(Some("event-1")))
+                .await
+                .expect("the event is handled");
+        }
+        let recorded: i64 = sqlx::query_scalar("SELECT count(*) FROM processed_events")
+            .fetch_one(&pool)
+            .await
+            .expect("the table is readable");
+        assert_eq!(recorded, 1);
+    }
+
+    #[sqlx::test]
+    async fn an_event_without_an_id_is_given_up_on(pool: PgPool) {
+        let handler = Record { pool };
+        assert!(matches!(
+            handler.handle(&event(None)).await,
+            Err(Failure::Drop(_))
+        ));
+    }
+}

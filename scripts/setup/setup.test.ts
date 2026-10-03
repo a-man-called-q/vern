@@ -393,6 +393,22 @@ describe("setup", () => {
 		});
 	});
 
+	test("a worker gets its .env, and nothing in ZITADEL", async () => {
+		const root = workspace();
+		write(root, "services/ingest/Cargo.toml", "");
+		write(root, "services/ingest/.env.example", "PORT=4100\nDATABASE_URL=postgres://ingest:ingest@localhost:5433/ingest\n");
+		const zitadel = fakeZitadel();
+		expect(await setup([], deps(root, zitadel))).toBe(0);
+
+		expect(readFileSync(resolve(root, "services/ingest/.env"), "utf8")).toBe(
+			"PORT=4100\nDATABASE_URL=postgres://ingest:ingest@localhost:5433/ingest\n",
+		);
+		expect(existsSync(resolve(root, "services/ingest/secrets"))).toBe(false);
+		expect(zitadel.calls.some((call) => JSON.stringify(call.body ?? "").includes("ingest"))).toBe(false);
+		// The web app still calls the only API.
+		expect(parseEnv(resolve(root, "apps/dashboard/.env")).get("API_BASE_URL")).toBe("http://localhost:4000");
+	});
+
 	test("says nothing about APIs when there are none", async () => {
 		const root = workspace();
 		rmSync(resolve(root, "services/api"), { recursive: true });
@@ -1176,6 +1192,40 @@ describe("setup --kubernetes", () => {
 		expect(zitadel.projects).toHaveLength(1);
 		expect(zitadel.calls.filter((call) => call.path.endsWith("/apps/oidc"))).toHaveLength(1);
 		expect(zitadel.keys).toHaveLength(1);
+	});
+
+	test("a worker is deployed without a key, a ZITADEL application, or a hostname", async () => {
+		const root = kubeWorkspace();
+		write(root, "services/ingest/Cargo.toml", "");
+		write(root, "services/ingest/.env.example", "PORT=4100\nNATS_URL=nats://localhost:4222\n");
+		write(root, "deploy/dev/bus/docker-compose.yml", "");
+		const zitadel = fakeZitadel();
+		const kubectl: string[] = [];
+		const templated: string[] = [];
+		expect(
+			await setup(["--kubernetes", "local"], {
+				...deps(root, zitadel),
+				generateAppManifests: (target, app) => {
+					templated.push(`${app.name}:${app.kind}:${app.events}`);
+					write(target, `${app.path}/k8s/kustomization.yaml`, "resources: []\n");
+				},
+				runKubectl: (_root, args) => kubectl.push(args.join(" ")),
+				readKubeToken: () => "token",
+			}),
+		).toBe(0);
+
+		expect(templated).toContain("ingest:worker:true");
+		expect(readFileSync(resolve(root, "deploy/base/kustomization.yaml"), "utf8")).toContain("  - ../../services/ingest/k8s\n");
+		expect(kubectl).toContain("-n vern rollout status deployment/ingest --timeout=10m");
+		const component = generated(root, "local", "kustomization.yaml");
+		expect(component).toContain("- name: ingest\n");
+		expect(component).toContain("- name: bus\n");
+		expect(component).not.toContain("ingest-key");
+		expect(generated(root, "local", "ingress.yaml")).not.toContain("ingest");
+		expect(existsSync(resolve(root, "deploy/local/generated/secrets/ingest-key.json"))).toBe(false);
+		// Only the API has a key, and only the web app an application.
+		expect(zitadel.keys).toHaveLength(1);
+		expect(zitadel.calls.filter((call) => call.path.endsWith("/apps/oidc"))).toHaveLength(1);
 	});
 
 	test("refuses an app whose hostname is ZITADEL's", async () => {

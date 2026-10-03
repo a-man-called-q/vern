@@ -1,3 +1,4 @@
+import type { AppKind } from "../lib/projects";
 import { toYaml } from "../lib/yaml";
 import type { Environment } from "./stack";
 
@@ -29,11 +30,12 @@ export type KubeSettings = {
 export type KubeApp = {
 	name: string;
 	path: string;
-	kind: "web" | "api";
+	kind: AppKind;
+	/** Web app and API: its hostname. A worker has none. */
 	host: string;
-	/** API: it has a database (DATABASE_URL), in the data project locally. */
+	/** API and worker: it has a database (DATABASE_URL), in the data project locally. */
 	database: boolean;
-	/** API: it uses the bus (NATS_URL). */
+	/** API and worker: it uses the bus (NATS_URL). */
 	events: boolean;
 	/** API: a `secrets/<name>.env` with its own settings, such as ZITADEL_ORG_ADMIN_TOKEN. */
 	secretEnv: boolean;
@@ -60,7 +62,7 @@ const HEADER = (overlay: Overlay) =>
 export function baseKustomization(apps: { path: string }[]): string {
 	return (
 		"# Written by `bun run setup -- --kubernetes`: the identity stack, then every web\n" +
-		"# app and API of the project. Run it again after generating one.\n" +
+		"# app, API, and worker of the project. Run it again after generating one.\n" +
 		toYaml({
 			apiVersion: "kustomize.config.k8s.io/v1beta1",
 			kind: "Kustomization",
@@ -105,7 +107,8 @@ export function componentKustomization(input: ComponentInput): string {
 	const local = settings.overlay === "local";
 	const webApps = apps.filter((app) => app.kind === "web");
 	const apis = apps.filter((app) => app.kind === "api");
-	const databaseApis = apis.filter((app) => app.database);
+	// An API or a worker with a database of its own.
+	const databaseApps = apps.filter((app) => app.database);
 
 	const resources = ["ingress.yaml"];
 	if (local) {
@@ -127,7 +130,7 @@ export function componentKustomization(input: ComponentInput): string {
 	];
 	if (local) {
 		configMapGenerator.push({ name: "local-ca", files: ["ca.pem=tls/ca.pem"] });
-		for (const app of databaseApis) configMapGenerator.push({ name: `${app.name}-db-init`, files: [`init.sql=db-init/${app.name}.sql`] });
+		for (const app of databaseApps) configMapGenerator.push({ name: `${app.name}-db-init`, files: [`init.sql=db-init/${app.name}.sql`] });
 	}
 
 	const secretGenerator: Record<string, unknown>[] = [
@@ -144,7 +147,7 @@ export function componentKustomization(input: ComponentInput): string {
 			{ name: "redis", envs: ["secrets/redis.env"] },
 		);
 		if (backing.data) secretGenerator.push({ name: "data", envs: ["secrets/data.env"] });
-		for (const app of databaseApis)
+		for (const app of databaseApps)
 			secretGenerator.push({ name: `${app.name}-database`, envs: [`secrets/${app.name}-database.env`] });
 		if (backing.bus) secretGenerator.push({ name: "bus", envs: ["secrets/bus.env"] });
 		if (backing.storage) secretGenerator.push({ name: "storage", files: ["s3.json=secrets/storage-s3.json"] });
@@ -156,7 +159,7 @@ export function componentKustomization(input: ComponentInput): string {
 	}
 
 	const patches = local
-		? databaseApis.map((app) => ({ path: `patches/${app.name}-db-init.yaml`, target: { kind: "Deployment", name: app.name } }))
+		? databaseApps.map((app) => ({ path: `patches/${app.name}-db-init.yaml`, target: { kind: "Deployment", name: app.name } }))
 		: [];
 
 	return (
@@ -212,7 +215,7 @@ function ingress(
 	};
 }
 
-/** One hostname per web app and per API, and ZITADEL's on `authHost`. */
+/** One hostname per web app and per API, and ZITADEL's on `authHost`. A worker gets none. */
 export function ingressManifest(input: ComponentInput): string {
 	const { settings } = input;
 	const pages = (path: string, pathType: "Prefix" | "Exact") => ({ path, pathType, service: "auth-pages", port: "http" });
@@ -236,21 +239,24 @@ export function ingressManifest(input: ComponentInput): string {
 				"traefik.ingress.kubernetes.io/router.priority": "1",
 			},
 		}),
-		...input.apps.map((app) =>
-			ingress(settings, app.name, app.host, [{ path: "/", pathType: "Prefix", service: app.name, port: "http" }], {
-				tlsName: app.name,
-				issue: true,
-			}),
-		),
+		...input.apps
+			.filter((app) => app.kind !== "worker")
+			.map((app) =>
+				ingress(settings, app.name, app.host, [{ path: "/", pathType: "Prefix", service: app.name, port: "http" }], {
+					tlsName: app.name,
+					issue: true,
+				}),
+			),
 	];
 	return HEADER(settings.overlay) + documents.map((document) => `---\n${toYaml(document)}`).join("");
 }
 
 /**
- * local: the API applies its db/init.sql to the data project's PostgreSQL
- * before it starts. The file only creates what is missing.
+ * local: the API or worker applies its db/init.sql to the data project's
+ * PostgreSQL before it starts. The file only creates what is missing.
  */
-export function dbInitPatch(app: { name: string }): string {
+export function dbInitPatch(app: { name: string; kind: AppKind }): string {
+	const volume = { name: "db-init", configMap: { name: `${app.name}-db-init` } };
 	return (
 		HEADER("local") +
 		toYaml([
@@ -267,7 +273,10 @@ export function dbInitPatch(app: { name: string }): string {
 					},
 				],
 			},
-			{ op: "add", path: "/spec/template/spec/volumes/-", value: { name: "db-init", configMap: { name: `${app.name}-db-init` } } },
+			// An API has the volume of its key already; a worker has none to add to.
+			app.kind === "worker"
+				? { op: "add", path: "/spec/template/spec/volumes", value: [volume] }
+				: { op: "add", path: "/spec/template/spec/volumes/-", value: volume },
 		])
 	);
 }

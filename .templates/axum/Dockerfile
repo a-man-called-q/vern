@@ -3,9 +3,10 @@
 #   moon run {{ name | kebab_case }}:docker
 # or, from the repository root:
 #   docker build -f services/{{ name | kebab_case }}/Dockerfile -t {{ name | kebab_case }} .
-# Configure it with ZITADEL_ISSUER and ZITADEL_PROJECT_ID, and mount the API
+{% if worker %}# It serves only /healthz, for a probe, and needs no ZITADEL settings.
+{% else %}# Configure it with ZITADEL_ISSUER and ZITADEL_PROJECT_ID, and mount the API
 # application's key file at /run/secrets/zitadel-api-key.json.
-
+{% endif %}
 # Alpine's Rust targets musl, which links a fully static binary.
 FROM rust:1.98.1-alpine AS build
 RUN apk add --no-cache musl-dev
@@ -31,7 +32,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 FROM gcr.io/distroless/static-debian13:nonroot
 COPY --from=build /usr/local/bin/{{ name | kebab_case }} /usr/local/bin/{{ name | kebab_case }}
 ENV HOST=0.0.0.0 \
-    PORT=4000 \
+{% if worker %}    PORT=4000
+{% else %}    PORT=4000 \
     ZITADEL_API_KEY_FILE=/run/secrets/zitadel-api-key.json
-EXPOSE 4000
+{% endif %}EXPOSE 4000
 ENTRYPOINT ["/usr/local/bin/{{ name | kebab_case }}"]

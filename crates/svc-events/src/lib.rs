@@ -33,7 +33,8 @@ use async_nats::{
         stream,
     },
 };
-use async_trait::async_trait;
+/// For a service's own [`Handler`], so it needs no dependency of its own for it.
+pub use async_trait::async_trait;
 use futures_util::StreamExt;
 use serde::{Serialize, de::DeserializeOwned};
 use sqlx::{PgConnection, PgPool};
