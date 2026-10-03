@@ -55,7 +55,16 @@ jobs:
             case "$path" in
               # A web app builds from the root, which holds the Bun workspace.
               apps/*) docker build -f "$path/Dockerfile" -t "$image" . ;;
-              services/*) docker build -t "$image" "$path" ;;
+              # So does an API, with the Cargo workspace and the crates it
+              # shares. One generated before crates/ existed has no
+              # Dockerfile.dockerignore, and builds from its own folder.
+              services/*)
+                if [ -e "$path/Dockerfile.dockerignore" ]; then
+                  docker build -f "$path/Dockerfile" -t "$image" .
+                else
+                  docker build -t "$image" "$path"
+                fi
+                ;;
             esac
             docker push "$image"
             echo "Pushed $image"

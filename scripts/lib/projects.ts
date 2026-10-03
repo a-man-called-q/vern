@@ -12,6 +12,14 @@ import { parseEnv } from "./env";
 export const PROJECT_ROOTS = ["apps", "services", "deploy/dev"] as const;
 export type ProjectRoot = (typeof PROJECT_ROOTS)[number];
 
+/**
+ * Where the code the projects share lives: the Bun packages the web apps
+ * import (the UI, sign-in, the app shell), and the Cargo crates the APIs build
+ * with. Nothing there has a port or a ZITADEL application, so it is not a
+ * project in the sense above; it has a Moon project ID, so its name is taken.
+ */
+export const SHARED_ROOTS = ["packages", "crates"] as const;
+
 /** Where the Compose stacks of the development environment live. */
 export const DEV_STACKS: ProjectRoot = "deploy/dev";
 
@@ -36,6 +44,17 @@ export function listProjects(root: string): Project[] {
 		}
 	}
 	return projects.sort((a, b) => a.name.localeCompare(b.name) || a.path.localeCompare(b.path));
+}
+
+/** Every folder of shared code, in name order. */
+export function listShared(root: string): { name: string; path: string }[] {
+	return SHARED_ROOTS.flatMap((sharedRoot) => {
+		const dir = resolve(root, sharedRoot);
+		if (!existsSync(dir)) return [];
+		return readdirSync(dir, { withFileTypes: true })
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => ({ name: entry.name, path: `${sharedRoot}/${entry.name}` }));
+	}).sort((a, b) => a.name.localeCompare(b.name) || a.path.localeCompare(b.path));
 }
 
 /**

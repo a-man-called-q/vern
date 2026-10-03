@@ -4,12 +4,15 @@ projects:
     # see AGENTS.md.
     - 'apps/*/moon.yml'
     - 'services/*/moon.yml'
+    # What the APIs share: the crates of the Cargo workspace at the root.
+    - 'crates/*/moon.yml'
     - 'deploy/dev/*/moon.yml'
     # The environments that run the whole product: deploy/README.md.
     - 'deploy/moon.yml'
     # Stacks from before deploy/dev/: `bun run project:update -- --migrate`
     # moves them, and until then the apps that depend on them still start.
     - 'infra/*/moon.yml'
+    # What the web apps share: the packages of the Bun workspace.
     - 'packages/*/moon.yml'
   sources:
     workspace: '.'

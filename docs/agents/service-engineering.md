@@ -12,11 +12,27 @@ in one file.
 | `src/main.rs` | Startup: settings, the database pool, the listener, `mod` lines | Only to add a `mod` or a startup setting |
 | `src/app.rs` | The router. Every route of the service is listed here | Yes, one line per route |
 | `src/<resource>.rs` | One resource: request and response types, handlers, tests | Yes, this is where the work is |
-| `src/error.rs` | `ApiError`, the only error a handler returns | Add a variant when a new status is needed |
-| `src/auth/`, `src/config.rs` | Token verification, `AuthenticatedUser`, roles; the settings it checks at startup | No. Build on them |
-| `src/db.rs` | The pool, and applying migrations at startup | Rarely |
 | `migrations/` | The schema, one numbered SQL file per change | Add files; never edit one that has shipped |
 | `db/init.sql` | Creates the service's local database and role | No |
+| `Cargo.toml` | The dependencies this service uses, by name | Add `<name> = { workspace = true }` |
+
+What every service does the same way is not in the service. It is in the
+crates of `crates/` at the repository root, which all services build with, so
+a fix there reaches each of them:
+
+| Crate | Holds | Change it? |
+| --- | --- | --- |
+| `svc-auth` | Token verification, `AuthenticatedUser`, roles, the ZITADEL settings checked at startup, and `api_router` | No. Build on it |
+| `svc-http` | `ApiError`, the only error a handler returns, and `/healthz` | Add a variant when a new status is needed |
+| `svc-boot` | The log, the listener on `PORT`, and a shutdown that finishes requests | Rarely |
+| `svc-db` | The pool, applying migrations at startup, and `database_error` | Rarely |
+| `svc-events` | The outbox, the relay to NATS, and the consumer (`--events`) | Rarely |
+
+Code that a second service needs goes into a crate there (a new one for a new
+concern: `crates/<name>` with a `Cargo.toml` like its neighbours' and a line in
+`[workspace.dependencies]` of the root `Cargo.toml`), not into a copy. Code
+only one service uses stays in that service. The versions of all dependencies
+are in the root `Cargo.toml`, one for the whole workspace.
 
 Keep a resource in one module until it is hard to read, then split it by
 resource, not by layer. Do not add repository traits, a service layer, or a
@@ -65,10 +81,10 @@ own SQL are easy to read, test, and change.
    }
    ```
 
-4. **Route.** Add it to `protected_routes` in `src/app.rs`, under `/api/`, and
+4. **Route.** Add it to `protected` in `src/app.rs`, under `/api/`, and
    add `mod <resource>;` to `src/main.rs`. A path parameter is written
-   `/api/invoices/{id}`. A route outside `protected_routes` is public: put one
-   there only on purpose, next to `/healthz`.
+   `/api/invoices/{id}`. A route in `public` is open to anyone: put one
+   there only on purpose.
 5. **Tests**, in the same file (see below).
 6. **The web side.** When a web app reads the endpoint, update its types and
    calls in the same change ([web-to-api.md](web-to-api.md)).
@@ -90,7 +106,7 @@ own SQL are easy to read, test, and change.
   the right status. The message of `BadRequest`, `Forbidden`, and `NotFound` is
   shown to users, so write it for them. Database and upstream failures are
   logged with `tracing::error!` and returned as `ApiError::Internal`, which
-  hides the cause (`database_error` in `notes.rs`).
+  hides the cause (`svc_db::database_error`).
 - **Validate at the edge.** Trim, bound lengths, and check ranges in the handler
   before the query, and answer `BadRequest` with what is wrong. The database
   constraint is the second line, not the error message.
@@ -103,14 +119,15 @@ own SQL are easy to read, test, and change.
   (`pool.begin()`, then `commit()`).
 - **A new setting** is read from the environment once at startup, added to
   `.env.example`, and missing means the service refuses to start, as
-  `src/main.rs` does for `PORT`.
+  `svc-boot` does for `PORT`.
 - **New roles** go in `roles.json` first ([roles-and-users.md](roles-and-users.md)).
 
 ## Tests
 
 Tests live in the module they test, under `#[cfg(test)]`. They do not need
 ZITADEL: build a small router with the handlers and put the user in by hand,
-as the tests in `notes.rs` do.
+as the tests in `notes.rs` do. To test through the token check itself, the test
+in `src/app.rs` shows the fake ZITADEL of `svc_auth::testing`.
 
 ```rust
 fn app(pool: &PgPool, sub: &str, roles: &[&str]) -> Router {
@@ -146,9 +163,9 @@ Cover, for each endpoint:
 ## Callers that are not signed-in users
 
 A device with its own token, or an event consumer, has no ZITADEL access token.
-Do not bend `src/auth/` for it: give it its own module (`src/device_auth.rs`) and
-its own router, next to `protected_routes` in `src/app.rs`, with the check in
-that module and limits on how often it can be called. Keep it away from the
+Do not bend `svc-auth` for it: give it its own module (`src/device_auth.rs`) and
+its own routes, in `public` in `src/app.rs`, with the check in that module and
+limits on how often it can be called. Keep it away from the
 user routes, and let it write only what that kind of caller may write. Events
 (`--events`) are for services telling each other what changed; they are not
 a way in for an outside caller.
@@ -156,7 +173,7 @@ a way in for an outside caller.
 ## Before calling it done
 
 ```sh
-cargo fmt                              # in services/<service>
+cargo fmt -p <service>
 moon run <service>:check <service>:test
 ```
 

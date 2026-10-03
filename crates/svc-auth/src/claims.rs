@@ -88,7 +88,7 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::{org_id_from_claims, roles_from_claims};
-    use crate::auth::testing::PROJECT;
+    use crate::testing::PROJECT;
 
     fn extra(value: Value) -> HashMap<String, Value> {
         serde_json::from_value(value).expect("claims are an object")

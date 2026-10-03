@@ -1,6 +1,3 @@
----
-skip: {{ not events }}
----
 //! Events between services, over NATS JetStream.
 //!
 //! A service that changes data other services care about writes an event to its
@@ -17,10 +14,10 @@ skip: {{ not events }}
 //! JetStream drops a second message with the same `Nats-Msg-Id` inside its
 //! duplicate window (two minutes by default), which covers a relay that crashed
 //! between publishing and marking the row.
-
-// A service usually sends events or receives them, not both; what it does not
-// use yet is here for when it does.
-#![allow(dead_code)]
+//!
+//! The `outbox` table is the service's own: `moon generate axum -- --events`
+//! writes its migration, the same table as `migrations/0001_outbox.sql` of this
+//! crate, which the tests here run on.
 
 use std::{
     env,
@@ -375,6 +372,7 @@ mod tests {
     }
 
     #[sqlx::test]
+    #[ignore = "needs PostgreSQL: DATABASE_URL of an API with events"]
     async fn the_relay_publishes_in_order_and_marks_the_rows(pool: PgPool) {
         let first = enqueue_in_tx(&pool, "thing.changed", json!({ "n": 1 })).await;
         let second = enqueue_in_tx(&pool, "thing.changed", json!({ "n": 2 })).await;
@@ -398,6 +396,7 @@ mod tests {
     }
 
     #[sqlx::test]
+    #[ignore = "needs PostgreSQL: DATABASE_URL of an API with events"]
     async fn an_event_rolled_back_with_its_change_is_never_published(pool: PgPool) {
         let mut tx = pool.begin().await.expect("begin");
         enqueue(&mut tx, "thing.changed", &json!({ "n": 1 }))
@@ -410,6 +409,7 @@ mod tests {
     }
 
     #[sqlx::test]
+    #[ignore = "needs PostgreSQL: DATABASE_URL of an API with events"]
     async fn a_failed_publish_keeps_the_rest_for_the_next_round(pool: PgPool) {
         enqueue_in_tx(&pool, "thing.changed", json!({ "n": 1 })).await;
         enqueue_in_tx(&pool, "thing.changed", json!({ "n": 2 })).await;
@@ -450,10 +450,10 @@ mod tests {
         }
     }
 
-    // Runs against the development NATS, as starting the API does.
+    // Runs against the development NATS, as starting an API does.
     #[tokio::test]
+    #[ignore = "needs NATS: NATS_URL of an API with events"]
     async fn an_event_goes_through_nats_to_a_consumer() {
-        dotenvy::dotenv().ok();
         let bus = Bus::from_env().await.expect("connects to NATS");
         let (sender, mut received) = tokio::sync::mpsc::unbounded_channel();
         // A consumer starts from the first event in the stream, so each run has

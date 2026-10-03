@@ -390,8 +390,10 @@ describe("update-project", () => {
 				'{\n  "name": "{{ name | kebab_case }}",\n  "dependencies": {\n{% if include_demos %}    "chart": "^1.0.0",\n{% endif %}    "@acme/ui": "workspace:*",\n    "demo": "^1.0.0"\n  }\n}\n',
 			".templates/next/package.json.tera":
 				'{\n  "name": "{{ name | kebab_case }}",\n  "dependencies": {\n    "@acme/ui": "workspace:*",\n    "demo": "^1.0.0"\n  }\n}\n',
+			"Cargo.toml":
+				'[workspace]\nmembers = ["crates/*", "services/*"]\n\n[workspace.dependencies]\nasync-trait = "0.1"\nsqlx = "0.8"\n',
 			".templates/axum/Cargo.toml.tera":
-				'[package]\nname = "{{ name | kebab_case }}"\nversion = "0.1.0"\n\n[dependencies]\n{% if events %}async-nats = "0.50"\n{% endif %}async-trait = "0.1"\n{% if database %}sqlx = "0.8"\n{% endif %}serde = "1"\n{% if database %}uuid = "1"\n{% endif %}\n[dev-dependencies]\ntower = "0.5"\n',
+				'[package]\nname = "{{ name | kebab_case }}"\nversion.workspace = true\n\n[dependencies]\nasync-trait = { workspace = true }\n{% if database %}sqlx = { workspace = true }\n{% endif %}',
 		});
 		git(consumer, "clone", upstream, ".");
 		git(consumer, "config", "user.name", "Vern Script Tests");
@@ -418,7 +420,7 @@ describe("update-project", () => {
 		write(
 			consumer,
 			"services/service/Cargo.toml",
-			'[package]\nname = "service"\nversion = "0.1.0"\n\n[dependencies]\nasync-trait = "0.1"\n',
+			'[package]\nname = "service"\nversion.workspace = true\n\n[dependencies]\nasync-trait = { workspace = true }\n',
 		);
 		write(
 			consumer,
@@ -493,9 +495,14 @@ describe("update-project", () => {
 		expect(
 			readFileSync(resolve(consumer, "services/service/src/main.rs"), "utf8"),
 		).toBe('fn main() { println!("custom service source"); }\n');
+		// One upgrade of the Cargo workspace covers the APIs and the crates: the
+		// versions are in the root manifest, and the API's own names them.
+		expect(readFileSync(resolve(consumer, "Cargo.toml"), "utf8")).toContain(
+			'async-trait = "0.2"\nsqlx = "0.9"\n',
+		);
 		expect(
 			readFileSync(resolve(consumer, "services/service/Cargo.toml"), "utf8"),
-		).toContain('async-trait = "0.2"');
+		).toContain("async-trait = { workspace = true }");
 		const tanstackTemplateText = readFileSync(
 			resolve(consumer, ".templates/tanstack/package.json.tera"),
 			"utf8",
@@ -520,15 +527,14 @@ describe("update-project", () => {
 		expect(nextTemplate.name).toBe("{{ name | kebab_case }}");
 		expect(nextTemplate.dependencies["@acme/ui"]).toBe("workspace:*");
 		expect(nextTemplate.dependencies.demo).toBe("^3.0.0");
-		const rustTemplate = readFileSync(
-			resolve(consumer, ".templates/axum/Cargo.toml.tera"),
-			"utf8",
-		);
-		expect(rustTemplate).toContain('name = "{{ name | kebab_case }}"');
-		expect(rustTemplate).toContain('async-trait = "0.2"');
-		// Every conditional dependency is upgraded and keeps its own condition.
-		expect(rustTemplate).toBe(
-			'[package]\nname = "{{ name | kebab_case }}"\nversion = "0.1.0"\n\n[dependencies]\n{% if events %}async-nats = "0.51"\n{% endif %}async-trait = "0.2"\n{% if database %}sqlx = "0.9"\n{% endif %}serde = "1"\n{% if database %}uuid = "2"\n{% endif %}\n[dev-dependencies]\ntower = "0.5"\n',
+		// The Axum template has no versions to upgrade.
+		expect(
+			readFileSync(
+				resolve(consumer, ".templates/axum/Cargo.toml.tera"),
+				"utf8",
+			),
+		).toBe(
+			'[package]\nname = "{{ name | kebab_case }}"\nversion.workspace = true\n\n[dependencies]\nasync-trait = { workspace = true }\n{% if database %}sqlx = { workspace = true }\n{% endif %}',
 		);
 		expect(readConfig(consumer)?.upstream.lastSyncedSha).toBe(target);
 		expect(existsState(consumer)).toBe(false);

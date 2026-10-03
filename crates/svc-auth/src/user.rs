@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use crate::error::ApiError;
+use svc_http::ApiError;
 
 #[derive(Clone, Debug)]
 pub struct AuthenticatedUser {
@@ -54,14 +54,13 @@ mod tests {
     use serde_json::{Value, json};
     use tower::ServiceExt;
 
+    use svc_http::ApiError;
+
     use super::AuthenticatedUser;
     use crate::{
-        auth::{
-            claims::IntrospectionClaims,
-            require_bearer,
-            testing::{active_claims, claims_with, make_state},
-        },
-        error::ApiError,
+        claims::IntrospectionClaims,
+        require_bearer,
+        testing::{active_claims, claims_with, make_state},
     };
 
     async fn publisher_only(

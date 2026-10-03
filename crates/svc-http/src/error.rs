@@ -8,8 +8,6 @@ use thiserror::Error;
 
 /// What a handler returns when it cannot answer. It renders as JSON,
 /// `{"error":{"code":"forbidden","message":"..."}}`, with the matching status.
-// The variants your handlers do not use yet are there for them.
-#[allow(dead_code)]
 #[derive(Debug, Error)]
 pub enum ApiError {
     #[error("{0}")]

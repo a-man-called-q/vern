@@ -227,9 +227,12 @@ services:
 
   # The API from services/${API_APP}. The web app calls it server-side with the
   # signed-in user's access token; it accepts only tokens ZITADEL confirms.
+  # It builds from the repository root, with the Cargo workspace and the crates
+  # in crates/; services/<api>/Dockerfile.dockerignore keeps the rest out.
   api:
     build:
-      context: ../../services/${API_APP:?Set API_APP in deploy/<environment>/.env}
+      context: ../..
+      dockerfile: services/${API_APP:?Set API_APP in deploy/<environment>/.env}/Dockerfile
     restart: unless-stopped
     environment:
       <<: *issuer

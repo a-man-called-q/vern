@@ -1,0 +1,12 @@
+# The build context of this image is the repository root, so that the API is
+# built with the crates it shares (crates/) and the workspace's Cargo.lock. Only
+# the Rust sources enter it; build output, settings, and secrets never do.
+*
+!Cargo.toml
+!Cargo.lock
+!crates
+!services
+**/target
+**/secrets
+**/.env
+**/.env.*

@@ -2,8 +2,10 @@ use std::sync::Arc;
 
 use thiserror::Error;
 
-use super::{cache::CachedIntrospector, claims::TokenIntrospector, zitadel::ZitadelIntrospector};
-use crate::config::Config;
+use crate::{
+    cache::CachedIntrospector, claims::TokenIntrospector, config::Config,
+    zitadel::ZitadelIntrospector,
+};
 
 #[derive(Debug, Error)]
 pub enum AuthSetupError {
@@ -14,12 +16,12 @@ pub enum AuthSetupError {
 /// What `require_bearer` checks a token against: the issuer and project it must
 /// name, and who to ask about it.
 #[derive(Clone)]
-pub struct AppState(pub(super) Arc<AppStateInner>);
+pub struct AppState(pub(crate) Arc<AppStateInner>);
 
-pub(super) struct AppStateInner {
-    pub(super) expected_issuer: String,
-    pub(super) project_id: String,
-    pub(super) introspector: Arc<dyn TokenIntrospector>,
+pub(crate) struct AppStateInner {
+    pub(crate) expected_issuer: String,
+    pub(crate) project_id: String,
+    pub(crate) introspector: Arc<dyn TokenIntrospector>,
 }
 
 impl AppState {
@@ -39,7 +41,7 @@ impl AppState {
         ))
     }
 
-    pub(super) fn with_introspector(
+    pub(crate) fn with_introspector(
         expected_issuer: String,
         project_id: String,
         introspector: Arc<dyn TokenIntrospector>,

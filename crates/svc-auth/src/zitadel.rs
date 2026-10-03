@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::OnceCell;
 
-use super::claims::{IntrospectionClaims, IntrospectionError, TokenIntrospector};
+use crate::claims::{IntrospectionClaims, IntrospectionError, TokenIntrospector};
 use crate::config::{ApiKey, Config, is_plain_http_url};
 
 const PRIVATE_KEY_JWT_ASSERTION_TYPE: &str =

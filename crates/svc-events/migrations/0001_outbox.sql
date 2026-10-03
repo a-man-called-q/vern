@@ -1,6 +1,3 @@
----
-skip: {{ not events }}
----
 -- Events waiting to be published to NATS. They are written in the same
 -- transaction as the change they describe (svc_events::enqueue), and the relay
 -- publishes them, oldest first. id is a UUID v7, so it sorts by time, and it

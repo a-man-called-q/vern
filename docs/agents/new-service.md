@@ -2,7 +2,9 @@
 
 A service is an Axum API under `services/<name>`. It accepts the access token of a
 signed-in user, verifies it with ZITADEL, and gives each handler the verified
-user and their roles.
+user and their roles. A generated service is small: its startup, its routes, and
+its resources. The token check, the error type, startup, the database pool, and
+events are in the crates of `crates/`, which every service builds with.
 
 ## A new service, or a module in one that exists?
 
@@ -45,7 +47,7 @@ A service stores the user's ID (`sub`) next to the rows that user owns.
    Add `--events` for a service that tells other services what changed or hears
    from them. It sends events over NATS JetStream through an outbox table, and
    needs the bus project once (`moon generate bus -- --name bus --port 4222`).
-   The service's README, section "Events", explains `src/events.rs`.
+   The service's README, section "Events", explains the `svc-events` crate.
    A service that keeps uploaded files needs the storage project once
    (`moon generate storage -- --name storage --port 9000`): an S3-compatible
    store with one bucket, whose settings the project's README lists for the
@@ -70,6 +72,10 @@ A service stores the user's ID (`sub`) next to the rows that user owns.
    curl http://localhost:4001/healthz
    moon run billing:check billing:test
    ```
+
+   The first build adds the service to `Cargo.lock` at the repository root:
+   commit that change with the service, so its image builds with the versions
+   you tested.
 
 7. **Replace the example.** `src/notes.rs` and `migrations/0001_init.sql` show
    the pattern. Turn them into the service's first real resource, following
@@ -102,9 +108,10 @@ HTTPS address; `deploy/compose` runs one API.
 Forward the caller's own bearer token. Both services verify tokens against the
 same ZITADEL project, so it is valid there, and the second service applies its
 own role and ownership rules to the real user. Do not create a shared secret or
-a super-user token between services. `reqwest` is already a dependency; keep
-the calls in one module (`src/<other>_client.rs`) and give the request a
-timeout.
+a super-user token between services. `reqwest` is in the workspace: add
+`reqwest = { workspace = true }` to the service's `Cargo.toml`, keep the calls
+in one module (`src/<other>_client.rs`), and give the request a timeout. When a
+second service makes the same calls, move the module to a crate in `crates/`.
 
 ## Things that go wrong
 

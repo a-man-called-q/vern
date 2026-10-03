@@ -20,7 +20,7 @@ function parseArgs(argv: string[]): Options | undefined {
 
 function help(): void {
 	console.log(
-		"Usage: bun scripts/update-project.ts [--apply | --continue | --migrate]\n\nDefault: fetch Vern main and preview changed files.\n--apply: create a review branch, merge upstream changes, upgrade dependencies, and validate.\n--continue: resume a pending update after resolving file conflicts or a failed dependency/validation step.\n--migrate: only move the APIs to services/, the Compose stacks to deploy/dev/, and a deployment's settings to its environment under deploy/ (for a project made before that layout).",
+		"Usage: bun scripts/update-project.ts [--apply | --continue | --migrate]\n\nDefault: fetch Vern main and preview changed files.\n--apply: create a review branch, merge upstream changes, upgrade dependencies, and validate.\n--continue: resume a pending update after resolving file conflicts or a failed dependency/validation step.\n--migrate: only move the APIs to services/, the Compose stacks to deploy/dev/, and a deployment's settings to its environment under deploy/ (for a project made before that layout), and make the image of an API generated before crates/ build from the repository root.",
 	);
 }
 

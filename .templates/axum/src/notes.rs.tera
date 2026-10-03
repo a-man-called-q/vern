@@ -10,7 +10,9 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
-use crate::{auth::AuthenticatedUser, error::ApiError};
+use svc_auth::AuthenticatedUser;
+use svc_db::database_error;
+use svc_http::ApiError;
 
 const MAX_BODY_CHARS: usize = 2000;
 
@@ -24,12 +26,6 @@ pub struct Note {
 #[derive(Deserialize)]
 pub struct NewNote {
     body: String,
-}
-
-/// Logs the cause and answers with a generic 500, so SQL details stay server-side.
-fn database_error(error: sqlx::Error) -> ApiError {
-    tracing::error!(%error, "database query failed");
-    ApiError::Internal
 }
 
 pub async fn list(
@@ -84,10 +80,10 @@ mod tests {
     };
     use serde_json::{Value, json};
     use sqlx::PgPool;
+    use svc_auth::AuthenticatedUser;
     use tower::ServiceExt;
 
     use super::{create, list};
-    use crate::auth::AuthenticatedUser;
 
     fn app(pool: &PgPool, sub: &str) -> Router {
         let user = AuthenticatedUser {

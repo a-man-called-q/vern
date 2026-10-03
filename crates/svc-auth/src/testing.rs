@@ -1,11 +1,11 @@
-//! A fake ZITADEL for the tests: answers each token from a table.
+//! A fake ZITADEL for the tests: answers each token from a table. A service's
+//! tests get it with the `testing` feature of this crate, and build a router
+//! whose tokens are the keys of that table (`make_state`).
 
 use std::{collections::HashMap, sync::Arc};
 
-use super::{
-    AppState,
-    claims::{Audience, IntrospectionClaims, IntrospectionError, TokenIntrospector},
-};
+pub use crate::claims::{Audience, IntrospectionClaims, IntrospectionError};
+use crate::{AppState, claims::TokenIntrospector};
 
 pub const ISSUER: &str = "http://zitadel.test";
 pub const PROJECT: &str = "shared-project-id";

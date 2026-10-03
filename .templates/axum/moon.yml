@@ -17,14 +17,35 @@ tasks:
     command: cargo build --release
     description: Build this Axum service for release
     toolchains: system
+    # The API is built with the crates it shares and the workspace's lockfile.
+    inputs:
+      - '**/*'
+      - '/crates/**/*'
+      - '/Cargo.toml'
+      - '/Cargo.lock'
 
   check:
-    command: cargo check
+    command: cargo check --all-targets
     description: Check this Axum service
     toolchains: system
+    inputs:
+      - '**/*'
+      - '/crates/**/*'
+      - '/Cargo.toml'
+      - '/Cargo.lock'
 
   test:
+{%- if events %}
+    # The tests of the shared crates that need a database or NATS are marked
+    # `#[ignore]` there, and run here, with this API's DATABASE_URL and NATS_URL.
+    script: cargo test && cargo test -p svc-db -p svc-events -- --ignored
+{%- elif database %}
+    # The test of the shared crate that needs a database is marked `#[ignore]`
+    # there, and runs here, with this API's DATABASE_URL.
+    script: cargo test && cargo test -p svc-db -- --ignored
+{%- else %}
     command: cargo test
+{%- endif %}
     description: Run this Axum service's tests
 {%- if database or events %}
     deps:
@@ -36,10 +57,17 @@ tasks:
       - 'bus:up'
 {%- endif %}
     toolchains: system
+    inputs:
+      - '**/*'
+      - '/crates/**/*'
+      - '/Cargo.toml'
+      - '/Cargo.lock'
 
   docker:
-    command: docker build -t {{ name | kebab_case }} .
+    command: docker build -f services/{{ name | kebab_case }}/Dockerfile -t {{ name | kebab_case }} .
     description: Build this API's production Docker image
     toolchains: system
     options:
       cache: false
+      # The context is the repository root: see Dockerfile.dockerignore.
+      runFromWorkspaceRoot: true

@@ -1,57 +1,68 @@
-use axum::{Json, Router, extract::Extension, middleware, routing::get};
-use serde::Serialize;
-use tower_http::trace::TraceLayer;
-
-use crate::auth::{AppState, AuthenticatedUser, require_bearer};
-{% if database %}use crate::notes;
+{% if database %}use axum::{Router, routing::get};
+{% else %}use axum::Router;
+{% endif %}use svc_auth::{AppState, routes::api_router};
+{% if database %}
+use crate::notes;
 {% endif %}
-#[derive(Serialize)]
-struct HealthResponse {
-    status: &'static str,
-}
-
-#[derive(Serialize)]
-struct MeResponse {
-    sub: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    name: Option<String>,
-    roles: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    org_id: Option<String>,
-}
-
-async fn healthz() -> Json<HealthResponse> {
-    Json(HealthResponse { status: "ok" })
-}
-
-async fn api_me(Extension(user): Extension<AuthenticatedUser>) -> Json<MeResponse> {
-    Json(MeResponse {
-        sub: user.sub,
-        name: user.display_name,
-        roles: user.roles.into_iter().collect(),
-        org_id: user.org_id,
-    })
-}
-
+/// The routes of this API. `api_router` adds `/healthz`, which is public, and
+/// `/api/me`, which answers who the caller is.
 pub fn router(state: AppState) -> Router {
-{% if database %}    let protected_routes = Router::new()
-        .route("/api/me", get(api_me))
-        .route("/api/notes", get(notes::list).post(notes::create))
-        .route_layer(middleware::from_fn_with_state(
-            state.clone(),
-            require_bearer,
-        ));
-{% else %}    let protected_routes =
-        Router::new()
-            .route("/api/me", get(api_me))
-            .route_layer(middleware::from_fn_with_state(
-                state.clone(),
-                require_bearer,
-            ));
+    // Anyone may call these: a route here needs a check of its own, or none.
+    let public = Router::new();
+    // A handler of these gets a verified `AuthenticatedUser`.
+{% if database %}    let protected = Router::new().route("/api/notes", get(notes::list).post(notes::create));
+{% else %}    let protected = Router::new();
 {% endif %}
-    Router::new()
-        .route("/healthz", get(healthz))
-        .merge(protected_routes)
-        .layer(TraceLayer::new_for_http())
-        .with_state(state)
+    api_router(public, protected, state)
+}
+
+// `svc_auth::testing` is a fake ZITADEL: each key of the table is a token, and
+// its value is what ZITADEL would say about it. Test an endpoint's rules the
+// same way: a caller without the role, and a caller asking for another's data.
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use axum::{
+        body::{Body, to_bytes},
+        http::{Request, StatusCode, header},
+    };
+    use serde_json::{Value, json};
+    use svc_auth::testing::{active_claims, make_state};
+    use tower::ServiceExt;
+
+    use super::router;
+
+    async fn me(token: Option<&str>) -> (StatusCode, Value) {
+        let state = make_state(HashMap::from([(
+            "users-token".to_owned(),
+            Ok(active_claims("user-1")),
+        )]));
+        let mut request = Request::builder().uri("/api/me");
+        if let Some(token) = token {
+            request = request.header(header::AUTHORIZATION, format!("Bearer {token}"));
+        }
+        let response = router(state)
+            .oneshot(request.body(Body::empty()).expect("request is valid"))
+            .await
+            .expect("router responds");
+        let status = response.status();
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body is readable");
+        (status, serde_json::from_slice(&body).unwrap_or(Value::Null))
+    }
+
+    #[tokio::test]
+    async fn a_protected_route_names_the_caller_and_refuses_anyone_else() {
+        let (status, body) = me(Some("users-token")).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body, json!({"sub": "user-1", "roles": []}));
+
+        for token in [None, Some("not-a-token")] {
+            let (status, body) = me(token).await;
+            assert_eq!(status, StatusCode::UNAUTHORIZED);
+            assert_eq!(body["error"]["code"], "unauthorized");
+        }
+    }
 }

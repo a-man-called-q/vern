@@ -1,6 +1,5 @@
 import {
 	existsSync,
-	mkdirSync,
 	mkdtempSync,
 	readFileSync,
 	rmSync,
@@ -10,11 +9,6 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { listProjects } from "../lib/projects";
 import { run } from "../lib/run";
-import {
-	cargoConditions,
-	restoreCargoConditions,
-	stripCargoConditions,
-} from "./cargo-template";
 import { requireCargoEdit } from "./cargo-edit";
 import {
 	demoDependencies,
@@ -145,44 +139,27 @@ function mkTemp(prefix: string): string {
 	return mkdtempSync(join(tmpdir(), prefix));
 }
 
-function updateRustTemplate(root: string): void {
-	const path = resolve(root, ".templates/axum/Cargo.toml.tera");
-	if (!existsSync(path)) return;
-	const tempRoot = mkTemp("vern-rust-template-");
-	try {
-		const original = readFileSync(path, "utf8");
-		const named = original.replace(
-			'"{{ name | kebab_case }}"',
-			'"vern-template-axum"',
-		);
-		if (named === original)
-			throw new Error("Could not render the Axum Cargo name placeholder.");
-		writeFileSync(resolve(tempRoot, "Cargo.toml"), stripCargoConditions(named));
-		mkdirSync(resolve(tempRoot, "src"), { recursive: true });
-		writeFileSync(resolve(tempRoot, "src/main.rs"), "fn main() {}\n");
-		run(
-			"cargo",
-			[
-				"upgrade",
-				"--manifest-path",
-				resolve(tempRoot, "Cargo.toml"),
-				"--incompatible",
-				"allow",
-				"--pinned",
-				"allow",
-			],
-			{ cwd: tempRoot },
-		);
-		const updated = readFileSync(
-			resolve(tempRoot, "Cargo.toml"),
-			"utf8",
-		).replace('"vern-template-axum"', '"{{ name | kebab_case }}"');
-		writeFileSync(
-			path,
-			restoreCargoConditions(updated, cargoConditions(original)),
-		);
-	} finally {
-		rmSync(tempRoot, { recursive: true, force: true });
+const CARGO_UPGRADE = ["--incompatible", "allow", "--pinned", "allow"];
+
+/**
+ * The Rust dependencies. The APIs in services/ and the crates in crates/ are
+ * one Cargo workspace, so one `cargo upgrade` at the root covers every member
+ * and the versions they share ([workspace.dependencies]). The Axum template
+ * names its dependencies without versions, so it has nothing to upgrade. A
+ * project without the root manifest has each API on its own.
+ */
+function updateRustDependencies(root: string): void {
+	const workspace = resolve(root, "Cargo.toml");
+	const manifests = existsSync(workspace)
+		? [workspace]
+		: listProjects(root)
+				.map((project) => resolve(root, project.path, "Cargo.toml"))
+				.filter((manifest) => existsSync(manifest));
+	for (const manifest of manifests) {
+		run("cargo", ["upgrade", "--manifest-path", manifest, ...CARGO_UPGRADE], {
+			cwd: root,
+		});
+		run("cargo", ["update", "--manifest-path", manifest], { cwd: root });
 	}
 }
 
@@ -193,25 +170,7 @@ export function updateDependencies(root: string): void {
 	for (const { template, label } of WEB_TEMPLATES)
 		updateBunTemplate(root, template, label);
 
-	for (const project of listProjects(root)) {
-		const manifest = resolve(root, project.path, "Cargo.toml");
-		if (!existsSync(manifest)) continue;
-		run(
-			"cargo",
-			[
-				"upgrade",
-				"--manifest-path",
-				manifest,
-				"--incompatible",
-				"allow",
-				"--pinned",
-				"allow",
-			],
-			{ cwd: root },
-		);
-		run("cargo", ["update", "--manifest-path", manifest], { cwd: root });
-	}
-	updateRustTemplate(root);
+	updateRustDependencies(root);
 	if (existsSync(resolve(root, "bun.lock")))
 		run("bun", ["install"], { cwd: root });
 }

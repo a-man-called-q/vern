@@ -8,7 +8,7 @@ use moka::{Expiry, future::Cache};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
-use super::claims::{IntrospectionClaims, IntrospectionError, TokenIntrospector};
+use crate::claims::{IntrospectionClaims, IntrospectionError, TokenIntrospector};
 
 /// How many tokens the cache keeps at most.
 const CACHE_CAPACITY: u64 = 10_000;
@@ -117,7 +117,7 @@ mod tests {
     use serde_json::json;
 
     use super::{CachedIntrospector, cache_lifetime};
-    use crate::auth::{
+    use crate::{
         claims::{IntrospectionClaims, IntrospectionError, TokenIntrospector},
         testing::{active_claims, claims_with},
     };

@@ -6,12 +6,13 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-use super::{
+use svc_http::ApiError;
+
+use crate::{
     AppState,
     claims::{IntrospectionError, org_id_from_claims, roles_from_claims},
     user::AuthenticatedUser,
 };
-use crate::error::ApiError;
 
 /// Lets the request through with an `AuthenticatedUser` when ZITADEL vouches for
 /// its bearer token: active, from our issuer, for our project, with a subject.
@@ -78,6 +79,7 @@ mod tests {
     use std::collections::HashMap;
 
     use axum::{
+        Router,
         body::{Body, to_bytes},
         http::{Request, StatusCode, header},
     };
@@ -85,13 +87,16 @@ mod tests {
     use tower::ServiceExt;
 
     use crate::{
-        app::router,
-        auth::{
-            AppState,
-            claims::{Audience, IntrospectionError},
-            testing::{active_claims, claims_with, make_state},
-        },
+        AppState,
+        claims::{Audience, IntrospectionError},
+        routes::api_router,
+        testing::{active_claims, claims_with, make_state},
     };
+
+    /// An API with no routes of its own: `/healthz` and `/api/me`.
+    fn router(state: AppState) -> Router {
+        api_router(Router::new(), Router::new(), state)
+    }
 
     async fn request_me(state: AppState, token: Option<&str>) -> axum::response::Response {
         let app = router(state);

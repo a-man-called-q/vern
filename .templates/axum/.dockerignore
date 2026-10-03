@@ -1,6 +1,0 @@
-# Keeps build output, dependencies, and secrets out of the image context.
-target
-secrets
-.env
-.env.*
-!.env.example

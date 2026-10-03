@@ -17,4 +17,9 @@
 **/.env.*
 !**/.env.example
 deploy
+# The Axum APIs and their Cargo workspace: an API image has its own list, in
+# services/<name>/Dockerfile.dockerignore.
 services
+crates
+Cargo.toml
+Cargo.lock
