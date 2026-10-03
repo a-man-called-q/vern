@@ -19,7 +19,7 @@ images:
     newTag: v4.19.3
   - name: zitadel-login
     newName: ghcr.io/a-man-called-q/vern-zitadel-login
-    newTag: v4.19.3-bb46521c3b02a3319c4487eb6236b58492db403c
+    newTag: v4.19.3-cab0aff783d85f02990c5bf725aafbbfaa43a655
 configMapGenerator:
   - name: zitadel-static
     literals:
