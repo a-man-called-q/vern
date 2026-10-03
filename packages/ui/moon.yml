@@ -9,10 +9,11 @@ tasks:
       - 'src/**/*'
       - 'package.json'
       - 'tsconfig.json'
+      - 'biome.json'
 
   check:
     command: bun run check
-    description: Type-check the shared UI package
+    description: Type-check, format-check, and lint the shared UI package
     deps:
       - 'workspace:install'
     toolchains: system
@@ -20,3 +21,4 @@ tasks:
       - 'src/**/*'
       - 'package.json'
       - 'tsconfig.json'
+      - 'biome.json'
