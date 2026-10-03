@@ -1,8 +1,6 @@
-export type AuthUser = {
-	sub: string;
-	name?: string;
-	email?: string;
-};
+import type { AuthUser } from "@vern/web-auth/next";
+
+export type { AuthUser };
 
 export type DashboardData = {
 	user: AuthUser;

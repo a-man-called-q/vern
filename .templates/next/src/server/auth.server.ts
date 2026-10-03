@@ -1,25 +1,12 @@
 import "server-only";
-import { redirect } from "next/navigation";
-import { cache } from "react";
-import type { AuthUser } from "../types/auth";
-import { AuthenticationRequiredError } from "./auth-error";
-import { readAppSession } from "./session.server";
+import { createWebAuth } from "@vern/web-auth/next";
+import { APP_ID } from "@/lib/site";
 
-export { dropRevokedSession, getApiAccessToken } from "./auth-flow.server";
-export { AuthenticationRequiredError };
+// Sign-in for this app. The flow, the session, and the API calls are in
+// @vern/web-auth, which every web app shares; this module is the one place that
+// binds them to the app.
+export const auth = createWebAuth({ appId: APP_ID });
 
-/** Deduplicated per request, so the header and a page can both call it. */
-export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
-	const session = await readAppSession();
-	return session?.data.user ?? null;
-});
-
-export async function requireUser(): Promise<AuthUser> {
-	const user = await getCurrentUser();
-
-	if (!user) {
-		redirect("/auth/login");
-	}
-
-	return user;
-}
+export const { createApiClient, getCurrentUser, redirectToLogin, requireUser } =
+	auth;
+export { AuthenticationRequiredError } from "@vern/web-auth/next";

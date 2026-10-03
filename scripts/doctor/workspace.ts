@@ -1,8 +1,9 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { errorMessage } from "../lib/errors";
-import { AUTH_SERVER, listProjects, PROJECT_ROOTS } from "../lib/projects";
-import { stripCargoConditions } from "../project/cargo-template";
+import { AUTH_SERVER, listProjects, listShared, PROJECT_ROOTS } from "../lib/projects";
+import { apisBuildingAlone } from "../project/api-images";
+import { checkTemplateDependencies } from "../project/cargo-template";
 import { readConfig } from "../project/config";
 import { deployLeftovers, OLD_AUTH_SERVERS, planLayoutMigration } from "../project/layout";
 import { renderPackageTemplate } from "../project/package-template";
@@ -31,7 +32,8 @@ export function checkLayout(root: string, report: Report): void {
 		report("FAIL", `${path} is left from the old deploy/ layout. Carry your changes over to its new place (deploy/README.md), then delete it.`);
 	}
 	const seen = new Map<string, string>();
-	for (const project of projects) {
+	// A shared package or crate is a Moon project too, so it takes its name.
+	for (const project of [...listShared(root), ...projects]) {
 		const other = seen.get(project.name);
 		if (other) {
 			problems += 1;
@@ -43,6 +45,46 @@ export function checkLayout(root: string, report: Report): void {
 		report(
 			"OK",
 			`Projects are in ${PROJECT_ROOTS.map((dir) => dir + "/").join(", ")} by kind, with unique names.`,
+		);
+}
+
+/**
+ * The Cargo workspace at the root, which the APIs and the crates they share are
+ * members of, and the Axum template that relies on its versions.
+ */
+function checkCargoWorkspace(root: string, report: Report): void {
+	const cargoTemplate = resolve(root, ".templates/axum/Cargo.toml.tera");
+	if (!existsSync(cargoTemplate)) return;
+	const manifest = resolve(root, "Cargo.toml");
+	if (!existsSync(manifest)) {
+		report("FAIL", "Cargo.toml is missing: the Axum APIs and crates/ build as one Cargo workspace.");
+		return;
+	}
+	try {
+		const errors = checkTemplateDependencies(readFileSync(cargoTemplate, "utf8"), readFileSync(manifest, "utf8"));
+		for (const error of errors) report("FAIL", error);
+		if (errors.length === 0) report("OK", "Axum Cargo template uses only dependencies of the root Cargo workspace.");
+	} catch (error) {
+		report("FAIL", errorMessage(error));
+	}
+	// Cargo refuses a `services/*` that matches nothing, and treats every folder
+	// there as a member.
+	const services = resolve(root, "services");
+	if (!existsSync(services) || readdirSync(services).length === 0) {
+		report("FAIL", "services/ is missing or empty: restore services/README.md, which keeps the Cargo workspace valid before the first API.");
+		return;
+	}
+	const strangers = readdirSync(services, { withFileTypes: true })
+		.filter((entry) => entry.isDirectory() && !existsSync(resolve(services, entry.name, "Cargo.toml")))
+		.map((entry) => `services/${entry.name}`);
+	if (strangers.length > 0) report("FAIL", `${strangers.join(", ")} has no Cargo.toml: every folder in services/ is a member of the Cargo workspace.`);
+	else report("OK", "Every folder in services/ is a member of the Cargo workspace.");
+	// deploy/compose builds every API from the repository root.
+	const alone = apisBuildingAlone(root);
+	if (alone.length > 0)
+		report(
+			"WARN",
+			`The image of ${alone.join(", ")} builds from the API's own folder, as before crates/. Run \`bun run project:update -- --migrate\` to build it from the repository root.`,
 		);
 }
 
@@ -123,18 +165,7 @@ export function checkWorkspace(root: string, report: Report): void {
 				);
 			}
 		}
-		const cargoTemplate = resolve(root, ".templates/axum/Cargo.toml.tera");
-		if (existsSync(cargoTemplate)) {
-			try {
-				stripCargoConditions(readFileSync(cargoTemplate, "utf8"));
-				report(
-					"OK",
-					"Axum Cargo template marks only whole dependency lines as conditional.",
-				);
-			} catch (error) {
-				report("FAIL", errorMessage(error));
-			}
-		}
+		checkCargoWorkspace(root, report);
 		const config = readConfig(root);
 		if (config) {
 			const uiPackage = JSON.parse(

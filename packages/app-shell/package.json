@@ -1,0 +1,44 @@
+{
+	"name": "@vern/app-shell",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"description": "The frame every web app shares: the dashboard's sidebar and header, the public pages' header and footer, and the theme",
+	"exports": {
+		"./styles.css": "./src/styles.css",
+		"./nav": "./src/nav.ts",
+		"./components/*": "./src/components/*.tsx",
+		"./next/*": "./src/next/*.tsx",
+		"./tanstack/*": "./src/tanstack/*.tsx"
+	},
+	"scripts": {
+		"check": "tsc --noEmit && biome check",
+		"format": "biome format",
+		"lint": "biome lint"
+	},
+	"dependencies": {
+		"@tabler/icons-react": "^3.48.0",
+		"@vern/ui": "workspace:*"
+	},
+	"peerDependencies": {
+		"@tanstack/react-router": "^1.170.41",
+		"next": "^16.3.7",
+		"react": "^19.0.0"
+	},
+	"peerDependenciesMeta": {
+		"@tanstack/react-router": {
+			"optional": true
+		},
+		"next": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.15",
+		"@tanstack/react-router": "1.170.41",
+		"@types/react": "^19.2.0",
+		"next": "^16.3.7",
+		"react": "^19.2.0",
+		"typescript": "^6.0.2"
+	}
+}

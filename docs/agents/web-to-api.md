@@ -11,15 +11,21 @@ the answer, and handles a lost session.
 
 ## The parts, in `src/server`
 
-| Use | For |
-| --- | --- |
-| `getCurrentUser()` | The signed-in user (`sub`, `name`, `email`) or `null`. For pages that work signed out |
-| `requireUser()` | The user, or a redirect to `/auth/login`. For pages that need sign-in |
-| `fetchAuthenticatedApi(path, init)` | A `fetch` to the API with the user's access token, refreshed when needed. `path` starts with one `/` |
-| `AuthenticationRequiredError` | Thrown when the session is gone or the API refused the token. Answer it by sending the user to sign in |
+| Use | From | For |
+| --- | --- | --- |
+| `getCurrentUser()` | `auth.server` | The signed-in user (`sub`, `name`, `email`) or `null`. For pages that work signed out |
+| `requireUser()` | `auth.server` | The user, or a redirect to `/auth/login`. For pages that need sign-in |
+| `redirectToLogin()` | `auth.server` | Sends the user to sign in. It never returns |
+| `fetchAuthenticatedApi(path, init)` | `api.server` | A `fetch` to the API with the user's access token, refreshed when needed. `path` starts with one `/` |
+| `AuthenticationRequiredError` | `auth.server` | Thrown when the session is gone or the API refused the token. Answer it by sending the user to sign in |
+
+`src/server/auth.server.ts` is a few lines: it makes the app's sign-in with
+`createWebAuth({ appId })` from `@vern/web-auth` and exports what the table
+lists. The flow itself, the session in Redis, and the token refresh are in
+`packages/web-auth`, which every web app of the project shares.
 
 Links to sign in and out are plain `<a href="/auth/login">` and a POST form to
-`/auth/logout`, as `AuthControls.tsx` has them.
+`/auth/logout`, as `AuthControls` in `packages/app-shell` has them.
 
 ## Next.js
 
@@ -89,8 +95,7 @@ Write one small `call` helper in that module (the templates do not ship one;
 things:
 
 1. Calls `fetchAuthenticatedApi`, and on `AuthenticationRequiredError` sends
-   the user to sign in: `redirect("/auth/login")` in Next.js,
-   `redirectToLogin()` in TanStack Start. A `401` that arrives as a response
+   the user to sign in with `redirectToLogin()`. A `401` that arrives as a response
    instead means the API is misconfigured (the session is under a minute old),
    so treat it as an error; redirecting would loop through sign-in.
 2. On an error status, reads the API's error body,
@@ -99,8 +104,8 @@ things:
    users; show a general message for 5xx.
 3. Checks that the body has the shape the type claims before returning it, at
    least for the fields the page depends on.
-4. Logs failures with `logAuthWarning` from `log.server.ts`, which never writes
-   tokens.
+4. Logs failures with `logAuthWarning` from `@vern/web-auth/next` (or
+   `/tanstack`), which never writes tokens.
 
 ## Roles in the UI
 
@@ -120,13 +125,24 @@ checks the role again on every request
   IDs (`encodeURIComponent`), never from a URL the browser sent.
 - When an API response changes, change the type, the check in `call`, and the
   pages that read it in the same change.
-- Do not edit `auth.server.ts`, `auth-flow.server.ts`, `config.server.ts`,
-  `session.server.ts`, `session-record.server.ts`, `oidc.server.ts`,
-  `api.server.ts`, or the `/auth` routes to add product features. If the stored
-  session shape must change, bump `SESSION_VERSION` in
-  `session-record.server.ts`.
+- Do not edit `auth.server.ts`, `api.server.ts`, or the `/auth` routes to add
+  product features, and do not copy code out of `packages/web-auth` into an app.
+  A change to sign-in itself is made in `packages/web-auth`, where every web app
+  gets it; if the stored session shape must change, bump `SESSION_VERSION` in
+  `packages/web-auth/src/core/session-record.ts`.
+
+## Shared between web apps
+
+What two web apps need is not copied from one to the other. Sign-in is in
+`packages/web-auth` and the frame around the pages in `packages/app-shell`
+(see [new-app.md](new-app.md)). When a second app needs the same calls to an
+API, the same form, or the same formatting, make it a package: a folder under
+`packages/` with a `package.json` named `@vern/<name>` and a `moon.yml`, like
+its neighbours, and `"@vern/<name>": "workspace:*"` in each app that uses it.
+A package takes what differs between apps as arguments (the client made by
+`createApiClient`, the app's name), so it imports nothing from an app.
 
 ## Check
 
-`moon run <app>:check <app>:test`. `api.server.test.ts` shows how to test a
-server module with a fake `fetch`.
+`moon run <app>:check <app>:test`. `packages/web-auth/src/core/api.test.ts`
+shows how to test a call to an API with a fake `fetch`.

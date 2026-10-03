@@ -14,14 +14,16 @@ Read [`../../AGENTS.md`](../../AGENTS.md) first. Before protecting a page or
 calling an API, read
 [`../../docs/agents/web-to-api.md`](../../docs/agents/web-to-api.md).
 
-- **Sign-in is done.** The Route Handlers under `src/app/auth` and `auth`,
-  `auth-flow`, `config`, `session`, `session-record`, `oidc`, `api`, `http`,
-  `log`, and `ttl-cache` under `src/server` are its machinery. Build next to
-  them, not in them.
+- **Sign-in is done, and shared.** The flow, the session, and the token
+  refresh are in `../../packages/web-auth`, which every web app uses.
+  `src/server/auth.server.ts` binds it to this app (`createWebAuth`), and the
+  Route Handlers under `src/app/auth` call it. Build next to them, not in them,
+  and do not copy the package's code here.
+- **The frame is shared too.** The dashboard's sidebar and header and the
+  public pages' header and footer come from `../../packages/app-shell`; the
+  layouts pass it this app's name, user, and navigation.
 - **Server code is in `src/server`.** A new module there imports `server-only`,
-  so a client component that imports it fails the build. The machinery that
-  does not depend on Next.js (`auth-flow`, `config`, `session-record`, `api`,
-  `http`, `log`, `ttl-cache`) leaves it out so `bun test` can load it.
+  so a client component that imports it fails the build.
 - **API calls** go through `fetchAuthenticatedApi`, wrapped in one module per
   API (`src/server/<api>.server.ts`). Browser code never calls an API and never
   sees a token.
@@ -33,11 +35,11 @@ calling an API, read
   already there; for a form, use `form-rhf` (React Hook Form).
 {% if include_demos %}- **Demo files** (`src/app/(site)/demo`, files named `demo-*`) are samples and
   can be deleted.
-{% else %}- **The dashboard shell** is `src/app/dashboard/layout.tsx` (sidebar and header).
+{% endif %}- **The dashboard shell** is `src/app/dashboard/layout.tsx` (sidebar and header).
   A new page goes in `src/app/dashboard/<name>/page.tsx`, starts with
-  `await requireUser()`, and gets an item in `navItems` in
-  `src/components/app-sidebar.tsx`.
-{% endif %}
+  `await requireUser()`, and gets an item in `navGroups` in
+  `src/components/dashboard-nav.tsx`.
+
 Check your work from the repository root:
 
 ```sh

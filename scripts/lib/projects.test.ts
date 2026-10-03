@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { findApps, listProjects, projectPath, rootFor } from "./projects";
+import { findApps, listProjects, listShared, projectPath, rootFor } from "./projects";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -28,6 +28,20 @@ describe("projects", () => {
 		"deploy/dev/auth-server/docker-compose.yml": "",
 		"deploy/dev/data/docker-compose.yml": "",
 	};
+
+	test("lists the shared packages and crates apart from the projects", () => {
+		const root = workspace({
+			...files,
+			"packages/ui/package.json": "{}",
+			"crates/svc-auth/Cargo.toml": "",
+			"crates/README.md": "",
+		});
+		expect(listShared(root)).toEqual([
+			{ name: "svc-auth", path: "crates/svc-auth" },
+			{ name: "ui", path: "packages/ui" },
+		]);
+		expect(listProjects(root).map((project) => project.name)).toEqual(["api", "auth-server", "data", "web"]);
+	});
 
 	test("lists every folder of the three roots by name", () => {
 		expect(listProjects(workspace(files))).toEqual([

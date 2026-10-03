@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { isTextBuffer, sha256, writeJson } from "../lib/files";
 import { AUTH_SERVER } from "../lib/projects";
 import { git, gitTry, run } from "../lib/run";
+import { apisBuildingAlone, moveApiImagesToRoot } from "./api-images";
 import { requireCargoEdit } from "./cargo-edit";
 import {
 	CONFIG_PATH,
@@ -32,14 +33,31 @@ interface UpdateState {
 export interface Options {
 	apply: boolean;
 	continueUpdate: boolean;
-	/** Only move the project to the apps/, services/, deploy/ layout. */
+	/** Only move the project to the current layout, and its APIs to the Cargo workspace's images. */
 	migrate?: boolean;
 }
 
-/** Moves the folders to the current layout, and says what it did. */
+/**
+ * Moves the folders to the current layout and the APIs' images to the
+ * repository root, and says what it did.
+ */
 function migrateAndReport(root: string): void {
 	const { moves, leftovers } = migrateLayout(root);
 	for (const move of moves) console.log("Moved " + move.from + " to " + move.to + ".");
+	const images = moveApiImagesToRoot(root);
+	if (images.moved.length > 0) {
+		console.log(
+			"The image of " +
+				images.moved.join(", ") +
+				" now builds from the repository root, with the Cargo workspace and crates/. Run `cargo check` once, which adds each API to the Cargo.lock at the root, and commit it.",
+		);
+	}
+	if (images.leftovers.length > 0) {
+		console.log(
+			"These files of an API were changed since they were generated, so they are as they were. Make the image build from the repository root by hand; README.md, \"Edits an update asks for\", says how:",
+		);
+		for (const path of images.leftovers) console.log("  " + path);
+	}
 	if (leftovers.length > 0) {
 		console.log(
 			"These files stay where they are: they changed locally, or their new place has its own. Carry what you need over (the auth stack is in " +
@@ -168,7 +186,7 @@ export function updateProject(root: string, options: Options): void {
 	if (options.migrate) {
 		if (git(root, "status", "--porcelain").stdout.trim())
 			throw new Error("Working tree must be clean before moving folders.");
-		if (planLayoutMigration(root).length === 0) {
+		if (planLayoutMigration(root).length === 0 && apisBuildingAlone(root).length === 0) {
 			console.log("The project already has the apps/, services/, deploy/ layout.");
 			return;
 		}

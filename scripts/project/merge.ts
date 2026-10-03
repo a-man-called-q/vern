@@ -47,6 +47,8 @@ function shouldSkipUpstreamPath(
 		path === UPDATE_STATE_PATH ||
 		path === CONFIG_PATH ||
 		path === "bun.lock" ||
+		// One lockfile for the Cargo workspace: it names the project's own APIs.
+		path === "Cargo.lock" ||
 		// `bun run setup -- --kubernetes` writes the project's own list of apps.
 		path === "deploy/base/kustomization.yaml" ||
 		path.endsWith("/bun.lock") ||

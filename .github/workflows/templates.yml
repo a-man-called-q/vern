@@ -77,6 +77,34 @@ jobs:
       - name: Build the production image
         run: moon run web:docker
 
+  # What the generated apps and APIs share: the Bun packages in packages/ and
+  # the Cargo crates in crates/. The crates' tests that need PostgreSQL or NATS
+  # run in the axum-database and axum-events jobs, with a generated API.
+  shared:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          # `moon run` compares against the base branch.
+          fetch-depth: 0
+
+      - name: Install the pinned toolchain
+        uses: moonrepo/setup-toolchain@v0
+        with:
+          auto-install: true
+
+      - name: Install workspace dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check and test the shared packages
+        run: moon run ui:check web-auth:check web-auth:test app-shell:check
+
+      - name: Check and test the shared crates
+        run: |
+          cargo check --workspace --all-targets --all-features --locked
+          cargo test --workspace --all-features --locked
+
   axum:
     runs-on: ubuntu-24.04
     steps:

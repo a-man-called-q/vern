@@ -1,28 +1,28 @@
 [package]
 name = "{{ name | kebab_case }}"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
 
+# The versions are in the Cargo.toml at the repository root, one for every API.
+# For a new dependency, add it there and name it here.
 [dependencies]
-{% if events %}async-nats = { version = "0.50", default-features = false, features = ["jetstream", "aws-lc-rs", "server_2_10"] }
-{% endif %}async-trait = "0.1"
-axum = "0.8"
-{% if database %}chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
-{% endif %}dotenvy = "0.15"
-{% if events %}futures-util = "0.3"
-{% endif %}jsonwebtoken = { version = "11", default-features = false, features = ["use_pem", "rust_crypto"] }
-moka = { version = "0.12", default-features = false, features = ["future"] }
-reqwest = { version = "0.13", default-features = false, features = ["json", "form", "rustls"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-sha2 = "0.10"
-{% if database %}sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "migrate", "macros", "chrono", "uuid", "json"] }
-{% endif %}thiserror = "2"
-tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "time"] }
-tower-http = { version = "0.7", features = ["trace"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
-{% if database %}uuid = { version = "1", features = ["v7", "serde"] }
-{% endif %}
+axum = { workspace = true }
+{% if database %}chrono = { workspace = true }
+{% endif %}serde = { workspace = true }
+{% if database %}sqlx = { workspace = true }
+{% endif %}svc-auth = { workspace = true }
+svc-boot = { workspace = true }
+{% if database %}svc-db = { workspace = true }
+{% endif %}{% if events %}svc-events = { workspace = true }
+{% endif %}svc-http = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+
 [dev-dependencies]
-tower = { version = "0.5", features = ["util"] }
+serde_json = { workspace = true }
+svc-auth = { workspace = true, features = ["testing"] }
+tower = { workspace = true }
+
+[lints]
+workspace = true

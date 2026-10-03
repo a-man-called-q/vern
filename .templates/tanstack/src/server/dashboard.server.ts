@@ -1,4 +1,5 @@
 import { env } from "node:process";
+import { logAuthWarning } from "@vern/web-auth/tanstack";
 import { fetchAuthenticatedApi } from "./api.server";
 import type { DashboardData } from "./auth";
 import {
@@ -6,7 +7,6 @@ import {
 	redirectToLogin,
 	requireUser,
 } from "./auth.server";
-import { logAuthWarning } from "./log.server";
 
 export async function getDashboardData(): Promise<DashboardData> {
 	const user = await requireUser();

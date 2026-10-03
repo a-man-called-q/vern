@@ -15,6 +15,11 @@ tasks:
       - 'workspace:install'
       - 'ui:build'
     toolchains: system
+    # The shared packages are compiled from source with the app.
+    inputs:
+      - '**/*'
+      - '/packages/*/src/**/*'
+      - '/packages/*/package.json'
     options:
       # `next build` recreates .next while `check` type-checks .next/types.
       mutex: '{{ name | kebab_case }}-next-dir'
@@ -25,6 +30,11 @@ tasks:
     deps:
       - 'workspace:install'
     toolchains: system
+    # The shared packages are compiled from source with the app.
+    inputs:
+      - '**/*'
+      - '/packages/*/src/**/*'
+      - '/packages/*/package.json'
     options:
       mutex: '{{ name | kebab_case }}-next-dir'
 
@@ -34,6 +44,11 @@ tasks:
     deps:
       - 'workspace:install'
     toolchains: system
+    # The shared packages are compiled from source with the app.
+    inputs:
+      - '**/*'
+      - '/packages/*/src/**/*'
+      - '/packages/*/package.json'
 
   docker:
     command: docker build -f apps/{{ name | kebab_case }}/Dockerfile -t {{ name | kebab_case }} .

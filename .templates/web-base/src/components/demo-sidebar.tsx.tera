@@ -1,0 +1,37 @@
+---
+skip: {{ not include_demos }}
+---
+"use client";
+
+import {
+	IconDatabase,
+	IconFileWord,
+	IconHelp,
+	IconReport,
+	IconSearch,
+	IconSettings,
+} from "@tabler/icons-react";
+import { NavDocuments } from "./nav-documents";
+import { NavSecondary } from "./nav-secondary";
+
+const documents = [
+	{ name: "Data Library", url: "#", icon: IconDatabase },
+	{ name: "Reports", url: "#", icon: IconReport },
+	{ name: "Word Assistant", url: "#", icon: IconFileWord },
+];
+
+const secondary = [
+	{ title: "Settings", url: "#", icon: IconSettings },
+	{ title: "Get Help", url: "#", icon: IconHelp },
+	{ title: "Search", url: "#", icon: IconSearch },
+];
+
+/** Sample sections of the sidebar, under the app's own navigation. */
+export function DemoSidebar() {
+	return (
+		<>
+			<NavDocuments items={documents} />
+			<NavSecondary items={secondary} className="mt-auto" />
+		</>
+	);
+}

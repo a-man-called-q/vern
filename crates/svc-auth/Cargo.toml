@@ -1,0 +1,30 @@
+[package]
+name = "svc-auth"
+description = "Who is calling an API: the bearer token, checked with ZITADEL, and the user it names"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[features]
+# A fake ZITADEL for the tests of a service.
+testing = []
+
+[dependencies]
+async-trait = { workspace = true }
+axum = { workspace = true }
+jsonwebtoken = { workspace = true }
+moka = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+svc-http = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tower-http = { workspace = true }
+
+[dev-dependencies]
+tower = { workspace = true }
+
+[lints]
+workspace = true

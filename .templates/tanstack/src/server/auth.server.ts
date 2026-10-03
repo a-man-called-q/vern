@@ -1,24 +1,12 @@
-import type { AuthUser } from "../types/auth";
-import { AuthenticationRequiredError } from "./auth-error";
-import { readAppSession } from "./session.server";
+import { createWebAuth } from "@vern/web-auth/tanstack";
+import { APP_ID } from "../lib/site";
 
-export { dropRevokedSession, getApiAccessToken } from "./auth-flow.server";
-export { AuthenticationRequiredError };
+// Sign-in for this app. The flow, the session, and the API calls are in
+// @vern/web-auth, which every web app shares; this module is the one place that
+// binds them to the app. Server code only: browser code reaches it through the
+// server functions in ./auth.ts.
+export const auth = createWebAuth({ appId: APP_ID });
 
-export async function getCurrentUser(): Promise<AuthUser | null> {
-	const session = await readAppSession();
-	return session?.data.user ?? null;
-}
-
-export async function redirectToLogin(): Promise<never> {
-	const { redirect } = await import("@tanstack/react-router");
-	throw redirect({ to: "/auth/login" });
-}
-
-export async function requireUser(): Promise<AuthUser> {
-	const user = await getCurrentUser();
-
-	if (!user) return redirectToLogin();
-
-	return user;
-}
+export const { createApiClient, getCurrentUser, redirectToLogin, requireUser } =
+	auth;
+export { AuthenticationRequiredError } from "@vern/web-auth/tanstack";

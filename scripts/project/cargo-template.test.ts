@@ -2,76 +2,79 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-	cargoConditions,
-	restoreCargoConditions,
+	checkTemplateDependencies,
 	stripCargoConditions,
+	templateDependencies,
 } from "./cargo-template";
 import { ROOT } from "../lib/paths";
 
 const TEMPLATE =
-	'[package]\nname = "{{ name | kebab_case }}"\n\n[dependencies]\n{% if events %}async-nats = "0.50"\n{% endif %}{% if database %}chrono = "0.4"\n{% endif %}serde = "1"\n{% if database %}uuid = { version = "1", features = ["v7"] }\n{% endif %}\n[dev-dependencies]\n{% if database %}chrono = "0.4"\n{% endif %}tower = "0.5"\n';
+	'[package]\nname = "{{ name | kebab_case }}"\nversion.workspace = true\n\n[dependencies]\naxum = { workspace = true }\n{% if database %}sqlx = { workspace = true }\n{% endif %}{% if events %}svc-events = { workspace = true }\n{% endif %}tokio = { workspace = true }\n\n[dev-dependencies]\nsvc-auth = { workspace = true, features = ["testing"] }\n';
+
+const WORKSPACE =
+	'[workspace]\nmembers = ["crates/*", "services/*"]\n\n[workspace.dependencies]\nsvc-auth = { path = "crates/svc-auth" }\nsvc-events = { path = "crates/svc-events" }\naxum = "0.8"\nsqlx = { version = "0.8", features = ["postgres"] }\ntokio = "1"\n';
 
 describe("cargo template", () => {
-	test("lists each conditional dependency with its flag and section", () => {
-		expect(cargoConditions(TEMPLATE)).toEqual([
-			{ flag: "events", section: "dependencies", name: "async-nats" },
-			{ flag: "database", section: "dependencies", name: "chrono" },
-			{ flag: "database", section: "dependencies", name: "uuid" },
-			{ flag: "database", section: "dev-dependencies", name: "chrono" },
-		]);
-	});
-
-	test("strips every marker and puts each back around its own dependency", () => {
+	test("strips every marker, which leaves TOML", () => {
 		const stripped = stripCargoConditions(TEMPLATE);
 		expect(stripped).not.toContain("{%");
-		expect(stripped).toContain('async-nats = "0.50"\nchrono = "0.4"\nserde');
-		expect(restoreCargoConditions(stripped, cargoConditions(TEMPLATE))).toBe(
-			TEMPLATE,
-		);
-	});
-
-	test("follows a dependency whose line the upgrade rewrote", () => {
-		const upgraded = stripCargoConditions(TEMPLATE)
-			.replace('async-nats = "0.50"', 'async-nats = "0.51"')
-			.replace('uuid = { version = "1"', 'uuid = { version = "2"');
-		const restored = restoreCargoConditions(
-			upgraded,
-			cargoConditions(TEMPLATE),
-		);
-		expect(restored).toContain(
-			'{% if events %}async-nats = "0.51"\n{% endif %}{% if database %}chrono',
-		);
-		expect(restored).toContain(
-			'{% if database %}uuid = { version = "2", features = ["v7"] }\n{% endif %}\n[dev-dependencies]',
+		expect(stripped).toContain(
+			"axum = { workspace = true }\nsqlx = { workspace = true }\nsvc-events",
 		);
 	});
 
 	test("refuses a marker that is not one conditional dependency line", () => {
 		expect(() =>
 			stripCargoConditions(
-				'[dependencies]\n{% if database %}\nsqlx = "0.8"\n{% endif %}\n',
+				"[dependencies]\n{% if database %}\nsqlx = { workspace = true }\n{% endif %}\n",
 			),
 		).toThrow("not one conditional dependency line");
 	});
 
-	test("refuses to drop a condition whose dependency is gone", () => {
-		expect(() =>
-			restoreCargoConditions('[dependencies]\nserde = "1"\n', [
-				{ flag: "database", section: "dependencies", name: "sqlx" },
-			]),
-		).toThrow("no sqlx line in [dependencies]");
+	test("lists every dependency, conditional or not, with its section", () => {
+		expect(
+			templateDependencies(TEMPLATE).map(
+				({ section, name }) => section + ": " + name,
+			),
+		).toEqual([
+			"dependencies: axum",
+			"dependencies: sqlx",
+			"dependencies: svc-events",
+			"dependencies: tokio",
+			"dev-dependencies: svc-auth",
+		]);
 	});
 
-	test("round-trips the Axum template", () => {
+	test("accepts a template whose dependencies the workspace has", () => {
+		expect(checkTemplateDependencies(TEMPLATE, WORKSPACE)).toEqual([]);
+	});
+
+	test("finds a dependency with its own version, and one the workspace lacks", () => {
+		const template = TEMPLATE.replace(
+			"tokio = { workspace = true }",
+			'tokio = "1"\nuuid = { workspace = true }',
+		);
+		expect(checkTemplateDependencies(template, WORKSPACE)).toEqual([
+			"The Axum Cargo template gives tokio a version of its own; write `tokio = { workspace = true }` and keep the version in the root Cargo.toml.",
+			"The Axum Cargo template uses uuid, which [workspace.dependencies] of the root Cargo.toml does not have.",
+		]);
+	});
+
+	test("the Axum template builds on the root workspace", () => {
 		const template = readFileSync(
 			resolve(ROOT, ".templates/axum/Cargo.toml.tera"),
 			"utf8",
 		);
-		const conditions = cargoConditions(template);
-		// Every marker in the template belongs to one of these lines.
-		expect(conditions.length).toBe(template.split("{% if ").length - 1);
-		expect(
-			restoreCargoConditions(stripCargoConditions(template), conditions),
-		).toBe(template);
+		const workspace = readFileSync(resolve(ROOT, "Cargo.toml"), "utf8");
+		expect(checkTemplateDependencies(template, workspace)).toEqual([]);
+		// With every condition on, it is the manifest of a workspace member.
+		const manifest = Bun.TOML.parse(
+			stripCargoConditions(template).replace(
+				'"{{ name | kebab_case }}"',
+				'"api"',
+			),
+		) as { package?: { name?: string }; lints?: { workspace?: boolean } };
+		expect(manifest.package?.name).toBe("api");
+		expect(manifest.lints?.workspace).toBe(true);
 	});
 });

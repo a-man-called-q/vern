@@ -1,0 +1,47 @@
+---
+skip: {{ not include_demos }}
+---
+import { Button } from "@vern/ui/components/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@vern/ui/components/dropdown-menu";
+import Link from "next/link";
+import NavLink from "./NavLink";
+
+/** The links of the public pages, in the header. */
+export function SiteNav() {
+	return (
+		<div className="flex items-center gap-1">
+			<Button variant="ghost" size="sm" asChild>
+				<NavLink href="/">Home</NavLink>
+			</Button>
+			<Button variant="ghost" size="sm" asChild>
+				<NavLink href="/about">About</NavLink>
+			</Button>
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<Button variant="ghost" size="sm">
+						Demos
+					</Button>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="start">
+					<DropdownMenuItem asChild>
+						<Link href="/demo/form/simple">Simple Form</Link>
+					</DropdownMenuItem>
+					<DropdownMenuItem asChild>
+						<Link href="/demo/form/address">Address Form</Link>
+					</DropdownMenuItem>
+					<DropdownMenuItem asChild>
+						<Link href="/demo/table">TanStack Table</Link>
+					</DropdownMenuItem>
+					<DropdownMenuItem asChild>
+						<Link href="/demo/tanstack-query">TanStack Query</Link>
+					</DropdownMenuItem>
+				</DropdownMenuContent>
+			</DropdownMenu>
+		</div>
+	);
+}

@@ -11,7 +11,8 @@ the product on top of them; do not rebuild them.
 | --- | --- |
 | `apps/<name>` | One web app each (TanStack Start or Next.js), generated from `.templates/`, and Storybook. Product code lives here |
 | `services/<name>` | One Axum API each, generated from `.templates/axum`. Product code lives here |
-| `packages/ui` | Shared shadcn components and design tokens (`@vern/ui`) |
+| `packages/<name>` | What the web apps share: `ui` (shadcn components and design tokens, `@vern/ui`), `web-auth` (sign-in, the session, and API calls as the user, `@vern/web-auth`), and `app-shell` (the dashboard's sidebar and header, the public pages' header and footer, `@vern/app-shell`) |
+| `crates/<name>` | What the APIs share, as crates of the Cargo workspace at the root: `svc-auth` (the token check), `svc-http` (`ApiError`, `/healthz`), `svc-boot` (startup and shutdown), `svc-db` (the database pool), `svc-events` (the outbox and the bus) |
 | `.templates/` | The generators behind `moon generate` |
 | `scripts/` | Setup, provisioning, doctor, rename, and update |
 | `roles.json`, `seed-users.json` | The product's roles, and local test users |
@@ -38,7 +39,9 @@ code and its production checklist.
 
 1. **Generate, do not copy.** A new app or API comes from `moon generate`,
    followed by `bun run setup`. A hand-copied app has no ZITADEL application, no
-   key, and a port that collides.
+   key, and a port that collides. Code two apps or two APIs need goes in a
+   package under `packages/` or a crate under `crates/`, not into a second copy:
+   a fix there reaches every app that uses it.
 2. **Do not write authentication.** No login page, password table, JWT parsing,
    or session library. Users live in ZITADEL; refer to one by `sub`, the ZITADEL
    user ID.
@@ -76,7 +79,9 @@ code and its production checklist.
 ## Done means
 
 - `moon run <app>:check` and `moon run <app>:test` pass for every app you
-  touched.
+  touched. After a change in `packages/` or `crates/`, that is the package or
+  crate itself (`moon run web-auth:check web-auth:test`, `moon run svc-auth:test`)
+  and every app or API that uses it.
 - A new endpoint has tests for the happy path, bad input, a caller without the
   role, and a caller asking for someone else's data.
 - A change to an API response is matched in the web app that reads it, in the

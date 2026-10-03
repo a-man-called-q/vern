@@ -1,5 +1,1 @@
-export type AuthUser = {
-	sub: string;
-	name?: string;
-	email?: string;
-};
+export type { AuthUser } from "@vern/web-auth/tanstack";

@@ -1,0 +1,29 @@
+import { SiteLayout } from "@vern/app-shell/next/site-layout";
+{%- if include_demos %}
+import { SiteNav } from "@/components/site-nav";
+{%- endif %}
+import { SITE_NAME } from "@/lib/site";
+import { getCurrentUser } from "@/server/auth.server";
+
+export default function Layout({ children }: LayoutProps<"/">) {
+	return (
+{%- if include_demos %}
+		<SiteLayout
+			siteName={SITE_NAME}
+			getUser={getCurrentUser}
+			nav={<SiteNav />}
+			footerNote={
+				<p className="m-0 text-xs">
+					A full stack starter for modern applications.
+				</p>
+			}
+		>
+			{children}
+		</SiteLayout>
+{%- else %}
+		<SiteLayout siteName={SITE_NAME} getUser={getCurrentUser}>
+			{children}
+		</SiteLayout>
+{%- endif %}
+	);
+}

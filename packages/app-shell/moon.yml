@@ -1,0 +1,13 @@
+tasks:
+  check:
+    command: bun run check
+    description: Type-check and lint the shared app shell
+    deps:
+      - 'workspace:install'
+    toolchains: system
+    inputs:
+      - 'src/**/*'
+      - 'package.json'
+      - 'tsconfig.json'
+      - 'biome.json'
+      - '/packages/ui/src/**/*'

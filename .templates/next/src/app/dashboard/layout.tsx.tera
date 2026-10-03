@@ -1,10 +1,9 @@
----
-skip: {{ include_demos }}
----
-import { SidebarInset, SidebarProvider } from "@vern/ui/components/sidebar";
-import type { CSSProperties } from "react";
-import { AppSidebar } from "@/components/app-sidebar";
-import { SiteHeader } from "@/components/site-header";
+import { DashboardShell } from "@vern/app-shell/next/dashboard-shell";
+import { ApiStatus } from "@/components/api-status";
+import { navGroups } from "@/components/dashboard-nav";
+{%- if include_demos %}
+import { DemoSidebar } from "@/components/demo-sidebar";
+{%- endif %}
 import { SITE_NAME } from "@/lib/site";
 import { getDashboardData } from "@/server/dashboard.server";
 
@@ -17,29 +16,16 @@ export default async function DashboardLayout({
 	const { user, apiStatus } = await getDashboardData();
 
 	return (
-		<SidebarProvider
-			className="dashboard-theme"
-			style={
-				{
-					"--sidebar-width": "calc(var(--spacing) * 72)",
-					"--header-height": "calc(var(--spacing) * 12)",
-				} as CSSProperties
-			}
+		<DashboardShell
+			siteName={SITE_NAME}
+			user={user}
+			navGroups={navGroups}
+{%- if include_demos %}
+			sidebarContent={<DemoSidebar />}
+{%- endif %}
+			sidebarFooter={<ApiStatus status={apiStatus} />}
 		>
-			<AppSidebar
-				variant="inset"
-				brandName={SITE_NAME}
-				user={% raw %}{{{% endraw %}
-					name: user.name || user.email || `${SITE_NAME} user`,
-					email: user.email || "",
-					subject: user.sub,
-				}}
-				apiStatus={apiStatus}
-			/>
-			<SidebarInset>
-				<SiteHeader />
-				{children}
-			</SidebarInset>
-		</SidebarProvider>
+			{children}
+		</DashboardShell>
 	);
 }

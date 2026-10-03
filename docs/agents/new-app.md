@@ -24,7 +24,7 @@ example). A new screen for the same people is a route in an app that exists.
    The demo routes and the sample dashboard are sample code; add
    `--no-include_demos` for an app that is going to ship. It starts from an empty
    dashboard in a working sidebar shell: add a page under `dashboard` and an item
-   to `navItems` in `src/components/app-sidebar.tsx`.
+   to `navGroups` in `src/components/dashboard-nav.tsx`.
 4. **Choose its API**, only when the workspace has more than one Axum API: set
    `API_APP=<api name>` in the new app's `.env.example`. With a single API,
    `setup` wires it by itself.
@@ -52,9 +52,17 @@ example). A new screen for the same people is a route in an app that exists.
   a form, use `form-tanstack` (TanStack Form) in a TanStack Start app and
   `form-rhf` (React Hook Form) in a Next.js app. Product-specific components
   stay in the app's `src/components`.
-- The files under `src/server` named `auth`, `session`, `oidc`, `api`, `http`,
-  `log`, and `ttl-cache`, and the routes under `/auth`, are the sign-in
-  machinery. Build next to them, not in them.
+- A generated app is small. Sign-in (`packages/web-auth`) and the frame around
+  the pages (`packages/app-shell`: the dashboard's sidebar and header, the
+  public pages' header and footer, the theme toggle) are shared by every web
+  app, and a fix there reaches all of them. The app holds what is its own:
+  `src/server/auth.server.ts` binds sign-in to the app's ID,
+  `src/components/dashboard-nav.tsx` lists the dashboard's pages, and the
+  layouts pass the app's name, user, and navigation to the shell.
+- `src/server/auth.server.ts`, `src/server/api.server.ts`, and the routes under
+  `/auth` are the sign-in wiring. Build next to them, not in them.
+- A different sidebar, header, or footer for one app is built in that app from
+  `@vern/ui`; a change every app should get is made in `packages/app-shell`.
 - The app's display name and ID are in `src/lib/site.ts`.
 
 ## Things that go wrong

@@ -1,0 +1,48 @@
+# One Cargo workspace for the Axum APIs in services/ and the crates they share
+# in crates/: one Cargo.lock, one version of each dependency.
+[workspace]
+resolver = "3"
+# services/README.md keeps `services/*` matching before the first API exists:
+# Cargo refuses a pattern that matches nothing.
+members = ["crates/*", "services/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# A dependency is listed here once, with the features every user of it needs. A
+# member adds the features only it needs:
+# `sqlx = { workspace = true, features = ["tls-rustls-aws-lc-rs"] }`.
+[workspace.dependencies]
+# The crates of this workspace.
+svc-auth = { path = "crates/svc-auth" }
+svc-boot = { path = "crates/svc-boot" }
+svc-db = { path = "crates/svc-db" }
+svc-events = { path = "crates/svc-events" }
+svc-http = { path = "crates/svc-http" }
+
+# From crates.io.
+async-nats = { version = "0.50", default-features = false, features = ["jetstream", "aws-lc-rs", "server_2_10"] }
+async-trait = "0.1"
+axum = "0.8"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+dotenvy = "0.15"
+futures-util = "0.3"
+jsonwebtoken = { version = "11", default-features = false, features = ["use_pem", "rust_crypto"] }
+moka = { version = "0.12", default-features = false, features = ["future"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "form", "rustls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "migrate", "macros", "chrono", "uuid", "json"] }
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "time"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.7", features = ["trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+uuid = { version = "1", features = ["v7", "serde"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
