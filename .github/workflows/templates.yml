@@ -129,6 +129,35 @@ jobs:
           cargo check --workspace --all-targets --all-features --locked
           cargo test --workspace --all-features --locked
 
+  # A rename gives the shared packages a new scope, and puts their imports
+  # where Biome sorts and wraps that scope. Biome has to agree, in the packages
+  # and in an app generated from each web template after the rename.
+  renamed:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          # The rename records the commit of main the project started from.
+          fetch-depth: 0
+
+      - name: Install the pinned toolchain
+        uses: moonrepo/setup-toolchain@v0
+        with:
+          auto-install: true
+
+      - name: Rename the project
+        run: bun scripts/rename-project.ts --name "Acme Board" --slug acme-board --base "$(git merge-base HEAD origin/main)" --apply
+
+      - name: Generate an app from each web template
+        run: |
+          moon generate tanstack -- --name web-tanstack --port 3000
+          moon generate next -- --name web-next --port 3001
+          bun install
+
+      - name: Check the shared packages and the apps
+        run: moon run ui:check web-auth:check app-shell:check web-tanstack:check web-next:check
+
   axum:
     runs-on: ubuntu-24.04
     steps:

@@ -382,7 +382,11 @@ The name accepts letters, numbers, spaces, periods, and hyphens. The slug must
 be lowercase kebab-case and becomes the UI package scope (`@acme-platform/ui`).
 The rename updates text references to Vern (URLs and container images keep
 their names) and records the project identity and the Vern commit it started
-from in `.vern/config.json`. If Git history cannot identify that commit, pass
+from in `.vern/config.json`. The imports of the shared packages get a new
+scope, so the rename also puts each one where Biome sorts that scope and wraps
+or joins its line, in the packages and in the templates: `check` passes right
+after a rename, and in an app generated after it. If Git history cannot
+identify the commit the project started from, pass
 it with `--base <sha>`. A checkout that has already started its auth stack
 (it has `deploy/dev/auth-server/.env`) needs Docker running for the rename, and its
 existing auth volumes must be migrated by hand first. A fresh copy without that
@@ -499,6 +503,14 @@ edit on the review branch and run `bun run project:update -- --continue`.
 - **Biome 2.5** reports each app's `biome.json` as out of date. These are
   notes, not failures; `bunx biome migrate --write` in the app's folder brings
   the file up to date.
+- **Imports out of order after a rename** (`Sort these imports.` in
+  `packages/`, or in an app). A rename used to leave the imports of
+  `@<slug>/ui` and the other shared packages on the lines they had before it,
+  which is the wrong place for a slug that sorts before `@tabler` or
+  `@tanstack`, and with a line too long or too short for the new name. A
+  rename now moves and wraps them, and an update does the same to each file it
+  brings. Files it does not bring, and apps generated earlier, are fixed with
+  `bunx biome check --write` in the folder of the package or the app.
 - **The logos, on the update that moves the auth stack to `deploy/dev/`.** That
   update runs the project's old updater, which writes
   `deploy/dev/auth-server/brand/logo-light.svg` and `logo-dark.svg` without
