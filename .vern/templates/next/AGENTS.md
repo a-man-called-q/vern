@@ -12,7 +12,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 Read [`../../AGENTS.md`](../../AGENTS.md) first. Before protecting a page or
 calling an API, read
-[`../../docs/agents/web-to-api.md`](../../docs/agents/web-to-api.md).
+[`../../.vern/agents/web-to-api.md`](../../.vern/agents/web-to-api.md).
 
 - **Sign-in is done, and shared.** The flow, the session, and the token
   refresh are in `../../packages/web-auth`, which every web app uses.

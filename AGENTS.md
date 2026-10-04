@@ -9,11 +9,11 @@ the product on top of them; do not rebuild them.
 
 | Path | What it is |
 | --- | --- |
-| `apps/<name>` | One web app each (TanStack Start or Next.js), generated from `.templates/`, and Storybook. Product code lives here |
-| `services/<name>` | One Axum API each, or a worker that serves no API (`--worker`), generated from `.templates/axum`. Product code lives here |
+| `apps/<name>` | One web app each (TanStack Start or Next.js), generated from `.vern/templates/`, and Storybook. Product code lives here |
+| `services/<name>` | One Axum API each, or a worker that serves no API (`--worker`), generated from `.vern/templates/axum`. Product code lives here |
 | `packages/<name>` | What the web apps share: `ui` (shadcn components and design tokens, `@vern/ui`), `web-auth` (sign-in, the session, and API calls as the user, `@vern/web-auth`), and `app-shell` (the dashboard's sidebar and header, the public pages' header and footer, `@vern/app-shell`) |
 | `crates/<name>` | What the APIs share, as crates of the Cargo workspace at the root: `svc-auth` (the token check), `svc-http` (`ApiError`, `/healthz`), `svc-boot` (startup and shutdown), `svc-db` (the database pool), `svc-events` (the outbox and the bus) |
-| `.templates/` | The generators behind `moon generate` |
+| `.vern/` | What the project is built from and follows: `templates/` (the generators behind `moon generate`), `agents/` (the recipes below), and `config.json` (the project's name, and the upstream commit it was last updated from) |
 | `scripts/` | Setup, provisioning, doctor, rename, and update |
 | `roles.json`, `seed-users.json` | The product's roles, and local test users |
 | `deploy/dev/<name>` | What the apps run on while developing, as Compose stacks: `auth-server` (the local ZITADEL and Redis), and the generated `postgres`, `bus`, and `storage`. Configuration only |
@@ -25,12 +25,12 @@ Read the one that matches the task before writing code. Each is short.
 
 | The task | Read |
 | --- | --- |
-| Add a web app | [docs/agents/new-app.md](docs/agents/new-app.md) |
-| Add an API service, with or without a database | [docs/agents/new-service.md](docs/agents/new-service.md) |
-| Add an endpoint, a table, or a rule to a service | [docs/agents/service-engineering.md](docs/agents/service-engineering.md) |
-| Protect a page, or call an API from a web app | [docs/agents/web-to-api.md](docs/agents/web-to-api.md) |
-| Add a role, a test user, or a screen that manages users | [docs/agents/roles-and-users.md](docs/agents/roles-and-users.md) |
-| Deploy to Kubernetes, or change how an app runs there | [docs/agents/kubernetes.md](docs/agents/kubernetes.md) |
+| Add a web app | [.vern/agents/new-app.md](.vern/agents/new-app.md) |
+| Add an API service, with or without a database | [.vern/agents/new-service.md](.vern/agents/new-service.md) |
+| Add an endpoint, a table, or a rule to a service | [.vern/agents/service-engineering.md](.vern/agents/service-engineering.md) |
+| Protect a page, or call an API from a web app | [.vern/agents/web-to-api.md](.vern/agents/web-to-api.md) |
+| Add a role, a test user, or a screen that manages users | [.vern/agents/roles-and-users.md](.vern/agents/roles-and-users.md) |
+| Deploy to Kubernetes, or change how an app runs there | [.vern/agents/kubernetes.md](.vern/agents/kubernetes.md) |
 
 Each generated app also has its own `AGENTS.md` and a README that covers its
 code and its production checklist.

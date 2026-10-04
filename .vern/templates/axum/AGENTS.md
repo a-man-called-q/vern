@@ -42,7 +42,7 @@ moon run {{ name | kebab_case }}:check {{ name | kebab_case }}:test
 # {{ name | kebab_case }}: an Axum API service
 
 Read [`../../AGENTS.md`](../../AGENTS.md) first. Before adding an endpoint, read
-[`../../docs/agents/service-engineering.md`](../../docs/agents/service-engineering.md).
+[`../../.vern/agents/service-engineering.md`](../../.vern/agents/service-engineering.md).
 
 - **Routes** are listed in `src/app.rs`. A route under `protected` gets a
   verified `AuthenticatedUser`; a route under `public` is open to anyone.

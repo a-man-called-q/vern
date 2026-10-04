@@ -402,13 +402,13 @@ describe("update-project", () => {
 			"deploy/dev/auth-server/brand.txt": "Product Vern\nVariant baseline\n",
 			"deploy/dev/auth-server/conflict.txt": "shared line\n",
 			"packages/ui/token.txt": "color: violet\n",
-			".templates/tanstack/package.json.tera":
+			".vern/templates/tanstack/package.json.tera":
 				'{\n  "name": "{{ name | kebab_case }}",\n  "dependencies": {\n{% if include_demos %}    "chart": "^1.0.0",\n{% endif %}    "@acme/ui": "workspace:*",\n    "demo": "^1.0.0"\n  }\n}\n',
-			".templates/next/package.json.tera":
+			".vern/templates/next/package.json.tera":
 				'{\n  "name": "{{ name | kebab_case }}",\n  "dependencies": {\n    "@acme/ui": "workspace:*",\n    "demo": "^1.0.0"\n  }\n}\n',
 			"Cargo.toml":
 				'[workspace]\nmembers = ["crates/*", "services/*"]\n\n[workspace.dependencies]\nasync-trait = "0.1"\nsqlx = "0.8"\n',
-			".templates/axum/Cargo.toml.tera":
+			".vern/templates/axum/Cargo.toml.tera":
 				'[package]\nname = "{{ name | kebab_case }}"\nversion.workspace = true\n\n[dependencies]\nasync-trait = { workspace = true }\n{% if database %}sqlx = { workspace = true }\n{% endif %}',
 		});
 		git(consumer, "clone", upstream, ".");
@@ -520,7 +520,7 @@ describe("update-project", () => {
 			readFileSync(resolve(consumer, "services/service/Cargo.toml"), "utf8"),
 		).toContain("async-trait = { workspace = true }");
 		const tanstackTemplateText = readFileSync(
-			resolve(consumer, ".templates/tanstack/package.json.tera"),
+			resolve(consumer, ".vern/templates/tanstack/package.json.tera"),
 			"utf8",
 		);
 		// The demo-only dependency keeps its conditional block.
@@ -536,7 +536,7 @@ describe("update-project", () => {
 		expect(tanstackTemplate.dependencies.demo).toBe("^3.0.0");
 		const nextTemplate = JSON.parse(
 			readFileSync(
-				resolve(consumer, ".templates/next/package.json.tera"),
+				resolve(consumer, ".vern/templates/next/package.json.tera"),
 				"utf8",
 			),
 		);
@@ -546,7 +546,7 @@ describe("update-project", () => {
 		// The Axum template has no versions to upgrade.
 		expect(
 			readFileSync(
-				resolve(consumer, ".templates/axum/Cargo.toml.tera"),
+				resolve(consumer, ".vern/templates/axum/Cargo.toml.tera"),
 				"utf8",
 			),
 		).toBe(
@@ -632,6 +632,62 @@ describe("update-project and scripts", () => {
 			'const fallback = "Vern";\nexport const steps = 2;\n',
 		);
 		expect(existsSync(resolve(consumer, "scripts/zitadel-smtp.ts"))).toBe(false);
+	});
+});
+
+describe("update-project and what Vern ships under .vern/", () => {
+	test("rebrands the templates and recipes, and follows them from their old folders", () => {
+		const upstream = tempRoot("vern-upstream-dotvern-");
+		const consumer = tempRoot("vern-consumer-dotvern-");
+		const base = initRepo(upstream, {
+			"README.md": "Project: Vern\n",
+			".templates/next/layout.tsx": 'import "@vern/ui/globals.css";\n',
+			".vern/templates/next/page.tsx": 'import { Button } from "@vern/ui";\nexport const page = 1;\n',
+			".vern/agents/new-app.md": "Add an app to Vern.\n",
+		});
+		git(consumer, "clone", upstream, ".");
+		git(consumer, "config", "user.name", "Vern Script Tests");
+		git(consumer, "config", "user.email", "vern-tests@example.test");
+		// What a rename wrote.
+		write(consumer, "README.md", "Project: Acme\n");
+		write(consumer, ".templates/next/layout.tsx", 'import "@acme/ui/globals.css";\n');
+		write(consumer, ".vern/templates/next/page.tsx", 'import { Button } from "@acme/ui";\nexport const page = 1;\n');
+		write(consumer, ".vern/agents/new-app.md", "Add an app to Acme.\n");
+		write(
+			consumer,
+			".vern/config.json",
+			JSON.stringify(
+				{
+					schemaVersion: 1,
+					project: { name: "Acme", slug: "acme" },
+					upstream: { url: upstream, branch: "main", lastSyncedSha: base },
+				} satisfies ProjectConfig,
+				null,
+				2,
+			) + "\n",
+		);
+		commitAll(consumer, "renamed");
+
+		rmSync(resolve(upstream, ".templates"), { recursive: true });
+		write(upstream, ".vern/templates/next/layout.tsx", 'import "@vern/ui/globals.css";\n');
+		write(upstream, ".vern/templates/next/page.tsx", 'import { Button } from "@vern/ui";\nexport const page = 2;\n');
+		write(upstream, ".vern/agents/new-app.md", "Add an app to Vern, then run setup.\n");
+		commitAll(upstream, "move the templates");
+		installFakeCommands();
+		updateProject(consumer, { apply: true, continueUpdate: false });
+
+		expect(existsState(consumer)).toBe(false);
+		// The old folder goes with its last file.
+		expect(existsSync(resolve(consumer, ".templates"))).toBe(false);
+		expect(readFileSync(resolve(consumer, ".vern/templates/next/layout.tsx"), "utf8")).toBe(
+			'import "@acme/ui/globals.css";\n',
+		);
+		expect(readFileSync(resolve(consumer, ".vern/templates/next/page.tsx"), "utf8")).toBe(
+			'import { Button } from "@acme/ui";\nexport const page = 2;\n',
+		);
+		expect(readFileSync(resolve(consumer, ".vern/agents/new-app.md"), "utf8")).toBe(
+			"Add an app to Acme, then run setup.\n",
+		);
 	});
 });
 

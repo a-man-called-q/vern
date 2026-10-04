@@ -24,4 +24,4 @@ vcs:
 
 generator:
   templates:
-    - './.templates'
+    - './.vern/templates'

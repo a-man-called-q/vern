@@ -79,7 +79,7 @@ example). A new screen for the same people is a route in an app that exists.
 
 ## Changing a generator
 
-Every text file in `.templates/<name>/` is rendered by Tera, whatever its
+Every text file in `.vern/templates/<name>/` is rendered by Tera, whatever its
 extension. A literal `{{` (common in JSX, `style={{ ... }}`) breaks generation:
 name such a file `*.raw` so it is copied as it is. After a template change,
 generate an app from it and run that app's `check` and `build`.

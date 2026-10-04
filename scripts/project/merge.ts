@@ -1,14 +1,16 @@
 import {
 	existsSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
+	rmdirSync,
 	rmSync,
 	statSync,
 	unlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve, sep } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { isTextBuffer, sha256, writeFileSafely } from "../lib/files";
 import { listProjects } from "../lib/projects";
 import { git, run } from "../lib/run";
@@ -75,14 +77,15 @@ function rebrand(data: Buffer, path: string, config: ProjectConfig): Buffer {
 /**
  * Upstream's copy of a file as this project's rename would have written it, so
  * the merge compares like with like. Scripts are never rebranded (see
- * isVernScript).
+ * isVernScript). What Vern ships under .vern/ (the templates, the recipes) is:
+ * a rename rewrites it like any other file.
  */
 export function rebrandSnapshot(
 	path: string,
 	data: Buffer,
 	config: ProjectConfig,
 ): Buffer {
-	if (!isTextBuffer(data) || isVernScript(path) || path.startsWith(".vern/"))
+	if (!isTextBuffer(data) || isVernScript(path))
 		return data;
 	return rebrand(data, path, config);
 }
@@ -208,6 +211,16 @@ function readWorkingFile(absolute: string): Buffer | undefined {
 		: undefined;
 }
 
+/** Removes the folders a deleted file leaves empty, so a folder Vern moved does not stay behind. */
+function removeEmptyParents(root: string, absolute: string): void {
+	for (
+		let dir = dirname(absolute);
+		dir.startsWith(resolve(root) + sep) && existsSync(dir) && readdirSync(dir).length === 0;
+		dir = dirname(dir)
+	)
+		rmdirSync(dir);
+}
+
 export function mergeUpstreamFiles(
 	root: string,
 	config: ProjectConfig,
@@ -231,6 +244,7 @@ export function mergeUpstreamFiles(
 		if (plan.kind === "keep") continue;
 		if (plan.kind === "delete") {
 			unlinkSync(absolute);
+			removeEmptyParents(root, absolute);
 			updated.push(path);
 		} else if (plan.kind === "write") {
 			writeFileSafely(root, path, plan.data);
@@ -284,8 +298,10 @@ export function settleConflicts(
 			continue;
 		}
 		if (plan.kind === "write") writeFileSafely(root, conflict.path, plan.data);
-		else if (plan.kind === "delete" || !ours) rmSync(absolute, { force: true });
-		else writeFileSafely(root, conflict.path, ours);
+		else if (plan.kind === "delete" || !ours) {
+			rmSync(absolute, { force: true });
+			removeEmptyParents(root, absolute);
+		} else writeFileSafely(root, conflict.path, ours);
 		settled.push(conflict.path);
 	}
 	return { remaining, settled };

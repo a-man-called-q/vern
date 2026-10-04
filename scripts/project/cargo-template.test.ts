@@ -70,7 +70,7 @@ describe("cargo template", () => {
 
 	test("the Axum template builds on the root workspace", () => {
 		const template = readFileSync(
-			resolve(ROOT, ".templates/axum/Cargo.toml.tera"),
+			resolve(ROOT, ".vern/templates/axum/Cargo.toml.tera"),
 			"utf8",
 		);
 		const workspace = readFileSync(resolve(ROOT, "Cargo.toml"), "utf8");
