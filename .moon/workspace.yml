@@ -17,6 +17,11 @@ projects:
   sources:
     workspace: '.'
 
+# The branch `moon run` compares with in CI. Moon's own default is `master`,
+# which this repository does not have, so every task failed on a push to main.
+vcs:
+  defaultBranch: 'main'
+
 generator:
   templates:
     - './.templates'
