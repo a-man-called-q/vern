@@ -717,6 +717,59 @@ function existsState(root: string): boolean {
 	return existsSync(resolve(root, ".vern/update-state.json"));
 }
 
+describe("update-project and the imports a rename moved", () => {
+	const PATH = "packages/app-shell/src/sidebar.tsx";
+	const BASE =
+		'import { Icon } from "@tabler/icons-react";\nimport { Button } from "@vern/ui/components/button";\n\nexport const version = 1;\n';
+	const ACME = { name: "Acme", slug: "acme" };
+
+	/** A project renamed to Acme, whose copy of the file is what `renamed` made of it. */
+	function updated(renamed: (text: string) => string): string {
+		const upstream = tempRoot("vern-upstream-imports-");
+		const consumer = tempRoot("vern-consumer-imports-");
+		const base = initRepo(upstream, { [PATH]: BASE });
+		git(consumer, "clone", upstream, ".");
+		git(consumer, "config", "user.name", "Vern Script Tests");
+		git(consumer, "config", "user.email", "vern-tests@example.test");
+		write(consumer, PATH, renamed(BASE));
+		write(
+			consumer,
+			".vern/config.json",
+			JSON.stringify(
+				{
+					schemaVersion: 1,
+					project: ACME,
+					upstream: { url: upstream, branch: "main", lastSyncedSha: base },
+				} satisfies ProjectConfig,
+				null,
+				2,
+			) + "\n",
+		);
+		commitAll(consumer, "renamed");
+		write(upstream, PATH, BASE.replace("version = 1", "version = 2"));
+		commitAll(upstream, "a new version");
+		installFakeCommands();
+		updateProject(consumer, { apply: true, continueUpdate: false });
+		expect(existsState(consumer)).toBe(false);
+		return readFileSync(resolve(consumer, PATH), "utf8");
+	}
+
+	const SORTED =
+		'import { Button } from "@acme/ui/components/button";\nimport { Icon } from "@tabler/icons-react";\n\nexport const version = 2;\n';
+
+	test("takes upstream's change with the imports where the project has them", () => {
+		expect(
+			updated((text) => rebrandText(PATH, text, { name: "Vern", slug: "vern" }, ACME)),
+		).toBe(SORTED);
+	});
+
+	test("sorts the imports an older rename left where they were", () => {
+		expect(
+			updated((text) => replaceIdentity(text, { name: "Vern", slug: "vern" }, ACME)),
+		).toBe(SORTED);
+	});
+});
+
 describe("alignRouterWithStart", () => {
 	function app(start: string | undefined, router: string) {
 		const root = tempRoot("vern-router-align-test-");

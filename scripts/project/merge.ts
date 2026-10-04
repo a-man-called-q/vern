@@ -15,7 +15,7 @@ import { git, run } from "../lib/run";
 import { CONFIG_PATH, type ProjectConfig, UPDATE_STATE_PATH } from "./config";
 import { type Environments, isUsed } from "./environments";
 import { isVernScript, readGitFile } from "./files";
-import { rebrandText } from "./identity";
+import { rebrandText, replaceIdentity } from "./identity";
 
 /** A file the merge left for the user, and its hash then, to tell when it is resolved. */
 export type Conflict = { path: string; initialHash: string };
@@ -194,10 +194,18 @@ function snapshots(
 	return {
 		base: baseRaw ? rebrandSnapshot(path, baseRaw, config) : undefined,
 		theirs: targetRaw ? rebrandSnapshot(path, targetRaw, config) : undefined,
-		// A rename used to rebrand most scripts; such a copy is not a local change.
+		// A rename used to rebrand most scripts, and to leave the imports it
+		// renamed as they were, unsorted; such a copy is not a local change.
 		renamedBase:
-			baseRaw && isVernScript(path) && isTextBuffer(baseRaw)
-				? rebrand(baseRaw, path, config)
+			baseRaw && isTextBuffer(baseRaw)
+				? Buffer.from(
+						replaceIdentity(
+							new TextDecoder().decode(baseRaw),
+							{ name: "Vern", slug: "vern" },
+							config.project,
+						),
+						"utf8",
+					)
 				: undefined,
 	};
 }

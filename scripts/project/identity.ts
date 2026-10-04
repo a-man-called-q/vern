@@ -1,3 +1,4 @@
+import { fitImports, isSourceFile } from "./imports";
 import { fitLogoText, isLogoSvg } from "./logo";
 
 function escapeRegExp(value: string): string {
@@ -59,7 +60,11 @@ export function replaceIdentity(
 	return output;
 }
 
-/** `replaceIdentity` plus the fixes that depend on the file (the logo's text fit). */
+/**
+ * `replaceIdentity` plus the fixes that depend on the file: the logo's text
+ * fit, and the imports of the project's own packages, whose new name wraps
+ * and sorts differently.
+ */
 export function rebrandText(
 	path: string,
 	text: string,
@@ -67,7 +72,10 @@ export function rebrandText(
 	to: { name: string; slug: string },
 ): string {
 	const replaced = replaceIdentity(text, from, to);
-	return isLogoSvg(path) ? fitLogoText(replaced) : replaced;
+	if (isLogoSvg(path)) return fitLogoText(replaced);
+	if (from.slug !== to.slug && isSourceFile(path))
+		return fitImports(text, replaced, `@${to.slug}/`);
+	return replaced;
 }
 
 export function validateIdentity(name: string, slug: string): void {
