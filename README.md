@@ -489,6 +489,9 @@ edit on the review branch and run `bun run project:update -- --continue`.
   `docker` task run `docker build -f services/<name>/Dockerfile -t <name> .`
   with `runFromWorkspaceRoot: true`. Then run `cargo check` once and commit the
   `Cargo.lock` at the root.
+- **Biome 2.5** reports each app's `biome.json` as out of date. These are
+  notes, not failures; `bunx biome migrate --write` in the app's folder brings
+  the file up to date.
 - **Imports out of order after a rename** (`Sort these imports.` in
   `packages/`, or in an app). A rename used to leave the imports of
   `@<slug>/ui` and the other shared packages on the lines they had before it,
@@ -497,9 +500,6 @@ edit on the review branch and run `bun run project:update -- --continue`.
   rename now moves and wraps them, and an update does the same to each file it
   brings. Files it does not bring, and apps generated earlier, are fixed with
   `bunx biome check --write` in the folder of the package or the app.
-- **Biome 2.5** reports each app's `biome.json` as out of date. These are
-  notes, not failures; `bunx biome migrate --write` in the app's folder brings
-  the file up to date.
 - **The logos, on the update that moves the auth stack to `deploy/dev/`.** That
   update runs the project's old updater, which writes
   `deploy/dev/auth-server/brand/logo-light.svg` and `logo-dark.svg` without
