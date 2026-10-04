@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { checkKubernetes } from "../doctor/kubernetes";
 import { ROOT } from "../lib/paths";
@@ -17,11 +17,11 @@ const settings: KubeSettings = {
 	adminUsername: "zitadel-admin",
 };
 
-const app = (name: string, kind: "web" | "api", extra: Partial<KubeApp> = {}): KubeApp => ({
+const app = (name: string, kind: KubeApp["kind"], extra: Partial<KubeApp> = {}): KubeApp => ({
 	name,
 	path: `${kind === "web" ? "apps" : "services"}/${name}`,
 	kind,
-	host: `${name}.localtest.me`,
+	host: kind === "worker" ? "" : `${name}.localtest.me`,
 	database: false,
 	events: false,
 	secretEnv: false,
@@ -60,9 +60,41 @@ describe("Kubernetes manifests", () => {
 			"APP_URL=https://web.localtest.me",
 			"API_BASE_URL=https://api.localtest.me",
 		]);
-		const patch = parse(dbInitPatch({ name: "api" })) as unknown as { path: string }[];
+		const patch = parse(dbInitPatch({ name: "api", kind: "api" })) as unknown as { path: string }[];
 		expect(patch.map((op) => op.path)).toEqual(["/spec/template/spec/initContainers", "/spec/template/spec/volumes/-"]);
 		expect((parse(storageBucketJob("media")) as { kind: string }).kind).toBe("Job");
+	});
+
+	test("a worker gets its image, database, and bus, and no key, settings, or hostname", () => {
+		const input = {
+			settings,
+			apps: [app("api", "api"), app("ingest", "worker", { database: true, events: true })],
+			backing: { data: true, bus: true },
+			projectId: "100",
+			brandFiles: [],
+		};
+		const component = parse(componentKustomization(input)) as {
+			images: { name: string }[];
+			secretGenerator: { name: string }[];
+			configMapGenerator: { name: string }[];
+			patches: { path: string }[];
+		};
+		expect(component.images.map((image) => image.name)).toEqual(["api", "ingest"]);
+		const secrets = component.secretGenerator.map((item) => item.name);
+		expect(secrets).toContain("ingest-database");
+		expect(secrets).toContain("bus");
+		expect(secrets).not.toContain("ingest-key");
+		expect(secrets).not.toContain("ingest");
+		expect(component.configMapGenerator.map((item) => item.name)).toContain("ingest-db-init");
+		expect(component.patches).toEqual([{ path: "patches/ingest-db-init.yaml", target: { kind: "Deployment", name: "ingest" } }]);
+		// A worker's Deployment has no volumes yet, so the patch brings the list.
+		const patch = parse(dbInitPatch({ name: "ingest", kind: "worker" })) as unknown as { path: string; value: unknown }[];
+		expect(patch.map((op) => op.path)).toEqual(["/spec/template/spec/initContainers", "/spec/template/spec/volumes"]);
+		expect(patch[1]?.value).toEqual([{ name: "db-init", configMap: { name: "ingest-db-init" } }]);
+
+		const ingress = ingressManifest(input);
+		expect(ingress).toContain("host: api.localtest.me");
+		expect(ingress).not.toContain("ingest");
 	});
 
 	test("ZITADEL's catch-all route comes after the sign-in pages", () => {
@@ -75,7 +107,8 @@ describe("Kubernetes manifests", () => {
 		expect(documents[1]?.metadata.annotations?.["traefik.ingress.kubernetes.io/router.priority"]).toBe("1");
 	});
 
-	test("run the images the Compose stacks run", () => {
+	// A project whose local environment does not run on Kubernetes has no deploy/local/backing.
+	test.skipIf(!existsSync(resolve(ROOT, "deploy/local/backing")))("run the images the Compose stacks run", () => {
 		const image = (path: string) => readFileSync(resolve(ROOT, path), "utf8").match(/image: (\S+)/)?.[1];
 		for (const [manifest, template] of [
 			["deploy/local/backing/zitadel-db/postgres.yaml", ".vern/templates/postgres/docker-compose.yml"],

@@ -74,6 +74,16 @@ needs the bus project below.
 moon generate axum -- --name inventory --port 4002 --database --events
 ```
 
+Add `--worker` for a service that serves no API: it reads the bus, or works on
+a schedule, and answers only `/healthz`. It checks no token, so `bun run setup`
+gives it a `.env` and no ZITADEL application or key, and a deployment gives it a
+workload and no hostname. The scripts tell it from an API by its `.env.example`,
+which has no `ZITADEL_API_KEY_FILE`.
+
+```sh
+moon generate axum -- --name ingest --port 4100 --database --events --worker
+```
+
 ## PostgreSQL
 
 ```sh

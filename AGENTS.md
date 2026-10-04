@@ -10,7 +10,7 @@ the product on top of them; do not rebuild them.
 | Path | What it is |
 | --- | --- |
 | `apps/<name>` | One web app each (TanStack Start or Next.js), generated from `.vern/templates/`, and Storybook. Product code lives here |
-| `services/<name>` | One Axum API each, generated from `.vern/templates/axum`. Product code lives here |
+| `services/<name>` | One Axum API each, or a worker that serves no API (`--worker`), generated from `.vern/templates/axum`. Product code lives here |
 | `packages/<name>` | What the web apps share: `ui` (shadcn components and design tokens, `@vern/ui`), `web-auth` (sign-in, the session, and API calls as the user, `@vern/web-auth`), and `app-shell` (the dashboard's sidebar and header, the public pages' header and footer, `@vern/app-shell`) |
 | `crates/<name>` | What the APIs share, as crates of the Cargo workspace at the root: `svc-auth` (the token check), `svc-http` (`ApiError`, `/healthz`), `svc-boot` (startup and shutdown), `svc-db` (the database pool), `svc-events` (the outbox and the bus) |
 | `.vern/` | What the project is built from and follows: `templates/` (the generators behind `moon generate`), `agents/` (the recipes below), and `config.json` (the project's name, and the upstream commit it was last updated from) |
@@ -74,6 +74,7 @@ code and its production checklist.
 | `moon run :dev` | Run everything. `moon run <app>:dev` runs one app and what it needs |
 | `moon run <app>:check` | Type-check one app (and lint it, for a web app) |
 | `moon run <app>:test` | Run one app's tests |
+| `bun run project:stack` | Show how each environment runs (Docker Compose, Kubernetes, or none); with `--local`, `--staging`, `--prod`, change it and keep only the files of that way |
 | `bun run project:doctor` | Check the tools, configuration, roles, and ports |
 
 ## Done means

@@ -75,4 +75,21 @@ describe("projects", () => {
 			{ name: "web", path: "apps/web", kind: "web" },
 		]);
 	});
+
+	test("a Cargo crate in services/ that names no ZITADEL key is a worker", () => {
+		const root = workspace({
+			...files,
+			"services/ingest/Cargo.toml": "",
+			"services/ingest/.env.example": "PORT=4100\nNATS_URL=nats://localhost:4222\n",
+			// Not services: a file, a folder without a crate, and a shared crate.
+			"services/README.md": "",
+			"services/notes/.env.example": "PORT=4200\n",
+			"crates/svc-boot/Cargo.toml": "",
+		});
+		expect(findApps(root).map((app) => `${app.path}:${app.kind}`)).toEqual([
+			"services/api:api",
+			"services/ingest:worker",
+			"apps/web:web",
+		]);
+	});
 });

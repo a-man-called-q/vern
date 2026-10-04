@@ -191,6 +191,22 @@ describe("rename-project", () => {
 		).toEqual([]);
 	});
 
+	test("a second rename keeps how the environments run", () => {
+		const root = tempRoot("vern-rename-environments-");
+		const sha = initRepo(root, { "README.md": "# Vern\n" });
+		git(root, "update-ref", "refs/vern/upstream-main", sha);
+		renameProject(root, { name: "Acme", slug: "acme", apply: true, base: sha });
+		const config = readConfig(root) as ProjectConfig;
+		write(root, ".vern/config.json", JSON.stringify({ ...config, environments: { local: "none", staging: "none", prod: "compose" } }));
+		commitAll(root, "acme");
+		renameProject(root, { name: "Acme Board", slug: "acme-board", apply: true });
+		expect(readConfig(root)).toMatchObject({
+			project: { name: "Acme Board", slug: "acme-board" },
+			upstream: { lastSyncedSha: sha },
+			environments: { local: "none", staging: "none", prod: "compose" },
+		});
+	});
+
 	test("refuses to rename a Compose project while its existing volumes are present", () => {
 		const root = tempRoot("vern-compose-rename-test-");
 		const base = initRepo(root, {

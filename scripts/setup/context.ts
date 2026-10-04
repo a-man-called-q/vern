@@ -1,3 +1,5 @@
+import type { AppKind } from "../lib/projects";
+
 export type Log = (message: string) => void;
 
 export type SecretKind = "hex" | "base64" | "password";
@@ -16,5 +18,5 @@ export type SetupDeps = {
 	randomSecret?: (kind: SecretKind, bytes: number) => string;
 	runKubectl?: (root: string, args: string[]) => void;
 	readKubeToken?: (root: string, namespace: string) => string | undefined;
-	generateAppManifests?: (root: string, app: { name: string; path: string; kind: "web" | "api"; database: boolean; events: boolean }) => void;
+	generateAppManifests?: (root: string, app: { name: string; path: string; kind: AppKind; database: boolean; events: boolean }) => void;
 };

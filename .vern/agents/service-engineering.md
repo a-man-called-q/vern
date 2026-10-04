@@ -168,7 +168,8 @@ its own routes, in `public` in `src/app.rs`, with the check in that module and
 limits on how often it can be called. Keep it away from the
 user routes, and let it write only what that kind of caller may write. Events
 (`--events`) are for services telling each other what changed; they are not
-a way in for an outside caller.
+a way in for an outside caller. A service that only handles events and serves
+no API at all is a worker; see [new-service.md](new-service.md#a-worker-a-service-with-no-api).
 
 ## Before calling it done
 

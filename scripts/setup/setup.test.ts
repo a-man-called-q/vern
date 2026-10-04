@@ -393,6 +393,22 @@ describe("setup", () => {
 		});
 	});
 
+	test("a worker gets its .env, and nothing in ZITADEL", async () => {
+		const root = workspace();
+		write(root, "services/ingest/Cargo.toml", "");
+		write(root, "services/ingest/.env.example", "PORT=4100\nDATABASE_URL=postgres://ingest:ingest@localhost:5433/ingest\n");
+		const zitadel = fakeZitadel();
+		expect(await setup([], deps(root, zitadel))).toBe(0);
+
+		expect(readFileSync(resolve(root, "services/ingest/.env"), "utf8")).toBe(
+			"PORT=4100\nDATABASE_URL=postgres://ingest:ingest@localhost:5433/ingest\n",
+		);
+		expect(existsSync(resolve(root, "services/ingest/secrets"))).toBe(false);
+		expect(zitadel.calls.some((call) => JSON.stringify(call.body ?? "").includes("ingest"))).toBe(false);
+		// The web app still calls the only API.
+		expect(parseEnv(resolve(root, "apps/dashboard/.env")).get("API_BASE_URL")).toBe("http://localhost:4000");
+	});
+
 	test("says nothing about APIs when there are none", async () => {
 		const root = workspace();
 		rmSync(resolve(root, "services/api"), { recursive: true });
@@ -992,6 +1008,35 @@ describe("setup", () => {
 		);
 	});
 
+	test("--env runs an environment the way the project chose, before anything is set up there", async () => {
+		const root = workspace();
+		write(root, "deploy/compose/.env.example", COMPOSE_EXAMPLE);
+		write(
+			root,
+			".vern/config.json",
+			JSON.stringify({
+				schemaVersion: 1,
+				project: { name: "Acme", slug: "acme" },
+				upstream: { url: "https://example.test/vern.git", branch: "main", lastSyncedSha: "0".repeat(40) },
+				environments: { local: "none", staging: "compose", prod: "kubernetes" },
+			}),
+		);
+		const run = (...args: string[]) => setup(args, { ...deps(root, fakeZitadel()), runCompose: () => {} });
+		// No .env or settings.env yet: the choice says Docker Compose.
+		await expect(run("--env", "staging")).rejects.toThrow("Created deploy/staging/.env");
+		await expect(run("--env", "local")).rejects.toThrow(
+			"This project has no local environment (.vern/config.json). Add it with `bun run project:stack -- --local compose`, or `kubernetes`.",
+		);
+		// The files of the other way are not in the project.
+		await expect(run("--compose", "prod")).rejects.toThrow(
+			"prod runs on Kubernetes in this project (.vern/config.json), so the files for Docker Compose are not here. Change it with `bun run project:stack -- --prod compose`.",
+		);
+		await expect(run("--kubernetes", "staging", "--manifests-only")).rejects.toThrow(
+			"staging runs with Docker Compose in this project (.vern/config.json), so the files for Kubernetes are not here.",
+		);
+		await expect(run("--kubernetes", "local")).rejects.toThrow("This project has no local environment");
+	});
+
 	test("waits for the issuer to answer before calling it", async () => {
 		const root = workspace();
 		const zitadel = fakeZitadel();
@@ -1025,22 +1070,26 @@ describe("setup", () => {
 	});
 });
 
-describe("setup --kubernetes", () => {
-	/** The workspace, with deploy/k8s and the auth stack's brand files as Vern ships them. */
+/** What the tests below take from the checkout: the overlays and the auth stack's brand files, as Vern ships them. */
+const KUBERNETES_FILES = [
+	"deploy/base/kustomization.yaml",
+	"deploy/local/kustomization.yaml",
+	"deploy/local/settings.env.example",
+	"deploy/prod/kustomization.yaml",
+	"deploy/prod/settings.env.example",
+	"deploy/staging/kustomization.yaml",
+	"deploy/staging/settings.env.example",
+	"deploy/dev/auth-server/nginx.conf",
+	"deploy/dev/auth-server/brand/brand.json",
+	"deploy/dev/auth-server/brand/favicon.svg",
+];
+
+// A project that runs an environment another way has no overlay for it
+// (`bun run project:stack`), so there is nothing here to test.
+describe.skipIf(!KUBERNETES_FILES.every((path) => existsSync(resolve(ROOT, path))))("setup --kubernetes", () => {
 	function kubeWorkspace(): string {
 		const root = workspace();
-		for (const path of [
-			"deploy/base/kustomization.yaml",
-			"deploy/local/kustomization.yaml",
-			"deploy/local/settings.env.example",
-			"deploy/prod/kustomization.yaml",
-			"deploy/prod/settings.env.example",
-			"deploy/staging/kustomization.yaml",
-			"deploy/staging/settings.env.example",
-			"deploy/dev/auth-server/nginx.conf",
-			"deploy/dev/auth-server/brand/brand.json",
-			"deploy/dev/auth-server/brand/favicon.svg",
-		]) {
+		for (const path of KUBERNETES_FILES) {
 			write(root, path, templateIdentity(readFileSync(resolve(ROOT, path), "utf8")));
 		}
 		return root;
@@ -1176,6 +1225,40 @@ describe("setup --kubernetes", () => {
 		expect(zitadel.projects).toHaveLength(1);
 		expect(zitadel.calls.filter((call) => call.path.endsWith("/apps/oidc"))).toHaveLength(1);
 		expect(zitadel.keys).toHaveLength(1);
+	});
+
+	test("a worker is deployed without a key, a ZITADEL application, or a hostname", async () => {
+		const root = kubeWorkspace();
+		write(root, "services/ingest/Cargo.toml", "");
+		write(root, "services/ingest/.env.example", "PORT=4100\nNATS_URL=nats://localhost:4222\n");
+		write(root, "deploy/dev/bus/docker-compose.yml", "");
+		const zitadel = fakeZitadel();
+		const kubectl: string[] = [];
+		const templated: string[] = [];
+		expect(
+			await setup(["--kubernetes", "local"], {
+				...deps(root, zitadel),
+				generateAppManifests: (target, app) => {
+					templated.push(`${app.name}:${app.kind}:${app.events}`);
+					write(target, `${app.path}/k8s/kustomization.yaml`, "resources: []\n");
+				},
+				runKubectl: (_root, args) => kubectl.push(args.join(" ")),
+				readKubeToken: () => "token",
+			}),
+		).toBe(0);
+
+		expect(templated).toContain("ingest:worker:true");
+		expect(readFileSync(resolve(root, "deploy/base/kustomization.yaml"), "utf8")).toContain("  - ../../services/ingest/k8s\n");
+		expect(kubectl).toContain("-n vern rollout status deployment/ingest --timeout=10m");
+		const component = generated(root, "local", "kustomization.yaml");
+		expect(component).toContain("- name: ingest\n");
+		expect(component).toContain("- name: bus\n");
+		expect(component).not.toContain("ingest-key");
+		expect(generated(root, "local", "ingress.yaml")).not.toContain("ingest");
+		expect(existsSync(resolve(root, "deploy/local/generated/secrets/ingest-key.json"))).toBe(false);
+		// Only the API has a key, and only the web app an application.
+		expect(zitadel.keys).toHaveLength(1);
+		expect(zitadel.calls.filter((call) => call.path.endsWith("/apps/oidc"))).toHaveLength(1);
 	});
 
 	test("refuses an app whose hostname is ZITADEL's", async () => {

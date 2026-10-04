@@ -6,6 +6,7 @@
 		"setup": "bun scripts/setup.ts",
 		"project:rename": "bun scripts/rename-project.ts",
 		"project:update": "bun scripts/update-project.ts",
+		"project:stack": "bun scripts/stack-project.ts",
 		"project:doctor": "bun scripts/doctor.ts",
 		"zitadel:app": "bun scripts/zitadel-app.ts",
 		"zitadel:service-account": "bun scripts/zitadel-service-account.ts",

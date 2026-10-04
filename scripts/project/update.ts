@@ -12,6 +12,7 @@ import {
 	UPDATE_STATE_PATH,
 } from "./config";
 import { updateDependencies, validateProject } from "./dependencies";
+import { isUsed } from "./environments";
 import { migrateLayout, planLayoutMigration } from "./layout";
 import {
 	allChangedUpstreamPaths,
@@ -102,8 +103,9 @@ function fetchMain(root: string, config: ProjectConfig): string {
 	return git(root, "rev-parse", ref).stdout.trim();
 }
 
-function printPreview(root: string, from: string, to: string): void {
-	const files = allChangedUpstreamPaths(root, from, to);
+function printPreview(root: string, config: ProjectConfig, from: string, to: string): void {
+	// What belongs to a way the project does not run an environment with stays out.
+	const files = allChangedUpstreamPaths(root, from, to).filter((path) => isUsed(path, config.environments));
 	console.log("Vern main: " + from.slice(0, 12) + " → " + to.slice(0, 12));
 	if (files.length === 0) console.log("No upstream file changes.");
 	else {
@@ -247,7 +249,7 @@ export function updateProject(root: string, options: Options): void {
 			"The saved upstream SHA is not an ancestor of Vern main. Check .vern/config.json.",
 		);
 	if (!options.apply) {
-		printPreview(root, config.upstream.lastSyncedSha, targetSha);
+		printPreview(root, config, config.upstream.lastSyncedSha, targetSha);
 		console.log(
 			"Preview only. Add --apply to create a review branch and apply the update.",
 		);

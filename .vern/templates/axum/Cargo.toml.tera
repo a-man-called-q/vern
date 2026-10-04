@@ -7,12 +7,12 @@ publish.workspace = true
 # The versions are in the Cargo.toml at the repository root, one for every API.
 # For a new dependency, add it there and name it here.
 [dependencies]
-axum = { workspace = true }
-{% if database %}chrono = { workspace = true }
+{% if not worker %}axum = { workspace = true }
+{% endif %}{% if database %}chrono = { workspace = true }
 {% endif %}serde = { workspace = true }
 {% if database %}sqlx = { workspace = true }
-{% endif %}svc-auth = { workspace = true }
-svc-boot = { workspace = true }
+{% endif %}{% if not worker %}svc-auth = { workspace = true }
+{% endif %}svc-boot = { workspace = true }
 {% if database %}svc-db = { workspace = true }
 {% endif %}{% if events %}svc-events = { workspace = true }
 {% endif %}svc-http = { workspace = true }
@@ -20,9 +20,9 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
-serde_json = { workspace = true }
-svc-auth = { workspace = true, features = ["testing"] }
-tower = { workspace = true }
-
+{% if not worker %}serde_json = { workspace = true }
+{% endif %}{% if not worker %}svc-auth = { workspace = true, features = ["testing"] }
+{% endif %}{% if not worker %}tower = { workspace = true }
+{% endif %}
 [lints]
 workspace = true

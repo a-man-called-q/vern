@@ -1,5 +1,5 @@
 ---
-skip: {{ not database }}
+skip: {{ worker or not database }}
 ---
 //! The example endpoints: each signed-in user keeps their own notes. Replace
 //! them with your own handlers; the pattern is the point. A handler takes the
