@@ -1,5 +1,5 @@
 {
-	"name": "@vern/cli",
+	"name": "@tsanyqudsi/vern",
 	"version": "0.1.0",
 	"description": "The commands of a Vern project: setup, doctor, rename, update, and the ZITADEL provisioning.",
 	"license": "MIT",

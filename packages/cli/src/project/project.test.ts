@@ -643,9 +643,9 @@ describe("the CLI, which a project installs from npm", () => {
 				name: "vern",
 				scripts: {
 					setup: "vern setup",
-					"project:update": "bunx @vern/cli@latest project:update",
+					"project:update": "bunx @tsanyqudsi/vern@latest project:update",
 				},
-				devDependencies: { "@vern/cli": "^0.1.0", "@vern/ui": "workspace:*" },
+				devDependencies: { "@tsanyqudsi/vern": "^0.1.0", "@vern/ui": "workspace:*" },
 			},
 			null,
 			2,
@@ -657,9 +657,9 @@ describe("the CLI, which a project installs from npm", () => {
 		const base = initRepo(root, {
 			"package.json": MANIFEST,
 			"moon.yml": "tasks:\n  check-ports:\n    command: bun run vern check-ports\n",
-			"README.md": "# Vern\n\nA vern project installs @vern/cli.\n",
+			"README.md": "# Vern\n\nA vern project installs @tsanyqudsi/vern.\n",
 			"packages/ui/package.json": '{"name":"@vern/ui"}\n',
-			"packages/cli/package.json": '{"name":"@vern/cli","bin":{"vern":"src/bin.ts"}}\n',
+			"packages/cli/package.json": '{"name":"@tsanyqudsi/vern","bin":{"vern":"src/bin.ts"}}\n',
 			"packages/cli/src/bin.ts": 'const UPSTREAM = "vern";\n',
 			".github/workflows/cli.yml": "name: CLI\n",
 			".github/workflows/templates.yml": "name: Templates\n",
@@ -694,11 +694,11 @@ describe("the CLI, which a project installs from npm", () => {
 		const manifest = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
 		expect(manifest.name).toBe("acme");
 		expect(manifest.scripts.setup).toBe("vern setup");
-		expect(manifest.scripts["project:update"]).toBe("bunx @vern/cli@latest project:update");
-		expect(manifest.devDependencies).toEqual({ "@vern/cli": "^0.1.0", "@acme/ui": "workspace:*" });
+		expect(manifest.scripts["project:update"]).toBe("bunx @tsanyqudsi/vern@latest project:update");
+		expect(manifest.devDependencies).toEqual({ "@tsanyqudsi/vern": "^0.1.0", "@acme/ui": "workspace:*" });
 		expect(readFileSync(resolve(root, "moon.yml"), "utf8")).toContain("bun run vern check-ports");
 		expect(readFileSync(resolve(root, "README.md"), "utf8")).toBe(
-			"# Acme\n\nA acme project installs @vern/cli.\n",
+			"# Acme\n\nA acme project installs @tsanyqudsi/vern.\n",
 		);
 	});
 
@@ -706,7 +706,7 @@ describe("the CLI, which a project installs from npm", () => {
 		const { root, base } = template("vern-rename-keep-cli-");
 		renameProject(root, { name: "Acme", slug: "acme", apply: true, base, keepCli: true });
 		expect(readFileSync(resolve(root, "packages/cli/src/bin.ts"), "utf8")).toBe('const UPSTREAM = "vern";\n');
-		expect(readFileSync(resolve(root, "packages/cli/package.json"), "utf8")).toContain('"@vern/cli"');
+		expect(readFileSync(resolve(root, "packages/cli/package.json"), "utf8")).toContain('"@tsanyqudsi/vern"');
 		expect(existsSync(resolve(root, ".github/workflows/cli.yml"))).toBe(true);
 	});
 
@@ -736,7 +736,7 @@ describe("the CLI, which a project installs from npm", () => {
 		write(root, "bun.lock", "{}\n");
 		commitAll(root, "a lockfile");
 		const bin = tempRoot("vern-failing-bun-");
-		write(bin, "bun", "#!/bin/sh\necho 'GET https://registry.npmjs.org/@vern%2fcli - 404' >&2\nexit 1\n");
+		write(bin, "bun", "#!/bin/sh\necho 'GET https://registry.npmjs.org/@tsanyqudsi%2fvern - 404' >&2\nexit 1\n");
 		chmodSync(resolve(bin, "bun"), 0o755);
 		process.env.PATH = bin + ":" + (originalPath ?? "");
 		expect(() => renameProject(root, { name: "Acme", slug: "acme", apply: true, base })).toThrow("404");
@@ -770,12 +770,12 @@ describe("the CLI, which a project installs from npm", () => {
 
 		mkdirSync(resolve(upstream, "packages/cli"), { recursive: true });
 		git(upstream, "mv", "scripts", "packages/cli/src");
-		write(upstream, "packages/cli/package.json", '{"name":"@vern/cli"}\n');
+		write(upstream, "packages/cli/package.json", '{"name":"@tsanyqudsi/vern"}\n');
 		write(upstream, ".github/workflows/cli.yml", "name: CLI\n");
 		write(
 			upstream,
 			"package.json",
-			'{\n  "name": "vern",\n  "scripts": {\n    "setup": "vern setup"\n  },\n  "devDependencies": {\n    "@vern/cli": "^0.1.0"\n  }\n}\n',
+			'{\n  "name": "vern",\n  "scripts": {\n    "setup": "vern setup"\n  },\n  "devDependencies": {\n    "@tsanyqudsi/vern": "^0.1.0"\n  }\n}\n',
 		);
 		commitAll(upstream, "the scripts become a package");
 
@@ -787,7 +787,7 @@ describe("the CLI, which a project installs from npm", () => {
 		const manifest = JSON.parse(readFileSync(resolve(consumer, "package.json"), "utf8"));
 		expect(manifest.name).toBe("acme");
 		expect(manifest.scripts.setup).toBe("vern setup");
-		expect(manifest.devDependencies["@vern/cli"]).toBe("^0.1.0");
+		expect(manifest.devDependencies["@tsanyqudsi/vern"]).toBe("^0.1.0");
 		expect(existsState(consumer)).toBe(false);
 	});
 });

@@ -11,7 +11,7 @@ tasks:
   check-ports:
     command: bun run vern check-ports
     description: Check local service ports for conflicts
-    # The check is a command of @vern/cli, which `bun install` puts in
+    # The check is a command of @tsanyqudsi/vern, which `bun install` puts in
     # node_modules: a project with only APIs has no other task that installs.
     deps:
       - '~:install'

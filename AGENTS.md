@@ -14,7 +14,7 @@ the product on top of them; do not rebuild them.
 | `packages/<name>` | What the web apps share: `ui` (shadcn components and design tokens, `@vern/ui`), `web-auth` (sign-in, the session, and API calls as the user, `@vern/web-auth`), and `app-shell` (the dashboard's sidebar and header, the public pages' header and footer, `@vern/app-shell`) |
 | `crates/<name>` | What the APIs share, as crates of the Cargo workspace at the root: `svc-auth` (the token check), `svc-http` (`ApiError`, `/healthz`), `svc-boot` (startup and shutdown), `svc-db` (the database pool), `svc-events` (the outbox and the bus) |
 | `.vern/` | What the project is built from and follows: `templates/` (the generators behind `moon generate`), `agents/` (the recipes below), and `config.json` (the project's name, and the upstream commit it was last updated from) |
-| `@vern/cli` | Setup, provisioning, doctor, rename, and update: a package from npm, which the scripts of the root `package.json` run |
+| `@tsanyqudsi/vern` | Setup, provisioning, doctor, rename, and update: a package from npm, which the scripts of the root `package.json` run |
 | `roles.json`, `seed-users.json` | The product's roles, and local test users |
 | `deploy/dev/<name>` | What the apps run on while developing, as Compose stacks: `auth-server` (the local ZITADEL and Redis), and the generated `postgres`, `bus`, and `storage`. Configuration only |
 | `deploy/local`, `deploy/staging`, `deploy/prod` | One folder per environment that runs the whole product: its settings, and its Kustomize overlay. `deploy/compose` (Docker Compose, one server) and `deploy/base` (Kubernetes) hold what they share; see [deploy/README.md](deploy/README.md) |

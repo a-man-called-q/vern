@@ -33,7 +33,7 @@ drag and drop, toasts) are left out.
 
 In both web templates, a dependency that only a demo imports goes inside the
 `{% if include_demos %}` block at the top of `dependencies` in
-`package.json.tera`. The tests of `@vern/cli` generate each template with and
+`package.json.tera`. The tests of `@tsanyqudsi/vern` generate each template with and
 without demos and fail on a dependency nothing imports, or an import that is not
 listed.
 

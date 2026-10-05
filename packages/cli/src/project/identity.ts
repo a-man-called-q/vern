@@ -7,7 +7,7 @@ function escapeRegExp(value: string): string {
 }
 
 // Every project installs the same published CLI, so its package and its command
-// keep their names: `@vern/cli`, and `vern` in front of the name of a command.
+// keep their names: `@tsanyqudsi/vern`, and `vern` in front of the name of a command.
 const CLI_NAMES = new RegExp(
 	`${escapeRegExp(CLI_PACKAGE)}\\b|\\b${CLI_BIN}(?= (?:${COMMANDS.map(escapeRegExp).join("|")})\\b)`,
 	"g",

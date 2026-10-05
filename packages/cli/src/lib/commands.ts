@@ -1,5 +1,5 @@
 /** The package the CLI is published as, and the command it installs. */
-export const CLI_PACKAGE = "@vern/cli";
+export const CLI_PACKAGE = "@tsanyqudsi/vern";
 export const CLI_BIN = "vern";
 
 /**

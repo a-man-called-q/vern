@@ -5,14 +5,14 @@
 	"scripts": {
 		"setup": "vern setup",
 		"project:rename": "vern project:rename",
-		"project:update": "bunx @vern/cli@latest project:update",
+		"project:update": "bunx @tsanyqudsi/vern@latest project:update",
 		"project:stack": "vern project:stack",
 		"project:doctor": "vern project:doctor",
 		"zitadel:app": "vern zitadel:app",
 		"zitadel:service-account": "vern zitadel:service-account"
 	},
 	"devDependencies": {
-		"@vern/cli": "^0.1.0"
+		"@tsanyqudsi/vern": "^0.1.0"
 	},
 	"workspaces": ["apps/*", "packages/*"]
 }

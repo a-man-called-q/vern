@@ -1,4 +1,4 @@
-# @vern/cli
+# @tsanyqudsi/vern
 
 The commands of a project made from [Vern](https://github.com/a-man-called-q/vern):
 setup, the ZITADEL provisioning, the port check, doctor, rename, update, and the
@@ -9,7 +9,7 @@ through the scripts of its root `package.json`:
 | --- | --- |
 | `bun run setup` | `vern setup` |
 | `bun run project:rename` | `vern project:rename` |
-| `bun run project:update` | `bunx @vern/cli@latest project:update` |
+| `bun run project:update` | `bunx @tsanyqudsi/vern@latest project:update` |
 | `bun run project:stack` | `vern project:stack` |
 | `bun run project:doctor` | `vern project:doctor` |
 | `bun run zitadel:app` | `vern zitadel:app` |
@@ -44,7 +44,7 @@ commands → setup | project | doctor → zitadel → lib
 
 A new command gets its name in `src/lib/commands.ts`, its entry in `src/bin.ts`,
 and a script in the root `package.json`. A rename keeps the text `vern <command>`
-for the names in that list, and `@vern/cli`, as they are.
+for the names in that list, and `@tsanyqudsi/vern`, as they are.
 
 ## Releases
 
@@ -52,7 +52,7 @@ A project updates to Vern's `main` and installs the CLI from npm, so a change
 here reaches it only as a new version:
 
 1. Raise `version` in `package.json` in the pull request that changes `src/`
-   (the `CLI` workflow fails without it). Raise the range of `@vern/cli` in the
+   (the `CLI` workflow fails without it). Raise the range of `@tsanyqudsi/vern` in the
    root `package.json` too when the new version is outside it, which for a `0.x`
    version is every minor.
 2. Merge. The `CLI` workflow publishes a version npm does not have yet, with

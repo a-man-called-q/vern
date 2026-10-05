@@ -1,4 +1,4 @@
-# The source of @vern/cli, the commands behind `bun run setup` and the other
+# The source of @tsanyqudsi/vern, the commands behind `bun run setup` and the other
 # scripts of the root package.json. Only Vern's own repository holds it: a
 # project installs the package from npm. README.md says how it is released.
 tasks:

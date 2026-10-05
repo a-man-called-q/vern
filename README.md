@@ -22,7 +22,7 @@ against.
 | `packages/web-auth` | Sign-in, the session, and API calls as the signed-in user, for every web app (`@vern/web-auth`) |
 | `packages/app-shell` | The frame every web app shares: the dashboard's sidebar and header, the public pages' header and footer, the theme toggle (`@vern/app-shell`) |
 | `crates/` | What the Axum APIs share, as crates of the Cargo workspace at the root (`Cargo.toml`): the token check, the error type, startup and shutdown, the database pool, and events |
-| `@vern/cli` | Project tools: setup, provisioning, rename, update, and doctor. A package from npm, behind the scripts of the root `package.json` |
+| `@tsanyqudsi/vern` | Project tools: setup, provisioning, rename, update, and doctor. A package from npm, behind the scripts of the root `package.json` |
 
 Projects are generated from the templates by kind: web apps into
 `apps/<name>`, Axum APIs into `services/<name>`, and the PostgreSQL, bus, and
@@ -382,7 +382,7 @@ be lowercase kebab-case and becomes the UI package scope (`@acme-platform/ui`).
 The rename updates text references to Vern (URLs and container images keep
 their names) and records the project identity and the Vern commit it started
 from in `.vern/config.json`. It also removes `packages/cli`, the source of
-`@vern/cli`, which only a clone has: a project installs that package from npm,
+`@tsanyqudsi/vern`, which only a clone has: a project installs that package from npm,
 so run `bun install` after the rename. The imports of the shared packages get a new
 scope, so the rename also puts each one where Biome sorts that scope and wraps
 or joins its line, in the packages and in the templates: `check` passes right
@@ -410,18 +410,18 @@ bun run project:update -- --apply
 `npx create-vern update` runs the same command from any folder of the project
 and takes the same `--apply` and `--continue` flags.
 
-`project:update` runs the newest `@vern/cli` on npm
-(`bunx @vern/cli@latest project:update`), not the one installed in the project:
+`project:update` runs the newest `@tsanyqudsi/vern` on npm
+(`bunx @tsanyqudsi/vern@latest project:update`), not the one installed in the project:
 the update that brings a change is the one that knows how to apply it. Every
 other command runs the installed version, which an update raises together with
 the other packages.
 
-A project from before `@vern/cli` has the same code as a `scripts/` folder at
+A project from before `@tsanyqudsi/vern` has the same code as a `scripts/` folder at
 its root, and its `project:update` still runs that copy. Start its next update
 with the package instead:
 
 ```sh
-bunx @vern/cli@latest project:update --apply
+bunx @tsanyqudsi/vern@latest project:update --apply
 ```
 
 That update deletes `scripts/`, makes the scripts of the root `package.json` run
