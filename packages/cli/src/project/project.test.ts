@@ -169,10 +169,11 @@ describe("rename-project", () => {
 		expect(readFileSync(resolve(root, ".gitignore"), "utf8")).toContain(
 			".vern/update-state.json",
 		);
-		// Scripts are Vern's tooling: a rename leaves them as they are.
+		// A scripts/ folder is the project's own, now that Vern's tooling is a
+		// package (what a rename does with that is tested further down).
 		expect(
 			readFileSync(resolve(root, "scripts/check-ports.ts"), "utf8"),
-		).toBe("const label = 'vern';\n");
+		).toBe("const label = 'acme-platform';\n");
 		expect(readConfig(root)).toEqual({
 			schemaVersion: 1,
 			project: { name: "Acme Platform", slug: "acme-platform" },
@@ -632,6 +633,162 @@ describe("update-project and scripts", () => {
 			'const fallback = "Vern";\nexport const steps = 2;\n',
 		);
 		expect(existsSync(resolve(consumer, "scripts/zitadel-smtp.ts"))).toBe(false);
+	});
+});
+
+describe("the CLI, which a project installs from npm", () => {
+	const MANIFEST =
+		JSON.stringify(
+			{
+				name: "vern",
+				scripts: {
+					setup: "vern setup",
+					"project:update": "bunx @vern/cli@latest project:update",
+				},
+				devDependencies: { "@vern/cli": "^0.1.0", "@vern/ui": "workspace:*" },
+			},
+			null,
+			2,
+		) + "\n";
+
+	/** Vern's own repository, as far as a rename cares. */
+	function template(prefix: string) {
+		const root = tempRoot(prefix);
+		const base = initRepo(root, {
+			"package.json": MANIFEST,
+			"moon.yml": "tasks:\n  check-ports:\n    command: bun run vern check-ports\n",
+			"README.md": "# Vern\n\nA vern project installs @vern/cli.\n",
+			"packages/ui/package.json": '{"name":"@vern/ui"}\n',
+			"packages/cli/package.json": '{"name":"@vern/cli","bin":{"vern":"src/bin.ts"}}\n',
+			"packages/cli/src/bin.ts": 'const UPSTREAM = "vern";\n',
+			".github/workflows/cli.yml": "name: CLI\n",
+			".github/workflows/templates.yml": "name: Templates\n",
+		});
+		git(root, "update-ref", "refs/vern/upstream-main", base);
+		return { root, base };
+	}
+
+	test("keeps the names of the package and of its command", () => {
+		const from = { name: "Vern", slug: "vern" };
+		const to = { name: "Acme", slug: "acme" };
+		expect(replaceIdentity(MANIFEST, from, to)).toBe(
+			MANIFEST.replace('"name": "vern"', '"name": "acme"').replace("@vern/ui", "@acme/ui"),
+		);
+		expect(replaceIdentity("command: bun run vern check-ports", from, to)).toBe(
+			"command: bun run vern check-ports",
+		);
+		// Anything else that is called vern is the project.
+		expect(replaceIdentity("vern-auth, @vern/client, vern setup-me", from, to)).toBe(
+			"acme-auth, @acme/client, vern setup-me",
+		);
+		expect(replaceIdentity("the vern stack, vern project", from, to)).toBe("the acme stack, acme project");
+	});
+
+	test("a rename removes its source and its workflow", () => {
+		const { root, base } = template("vern-rename-cli-");
+		renameProject(root, { name: "Acme", slug: "acme", apply: true, base });
+		expect(existsSync(resolve(root, "packages/cli"))).toBe(false);
+		expect(existsSync(resolve(root, ".github/workflows/cli.yml"))).toBe(false);
+		expect(existsSync(resolve(root, ".github/workflows/templates.yml"))).toBe(true);
+		expect(existsSync(resolve(root, "packages/ui/package.json"))).toBe(true);
+		const manifest = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
+		expect(manifest.name).toBe("acme");
+		expect(manifest.scripts.setup).toBe("vern setup");
+		expect(manifest.scripts["project:update"]).toBe("bunx @vern/cli@latest project:update");
+		expect(manifest.devDependencies).toEqual({ "@vern/cli": "^0.1.0", "@acme/ui": "workspace:*" });
+		expect(readFileSync(resolve(root, "moon.yml"), "utf8")).toContain("bun run vern check-ports");
+		expect(readFileSync(resolve(root, "README.md"), "utf8")).toBe(
+			"# Acme\n\nA acme project installs @vern/cli.\n",
+		);
+	});
+
+	test("a rename with keepCli leaves them, as Vern wrote them", () => {
+		const { root, base } = template("vern-rename-keep-cli-");
+		renameProject(root, { name: "Acme", slug: "acme", apply: true, base, keepCli: true });
+		expect(readFileSync(resolve(root, "packages/cli/src/bin.ts"), "utf8")).toBe('const UPSTREAM = "vern";\n');
+		expect(readFileSync(resolve(root, "packages/cli/package.json"), "utf8")).toContain('"@vern/cli"');
+		expect(existsSync(resolve(root, ".github/workflows/cli.yml"))).toBe(true);
+	});
+
+	test("a rename leaves a project's own packages/cli", () => {
+		const root = tempRoot("vern-rename-own-cli-");
+		const base = initRepo(root, {
+			"package.json": '{"name":"acme"}\n',
+			"packages/cli/package.json": '{"name":"@acme/cli"}\n',
+			".vern/config.json": "{}\n",
+		});
+		write(
+			root,
+			".vern/config.json",
+			JSON.stringify({
+				schemaVersion: 1,
+				project: { name: "Acme", slug: "acme" },
+				upstream: { url: root, branch: "main", lastSyncedSha: base },
+			} satisfies ProjectConfig) + "\n",
+		);
+		commitAll(root, "a project");
+		renameProject(root, { name: "Beta", slug: "beta", apply: true });
+		expect(readFileSync(resolve(root, "packages/cli/package.json"), "utf8")).toBe('{"name":"@beta/cli"}\n');
+	});
+
+	test("a failed rename puts the source back", () => {
+		const { root, base } = template("vern-rename-cli-fails-");
+		write(root, "bun.lock", "{}\n");
+		commitAll(root, "a lockfile");
+		const bin = tempRoot("vern-failing-bun-");
+		write(bin, "bun", "#!/bin/sh\necho 'GET https://registry.npmjs.org/@vern%2fcli - 404' >&2\nexit 1\n");
+		chmodSync(resolve(bin, "bun"), 0o755);
+		process.env.PATH = bin + ":" + (originalPath ?? "");
+		expect(() => renameProject(root, { name: "Acme", slug: "acme", apply: true, base })).toThrow("404");
+		expect(readFileSync(resolve(root, "packages/cli/src/bin.ts"), "utf8")).toBe('const UPSTREAM = "vern";\n');
+		expect(existsSync(resolve(root, ".github/workflows/cli.yml"))).toBe(true);
+		expect(git(root, "status", "--porcelain")).toBe("");
+	});
+
+	test("an update takes the scripts away and never brings the source", () => {
+		const upstream = tempRoot("vern-upstream-cli-");
+		const consumer = tempRoot("vern-consumer-cli-");
+		const base = initRepo(upstream, {
+			"package.json": '{\n  "name": "vern",\n  "scripts": {\n    "setup": "bun scripts/setup.ts"\n  }\n}\n',
+			"scripts/setup.ts": 'const fallback = "Vern";\n',
+			"scripts/lib/env.ts": "export const env = 1;\n",
+		});
+		git(consumer, "clone", upstream, ".");
+		git(consumer, "config", "user.name", "Vern Script Tests");
+		git(consumer, "config", "user.email", "vern-tests@example.test");
+		write(consumer, "package.json", '{\n  "name": "acme",\n  "scripts": {\n    "setup": "bun scripts/setup.ts"\n  }\n}\n');
+		write(
+			consumer,
+			".vern/config.json",
+			JSON.stringify({
+				schemaVersion: 1,
+				project: { name: "Acme", slug: "acme" },
+				upstream: { url: upstream, branch: "main", lastSyncedSha: base },
+			} satisfies ProjectConfig) + "\n",
+		);
+		commitAll(consumer, "renamed");
+
+		mkdirSync(resolve(upstream, "packages/cli"), { recursive: true });
+		git(upstream, "mv", "scripts", "packages/cli/src");
+		write(upstream, "packages/cli/package.json", '{"name":"@vern/cli"}\n');
+		write(upstream, ".github/workflows/cli.yml", "name: CLI\n");
+		write(
+			upstream,
+			"package.json",
+			'{\n  "name": "vern",\n  "scripts": {\n    "setup": "vern setup"\n  },\n  "devDependencies": {\n    "@vern/cli": "^0.1.0"\n  }\n}\n',
+		);
+		commitAll(upstream, "the scripts become a package");
+
+		installFakeCommands();
+		updateProject(consumer, { apply: true, continueUpdate: false });
+		expect(existsSync(resolve(consumer, "scripts"))).toBe(false);
+		expect(existsSync(resolve(consumer, "packages/cli"))).toBe(false);
+		expect(existsSync(resolve(consumer, ".github/workflows/cli.yml"))).toBe(false);
+		const manifest = JSON.parse(readFileSync(resolve(consumer, "package.json"), "utf8"));
+		expect(manifest.name).toBe("acme");
+		expect(manifest.scripts.setup).toBe("vern setup");
+		expect(manifest.devDependencies["@vern/cli"]).toBe("^0.1.0");
+		expect(existsState(consumer)).toBe(false);
 	});
 });
 

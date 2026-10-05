@@ -1,10 +1,9 @@
-import { runCommand } from "./lib/cli";
 import { ROOT } from "./lib/paths";
 import { chooseEnvironments, describeResult, environmentFlag } from "./project/choose";
 import { CONFIG_PATH, readConfig } from "./project/config";
 import { type Choice, describeEnvironments, type Environments } from "./project/environments";
 
-const USAGE = `Usage: bun scripts/stack-project.ts --local <how> --staging <how> --prod <how>
+const USAGE = `Usage: bun run project:stack -- --local <how> --staging <how> --prod <how>
 
 Chooses how each environment of the project runs, and makes the project hold
 only what that needs.
@@ -37,24 +36,22 @@ function parseArgs(argv: string[]): Partial<Environments> | undefined {
 	return requested;
 }
 
-if (import.meta.main)
-	runCommand("stack-project", () => {
-		const argv = process.argv.slice(2);
-		const requested = parseArgs(argv);
-		if (!requested) {
-			console.log(USAGE);
-			return undefined;
-		}
-		if (argv.length === 0) {
-			const environments = readConfig(ROOT)?.environments;
-			console.log(
-				environments
-					? `Environments: ${describeEnvironments(environments)}.\n`
-					: "This project has not chosen how its environments run, so it holds both ways.\n",
-			);
-			console.log(USAGE);
-			return undefined;
-		}
-		for (const line of describeResult(chooseEnvironments(ROOT, requested))) console.log(line);
+export function stackCommand(argv: string[]): undefined {
+	const requested = parseArgs(argv);
+	if (!requested) {
+		console.log(USAGE);
 		return undefined;
-	});
+	}
+	if (argv.length === 0) {
+		const environments = readConfig(ROOT)?.environments;
+		console.log(
+			environments
+				? `Environments: ${describeEnvironments(environments)}.\n`
+				: "This project has not chosen how its environments run, so it holds both ways.\n",
+		);
+		console.log(USAGE);
+		return undefined;
+	}
+	for (const line of describeResult(chooseEnvironments(ROOT, requested))) console.log(line);
+	return undefined;
+}

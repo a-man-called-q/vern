@@ -1,9 +1,17 @@
+import { CLI_BIN, CLI_PACKAGE, COMMANDS } from "../lib/commands";
 import { fitImports, isSourceFile } from "./imports";
 import { fitLogoText, isLogoSvg } from "./logo";
 
 function escapeRegExp(value: string): string {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
+// Every project installs the same published CLI, so its package and its command
+// keep their names: `@vern/cli`, and `vern` in front of the name of a command.
+const CLI_NAMES = new RegExp(
+	`${escapeRegExp(CLI_PACKAGE)}\\b|\\b${CLI_BIN}(?= (?:${COMMANDS.map(escapeRegExp).join("|")})\\b)`,
+	"g",
+);
 
 export function replaceIdentity(
 	text: string,
@@ -13,6 +21,7 @@ export function replaceIdentity(
 	if (from.name === to.name && from.slug === to.slug) return text;
 	const urls: string[] = [];
 	const configPaths: string[] = [];
+	const cliNames: string[] = [];
 	// URLs and container images name published upstream resources, such as the
 	// Vern Login image, that keep their names after a rename.
 	const protectedText = text
@@ -24,6 +33,11 @@ export function replaceIdentity(
 		.replace(/\.vern(?=\/|$)/g, () => {
 			const marker = `__VERN_CONFIG_PATH_${configPaths.length}__`;
 			configPaths.push(".vern");
+			return marker;
+		})
+		.replace(CLI_NAMES, (name) => {
+			const marker = `__VERN_CLI_NAME_${cliNames.length}__`;
+			cliNames.push(name);
 			return marker;
 		});
 	// One pass over the original text: a replacement is never scanned again, so a
@@ -56,6 +70,10 @@ export function replaceIdentity(
 	output = output.replace(
 		/__VERN_CONFIG_PATH_(\d+)__/g,
 		(_match, index: string) => configPaths[Number(index)],
+	);
+	output = output.replace(
+		/__VERN_CLI_NAME_(\d+)__/g,
+		(_match, index: string) => cliNames[Number(index)],
 	);
 	return output;
 }

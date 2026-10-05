@@ -1,0 +1,124 @@
+name: CLI
+
+# Tests @vern/cli (packages/cli), the commands behind `bun run setup` and the
+# other scripts of the root package.json, and publishes it to npm when its
+# version changes on main. Only Vern's own repository has the source and this
+# workflow: a project installs the package, and a rename removes both.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install the pinned toolchain
+        uses: moonrepo/setup-toolchain@v0
+        with:
+          auto-install: true
+
+      - name: Install workspace dependencies
+        run: bun install --frozen-lockfile
+
+      # zitadel-app.test.ts checks its requests against the ZITADEL release the
+      # auth stack runs.
+      - name: Download the ZITADEL API definitions
+        run: |
+          version="$(grep '^ZITADEL_VERSION=' deploy/dev/auth-server/.env.example | cut -d= -f2)"
+          dir="$RUNNER_TEMP/zitadel-proto"
+          mkdir -p "$dir"
+          for file in management.proto admin.proto app.proto user.proto project.proto member.proto object.proto \
+            user/v2/user_service.proto user/v2/user.proto user/v2/email.proto user/v2/password.proto \
+            org/v2/org_service.proto org/v2/org.proto org/v2/query.proto settings.proto; do
+            mkdir -p "$dir/$(dirname "$file")"
+            curl --fail --silent --show-error --location --output "$dir/$file" \
+              "https://raw.githubusercontent.com/zitadel/zitadel/${version}/proto/zitadel/${file}"
+          done
+          echo "ZITADEL_PROTO_DIR=$dir" >> "$GITHUB_ENV"
+
+      - name: Test the CLI
+        run: bun test packages/cli
+
+      # What npm would publish: the source without its tests.
+      - name: List the files of the package
+        working-directory: packages/cli
+        run: bun pm pack --dry-run
+
+  # A project updates to main and installs the CLI from npm, so a change to the
+  # CLI reaches it only as a new version: without one, main's templates and the
+  # CLI a project runs would be two different states of this repository.
+  version:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require a new version when the CLI changed
+        env:
+          BASE: origin/${{ github.base_ref }}
+        run: |
+          if git diff --quiet "$BASE...HEAD" -- packages/cli/package.json packages/cli/src ':(exclude)packages/cli/src/**/*.test.ts'; then
+            echo "The CLI is as it is on $BASE."
+            exit 0
+          fi
+          old="$(git show "$BASE:packages/cli/package.json" 2>/dev/null | jq -r .version || true)"
+          new="$(jq -r .version packages/cli/package.json)"
+          if [ "$old" = "$new" ]; then
+            echo "::error file=packages/cli/package.json::The CLI changed but its version is still $new. Raise it, and the range of @vern/cli in the root package.json when the new version is outside it."
+            exit 1
+          fi
+          echo "The CLI goes from ${old:-nothing} to $new."
+
+  publish:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.repository == 'a-man-called-q/vern'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      # npm takes the workflow's identity in place of a token (trusted
+      # publishing), and records where the package was built.
+      id-token: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install the pinned toolchain
+        uses: moonrepo/setup-toolchain@v0
+        with:
+          auto-install: true
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm 11.5.1 or later.
+      - name: Install the latest npm
+        run: npm install --global npm@latest
+
+      # Bun packs the files the test job listed; npm uploads them.
+      - name: Publish a version npm does not have yet
+        working-directory: packages/cli
+        run: |
+          name="$(jq -r .name package.json)"
+          version="$(jq -r .version package.json)"
+          if [ "$(npm view "$name@$version" version 2>/dev/null)" = "$version" ]; then
+            echo "$name $version is already on npm."
+            exit 0
+          fi
+          bun pm pack --filename "$RUNNER_TEMP/cli.tgz"
+          npm publish "$RUNNER_TEMP/cli.tgz" --access public

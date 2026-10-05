@@ -23,7 +23,14 @@ generated and `bun.lock` committed):
 
 1. Point DNS records for the three hostnames at the server, and open ports 80
    and 443. Let's Encrypt needs both before the first start.
-2. Create the environment's settings file:
+2. Install the project's commands. `--filter .` leaves out the packages of the
+   apps, which the images install for themselves:
+
+   ```sh
+   bun install --filter .
+   ```
+
+3. Create the environment's settings file:
 
    ```sh
    bun run setup -- --compose prod
@@ -33,7 +40,7 @@ generated and `bun.lock` committed):
    `deploy/prod/.env` and stops. Set its first block (hostnames, email, and the
    apps to deploy).
 
-3. Run it again:
+4. Run it again:
 
    ```sh
    bun run setup -- --compose prod

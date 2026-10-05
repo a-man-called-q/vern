@@ -33,8 +33,9 @@ drag and drop, toasts) are left out.
 
 In both web templates, a dependency that only a demo imports goes inside the
 `{% if include_demos %}` block at the top of `dependencies` in
-`package.json.tera`. `bun test scripts` generates each template with and without
-demos and fails on a dependency nothing imports, or an import that is not listed.
+`package.json.tera`. The tests of `@vern/cli` generate each template with and
+without demos and fail on a dependency nothing imports, or an import that is not
+listed.
 
 ## Next.js
 

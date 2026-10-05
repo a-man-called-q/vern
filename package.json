@@ -3,14 +3,16 @@
 	"private": true,
 	"packageManager": "bun@1.4.2",
 	"scripts": {
-		"setup": "bun scripts/setup.ts",
-		"project:rename": "bun scripts/rename-project.ts",
-		"project:update": "bun scripts/update-project.ts",
-		"project:stack": "bun scripts/stack-project.ts",
-		"project:doctor": "bun scripts/doctor.ts",
-		"zitadel:app": "bun scripts/zitadel-app.ts",
-		"zitadel:service-account": "bun scripts/zitadel-service-account.ts",
-		"test:scripts": "bun test scripts"
+		"setup": "vern setup",
+		"project:rename": "vern project:rename",
+		"project:update": "bunx @vern/cli@latest project:update",
+		"project:stack": "vern project:stack",
+		"project:doctor": "vern project:doctor",
+		"zitadel:app": "vern zitadel:app",
+		"zitadel:service-account": "vern zitadel:service-account"
+	},
+	"devDependencies": {
+		"@vern/cli": "^0.1.0"
 	},
 	"workspaces": ["apps/*", "packages/*"]
 }

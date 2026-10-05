@@ -1,0 +1,24 @@
+{
+	"name": "@vern/cli",
+	"version": "0.1.0",
+	"description": "The commands of a Vern project: setup, doctor, rename, update, and the ZITADEL provisioning.",
+	"license": "MIT",
+	"type": "module",
+	"bin": {
+		"vern": "src/bin.ts"
+	},
+	"files": ["src", "!src/**/*.test.ts", "!src/zitadel/testing.ts"],
+	"engines": {
+		"bun": ">=1.4.0"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/a-man-called-q/vern.git",
+		"directory": "packages/cli"
+	},
+	"homepage": "https://github.com/a-man-called-q/vern/tree/main/packages/cli#readme",
+	"keywords": ["vern", "zitadel", "moon", "cli"],
+	"publishConfig": {
+		"access": "public"
+	}
+}

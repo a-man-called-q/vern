@@ -149,7 +149,7 @@ export function chooseEnvironments(root: string, requested: Partial<Environments
 	const config = readConfig(root);
 	if (!config) {
 		throw new Error(
-			`${CONFIG_PATH} is missing: this is not a project yet (or it is the Vern template itself, which keeps both ways). Run rename-project.ts first.`,
+			`${CONFIG_PATH} is missing: this is not a project yet (or it is the Vern template itself, which keeps both ways). Run \`bun run project:rename\` first.`,
 		);
 	}
 	const next = {} as Environments;

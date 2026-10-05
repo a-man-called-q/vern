@@ -1,6 +1,5 @@
 import { parseArgs } from "node:util";
 import { projectPath } from "./lib/projects";
-import { runCommand } from "./lib/cli";
 import { envFiles, parseEnv, readEffectiveEnv, setEnvValue } from "./lib/env";
 import { ROOT } from "./lib/paths";
 import { readConfig } from "./project/config";
@@ -118,5 +117,3 @@ export async function main(argv: string[], deps: ServiceAccountDeps = {}): Promi
 	log(`${appPath}: wrote a new token for "${userName}" to ${envKey} in ${appPath}/.env`);
 	return 0;
 }
-
-if (import.meta.main) runCommand("zitadel:service-account", () => main(process.argv.slice(2)));

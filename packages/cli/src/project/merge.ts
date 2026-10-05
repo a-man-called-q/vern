@@ -16,7 +16,7 @@ import { listProjects } from "../lib/projects";
 import { git, run } from "../lib/run";
 import { CONFIG_PATH, type ProjectConfig, UPDATE_STATE_PATH } from "./config";
 import { type Environments, isUsed } from "./environments";
-import { isVernScript, readGitFile } from "./files";
+import { isVernOnly, isVernScript, readGitFile } from "./files";
 import { rebrandText, replaceIdentity } from "./identity";
 
 /** A file the merge left for the user, and its hash then, to tell when it is resolved. */
@@ -47,6 +47,8 @@ function shouldSkipUpstreamPath(
 	generatedDirs: Set<string>,
 	environments: Environments | undefined,
 ): boolean {
+	// The source of the CLI: the project installs the package.
+	if (isVernOnly(path)) return true;
 	// A way to run an environment that the project does not use stays out.
 	if (!isUsed(path, environments)) return true;
 	if (
@@ -76,8 +78,9 @@ function rebrand(data: Buffer, path: string, config: ProjectConfig): Buffer {
 
 /**
  * Upstream's copy of a file as this project's rename would have written it, so
- * the merge compares like with like. Scripts are never rebranded (see
- * isVernScript). What Vern ships under .vern/ (the templates, the recipes) is:
+ * the merge compares like with like. The scripts of a project from before the
+ * CLI was a package are never rebranded (see isVernScript). What Vern ships
+ * under .vern/ (the templates, the recipes) is:
  * a rename rewrites it like any other file.
  */
 export function rebrandSnapshot(

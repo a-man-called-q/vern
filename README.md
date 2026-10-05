@@ -22,7 +22,7 @@ against.
 | `packages/web-auth` | Sign-in, the session, and API calls as the signed-in user, for every web app (`@vern/web-auth`) |
 | `packages/app-shell` | The frame every web app shares: the dashboard's sidebar and header, the public pages' header and footer, the theme toggle (`@vern/app-shell`) |
 | `crates/` | What the Axum APIs share, as crates of the Cargo workspace at the root (`Cargo.toml`): the token check, the error type, startup and shutdown, the database pool, and events |
-| `scripts/` | Project tools: setup, provisioning, rename, update, and doctor |
+| `@vern/cli` | Project tools: setup, provisioning, rename, update, and doctor. A package from npm, behind the scripts of the root `package.json` |
 
 Projects are generated from the templates by kind: web apps into
 `apps/<name>`, Axum APIs into `services/<name>`, and the PostgreSQL, bus, and
@@ -339,7 +339,6 @@ above it are updated by `bun run project:update`.
 | `bun run zitadel:service-account -- --app <name>` | Create a service user that manages users, and store its token in the app's `.env` |
 | `bun run project:stack -- --local <how> --staging <how> --prod <how>` | Choose how each environment runs (`none`, `compose`, `kubernetes`), and keep only the files of that way |
 | `bun run project:doctor` | Check the tools, configuration, and ports |
-| `bun test scripts` | Test the workspace scripts |
 
 The root `.env` holds shared settings (`ZITADEL_ISSUER`, `ZITADEL_PROJECT_ID`,
 `AUTH_HTTP_PORT`, `REDIS_PORT`, `REDIS_URL`); each app's `.env` holds its own
@@ -382,7 +381,9 @@ The name accepts letters, numbers, spaces, periods, and hyphens. The slug must
 be lowercase kebab-case and becomes the UI package scope (`@acme-platform/ui`).
 The rename updates text references to Vern (URLs and container images keep
 their names) and records the project identity and the Vern commit it started
-from in `.vern/config.json`. The imports of the shared packages get a new
+from in `.vern/config.json`. It also removes `packages/cli`, the source of
+`@vern/cli`, which only a clone has: a project installs that package from npm,
+so run `bun install` after the rename. The imports of the shared packages get a new
 scope, so the rename also puts each one where Biome sorts that scope and wraps
 or joins its line, in the packages and in the templates: `check` passes right
 after a rename, and in an app generated after it. If Git history cannot
@@ -406,27 +407,42 @@ package versions (Rust upgrades need `cargo install cargo-edit`):
 bun run project:update -- --apply
 ```
 
-`npx create-vern update` runs the same script from any folder of the project and
-takes the same `--apply` and `--continue` flags.
+`npx create-vern update` runs the same command from any folder of the project
+and takes the same `--apply` and `--continue` flags.
+
+`project:update` runs the newest `@vern/cli` on npm
+(`bunx @vern/cli@latest project:update`), not the one installed in the project:
+the update that brings a change is the one that knows how to apply it. Every
+other command runs the installed version, which an update raises together with
+the other packages.
+
+A project from before `@vern/cli` has the same code as a `scripts/` folder at
+its root, and its `project:update` still runs that copy. Start its next update
+with the package instead:
+
+```sh
+bunx @vern/cli@latest project:update --apply
+```
+
+That update deletes `scripts/`, makes the scripts of the root `package.json` run
+the `vern` command, and installs the package; from then on it is
+`bun run project:update` again. A script you changed yourself stays as a
+conflict. The code is no longer the project's to edit, so propose the change in
+[Vern's repository](https://github.com/a-man-called-q/vern), and delete the
+file.
 
 A project made before the layout of today (APIs in `services/`, the Compose
 stacks in `deploy/dev/`, and one folder per environment in `deploy/`) gets it
-from its next update. That update still runs the project's old updater, which
-brings the new files but cannot move the project's own: the stacks it generated
-stay in `infra/` (or `apps/`), with the local `.env` of `auth-server`, and a
-deployment's settings stay in `deploy/.env` and `deploy/k8s/overlays/`.
-`bun run project:doctor` names each of them, and
-`bun run project:update -- --migrate` moves them: the stacks with `git mv`
-(local `.env` files and keys go along, and the paths in them are fixed),
-`deploy/.env` and `deploy/secrets/` to `deploy/prod/` (to `deploy/local/` when
-its hostnames are under `localtest.me`), and each overlay's `settings.env` and
-`generated/` to `deploy/prod/` or `deploy/local/`. When the update stops on a
-conflict, `bun run project:update -- --continue` does the same once the
-conflicts are resolved. A file of the old layout that you changed yourself
-(`deploy/docker-compose.yml`, a brand file of the old `auth-server`) stays where
-it is, for you to carry over to its new place and delete. Docker keeps the
-volumes: no Compose project changes its name. A rename no longer touches
-`scripts/`, which merges as Vern ships it.
+from its next update, which also moves the project's own folders: the stacks it
+generated with `git mv` (local `.env` files and keys go along, and the paths in
+them are fixed), `deploy/.env` and `deploy/secrets/` to `deploy/prod/` (to
+`deploy/local/` when its hostnames are under `localtest.me`), and each overlay's
+`settings.env` and `generated/` to `deploy/prod/` or `deploy/local/`.
+`bun run project:update -- --migrate` does only the moves, and
+`bun run project:doctor` names what is still in an old place. A file of the old
+layout that you changed yourself (`deploy/docker-compose.yml`, a brand file of
+the old `auth-server`) stays where it is, for you to carry over to its new place
+and delete. Docker keeps the volumes: no Compose project changes its name.
 
 The updater needs a clean working tree, so commit the rename and your changes
 first. Generated app source is not synchronized, but its dependency manifests
@@ -437,21 +453,6 @@ do the same when you bump them by hand. If a conflict or a failed check stops th
 review branch and run `bun run project:update -- --continue`. Review the diff
 and merge it yourself. An update that fails before it has merged the files
 undoes its review branch, and can be applied again.
-
-The updater that runs is the project's own copy, from its last update. An older
-one stops with `git merge-file failed for <file>:`, and nothing after the colon,
-when one file conflicts in two or more places, and leaves a review branch that
-neither `--apply` nor `--continue` accepts. Discard it (replace `main` with the
-branch you were on):
-
-```sh
-git reset --hard && git clean -fd && git switch main && git branch -D vern/update-<sha>
-```
-
-Then, in `scripts/project/merge.ts` (`scripts/update-project.ts` in an older
-project), change `result.status > 1` to `result.status > 127` and
-`result.status === 1` to `result.status > 0`, commit, and apply the update
-again.
 
 ### Edits an update asks for
 
@@ -490,16 +491,10 @@ edit on the review branch and run `bun run project:update -- --continue`.
   with `runFromWorkspaceRoot: true`. Then run `cargo check` once and commit the
   `Cargo.lock` at the root.
 - **The templates and the recipes, in `.vern/`.** `.templates/` is now
-  `.vern/templates/` and `docs/agents/` is `.vern/agents/`. The update that
-  brings the move runs the project's old updater, which writes the two folders
-  with the template's names in them instead of your project's. Before that
-  update, delete `|| path.startsWith(".vern/")` from `rebrandSnapshot` in
-  `scripts/project/merge.ts` and commit; the files then arrive renamed. The old
-  updater also leaves `.templates/` and `docs/agents/` behind as empty folders
-  to delete, and a template or recipe you changed yourself stays there as a
-  conflict, for you to carry over to its new place. The `AGENTS.md` of an app
-  or API generated earlier links to `../../docs/agents/`: change that to
-  `../../.vern/agents/`.
+  `.vern/templates/` and `docs/agents/` is `.vern/agents/`. A template or recipe
+  you changed yourself stays in its old folder as a conflict, for you to carry
+  over to its new place. The `AGENTS.md` of an app or API generated earlier
+  links to `../../docs/agents/`: change that to `../../.vern/agents/`.
 - **Biome 2.5** reports each app's `biome.json` as out of date. These are
   notes, not failures; `bunx biome migrate --write` in the app's folder brings
   the file up to date.
@@ -511,18 +506,6 @@ edit on the review branch and run `bun run project:update -- --continue`.
   rename now moves and wraps them, and an update does the same to each file it
   brings. Files it does not bring, and apps generated earlier, are fixed with
   `bunx biome check --write` in the folder of the package or the app.
-- **The logos, on the update that moves the auth stack to `deploy/dev/`.** That
-  update runs the project's old updater, which writes
-  `deploy/dev/auth-server/brand/logo-light.svg` and `logo-dark.svg` without
-  fitting the product's name to the logo's width. Restore the fitted ones from
-  the old folder, with the branch you were on in place of `main`:
-
-  ```sh
-  git show main:apps/auth-server/brand/logo-light.svg > deploy/dev/auth-server/brand/logo-light.svg
-  git show main:apps/auth-server/brand/logo-dark.svg > deploy/dev/auth-server/brand/logo-dark.svg
-  ```
-
-  (`infra/auth-server/` when the stack was there.)
 
 ## Deploy
 

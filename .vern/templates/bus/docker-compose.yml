@@ -10,7 +10,7 @@ services:
     # health check uses (inside the container only).
     command: ["--jetstream", "--store_dir", "/data", "--http_port", "8222"]
     # A name of its own, not PORT: a task that starts this stack as a dependency
-    # may run with the PORT of the app it was started for. scripts/check-ports.ts
+    # may run with the PORT of the app it was started for. `workspace:check-ports`
     # reads every *_PORT of a stack.
     ports:
       - "127.0.0.1:${NATS_PORT:-{{ port }}}:4222"
