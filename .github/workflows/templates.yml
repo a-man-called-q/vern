@@ -35,7 +35,7 @@ jobs:
           case "$local" in any | kubernetes) rehearses=true ;; *) rehearses=false ;; esac
           answer kind "$rehearses" deploy/local/kind.yaml
 
-  scripts:
+  doctor:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out source
@@ -48,25 +48,6 @@ jobs:
 
       - name: Install workspace dependencies
         run: bun install --frozen-lockfile
-
-      # zitadel-app.test.ts checks its requests against the ZITADEL release the
-      # auth stack runs.
-      - name: Download the ZITADEL API definitions
-        run: |
-          version="$(grep '^ZITADEL_VERSION=' deploy/dev/auth-server/.env.example | cut -d= -f2)"
-          dir="$RUNNER_TEMP/zitadel-proto"
-          mkdir -p "$dir"
-          for file in management.proto admin.proto app.proto user.proto project.proto member.proto object.proto \
-            user/v2/user_service.proto user/v2/user.proto user/v2/email.proto user/v2/password.proto \
-            org/v2/org_service.proto org/v2/org.proto org/v2/query.proto settings.proto; do
-            mkdir -p "$dir/$(dirname "$file")"
-            curl --fail --silent --show-error --location --output "$dir/$file" \
-              "https://raw.githubusercontent.com/zitadel/zitadel/${version}/proto/zitadel/${file}"
-          done
-          echo "ZITADEL_PROTO_DIR=$dir" >> "$GITHUB_ENV"
-
-      - name: Test the workspace scripts
-        run: bun test scripts
 
       - name: Check the workspace
         run: bun run project:doctor
@@ -146,8 +127,13 @@ jobs:
         with:
           auto-install: true
 
+      - name: Install workspace dependencies
+        run: bun install --frozen-lockfile
+
+      # --keep-cli: in Vern's own repository the rename under test is the one in
+      # packages/cli, which a rename would otherwise remove for the one on npm.
       - name: Rename the project
-        run: bun scripts/rename-project.ts --name "Acme Board" --slug acme-board --base "$(git merge-base HEAD origin/main)" --apply
+        run: bun run project:rename -- --name "Acme Board" --slug acme-board --base "$(git merge-base HEAD origin/main)" --apply --keep-cli
 
       - name: Generate an app from each web template
         run: |
@@ -337,6 +323,7 @@ jobs:
           moon generate axum -- --name ingest --port 4002 --database --events --worker
           printf 'API_APP=api\n' >> apps/web/.env.example
           printf 'API_APP=api\nAPI_APPS=billing\n' >> apps/admin/.env.example
+          bun install
 
       - name: Write the manifests of every overlay
         run: |

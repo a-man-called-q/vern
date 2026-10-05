@@ -51,7 +51,7 @@ export function checkIdentity(root: string, report: Report): void {
 			report(
 				"WARN",
 				CONFIG_PATH +
-					" is missing; run rename-project.ts before using update-project.ts.",
+					" is missing; run `bun run project:rename` before `bun run project:update`.",
 			);
 		}
 	} else {
@@ -82,7 +82,7 @@ export function checkIdentity(root: string, report: Report): void {
 	if (existsSync(resolve(root, UPDATE_STATE_PATH))) {
 		report(
 			"WARN",
-			"An upstream update is pending; resolve it with update-project.ts --continue.",
+			"An upstream update is pending; resolve it with `bun run project:update -- --continue`.",
 		);
 	}
 }

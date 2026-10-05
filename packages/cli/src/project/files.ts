@@ -76,12 +76,26 @@ export function readGitFile(
 	return result.stdout;
 }
 
+/** Where Vern's own repository keeps the source of its CLI. */
+export const CLI_SOURCE = "packages/cli";
+/** The workflow that tests the CLI there, and publishes it to npm. */
+export const CLI_WORKFLOW = ".github/workflows/cli.yml";
+
 /**
- * scripts/ is Vern's tooling, which names Vern on purpose (the upstream it
- * follows, the identity it renames from, defaults). A rename leaves it as it
- * is, and an update merges upstream's copy as it is, so a project's scripts
- * stay byte for byte Vern's and merge cleanly.
+ * What only Vern's own repository holds. A project installs the CLI from npm,
+ * so a rename removes these, and an update never brings them.
+ */
+export function isVernOnly(path: string): boolean {
+	return path === CLI_WORKFLOW || path.startsWith(CLI_SOURCE + "/");
+}
+
+/**
+ * Upstream's tooling, which is never rebranded: it names Vern on purpose (the
+ * upstream it follows, the identity it renames from, defaults). Before the CLI
+ * was a package it was scripts/, a copy in every project, and an update merges
+ * upstream's copy of that as it is: the project's scripts stay byte for byte
+ * Vern's until the update that deletes them.
  */
 export function isVernScript(path: string): boolean {
-	return path.startsWith("scripts/");
+	return path.startsWith("scripts/") || isVernOnly(path);
 }

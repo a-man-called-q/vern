@@ -13,6 +13,7 @@ import {
 } from "./config";
 import { updateDependencies, validateProject } from "./dependencies";
 import { isUsed } from "./environments";
+import { isVernOnly } from "./files";
 import { migrateLayout, planLayoutMigration } from "./layout";
 import {
 	allChangedUpstreamPaths,
@@ -104,8 +105,11 @@ function fetchMain(root: string, config: ProjectConfig): string {
 }
 
 function printPreview(root: string, config: ProjectConfig, from: string, to: string): void {
-	// What belongs to a way the project does not run an environment with stays out.
-	const files = allChangedUpstreamPaths(root, from, to).filter((path) => isUsed(path, config.environments));
+	// What belongs to a way the project does not run an environment with stays
+	// out, and so does the source of the CLI.
+	const files = allChangedUpstreamPaths(root, from, to).filter(
+		(path) => isUsed(path, config.environments) && !isVernOnly(path),
+	);
 	console.log("Vern main: " + from.slice(0, 12) + " → " + to.slice(0, 12));
 	if (files.length === 0) console.log("No upstream file changes.");
 	else {
@@ -199,7 +203,7 @@ export function updateProject(root: string, options: Options): void {
 	const config = readConfig(root);
 	if (!config)
 		throw new Error(
-			"Run rename-project.ts first to create " + CONFIG_PATH + ".",
+			"Run `bun run project:rename` first to create " + CONFIG_PATH + ".",
 		);
 
 	if (options.continueUpdate) {

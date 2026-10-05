@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "vern",
+      "devDependencies": {
+        "@tsanyqudsi/vern": "^0.1.0",
+      },
     },
     "apps/storybook": {
       "name": "storybook",
@@ -67,6 +70,13 @@
         "@tanstack/react-router",
         "next",
       ],
+    },
+    "packages/cli": {
+      "name": "@tsanyqudsi/vern",
+      "version": "0.1.0",
+      "bin": {
+        "vern": "src/bin.ts",
+      },
     },
     "packages/ui": {
       "name": "@vern/ui",
@@ -774,6 +784,8 @@
     "@tmcp/session-manager": ["@tmcp/session-manager@0.2.2", "", { "peerDependencies": { "tmcp": "^1.16.3" } }, "sha512-UrCRpTsxh5XnMbplspvftEYboiZWgAiXqqAUbyFTHoHMJ0LoNDy8bQd0+7qtxtT4S5Qsnv650gvs/Nbec5NTCQ=="],
 
     "@tmcp/transport-http": ["@tmcp/transport-http@0.8.6", "", { "dependencies": { "@tmcp/session-manager": "^0.2.2", "esm-env": "^1.2.2" }, "peerDependencies": { "@tmcp/auth": "^0.3.3 || ^0.4.0", "tmcp": "^1.18.0" }, "optionalPeers": ["@tmcp/auth"] }, "sha512-iLcxu+tEMbkVHbhFfyXQhxfPDDTfm+F0kEw8Xg/a1rm29s4cBg1vwcpbtk02XTxsdDh8RJ1AZkQwF9WDGeb/IA=="],
+
+    "@tsanyqudsi/vern": ["@tsanyqudsi/vern@workspace:packages/cli"],
 
     "@tybys/wasm-util": ["@tybys/wasm-util@0.10.4", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A=="],
 

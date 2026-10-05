@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { CLI_PACKAGE } from "../lib/commands";
 import { writeJson } from "../lib/files";
 import { AUTH_SERVER } from "../lib/projects";
 import { git, gitTry, run } from "../lib/run";
@@ -10,7 +11,7 @@ import {
 	UPSTREAM_BRANCH,
 	UPSTREAM_URL,
 } from "./config";
-import { isVernScript, listTextFiles } from "./files";
+import { CLI_SOURCE, CLI_WORKFLOW, isVernOnly, listTextFiles } from "./files";
 import { rebrandText, replaceIdentity, validateIdentity } from "./identity";
 
 export interface Options {
@@ -18,6 +19,8 @@ export interface Options {
 	slug: string;
 	apply: boolean;
 	base?: string;
+	/** Leave the source of the CLI where it is: for a rename of Vern's own checkout. */
+	keepCli?: boolean;
 }
 
 function fetchUpstream(root: string, url: string, branch: string): string {
@@ -97,6 +100,18 @@ function composeProjectName(root: string): string | undefined {
 	return match?.[1];
 }
 
+/**
+ * What only Vern's own repository holds, when this tree still has it: the
+ * source of the CLI and its workflow. A project's own packages/cli is not it.
+ */
+function vernOnlyPaths(root: string): string[] {
+	const manifest = resolve(root, CLI_SOURCE, "package.json");
+	if (!existsSync(manifest)) return [];
+	const { name } = JSON.parse(readFileSync(manifest, "utf8")) as { name?: string };
+	if (name !== CLI_PACKAGE) return [];
+	return [CLI_SOURCE, CLI_WORKFLOW].filter((path) => existsSync(resolve(root, path)));
+}
+
 export function renameProject(root: string, options: Options): string[] {
 	const existing = readConfig(root);
 	const from = existing?.project ?? { name: "Vern", slug: "vern" };
@@ -107,15 +122,19 @@ export function renameProject(root: string, options: Options): string[] {
 		return [];
 	}
 
+	// The source of the CLI names Vern on purpose (the upstream it follows, the
+	// identity it renames from), so it leaves, or stays as Vern wrote it.
+	const cliSource = vernOnlyPaths(root);
 	const changed: Array<{ path: string; content: string }> = [];
 	for (const path of listTextFiles(root)) {
-		if (isVernScript(path)) continue;
+		if (cliSource.length > 0 && isVernOnly(path)) continue;
 		const absolute = resolve(root, path);
 		const source = readFileSync(absolute, "utf8");
 		const content = rebrandText(path, source, from, to);
 		if (content !== source) changed.push({ path, content });
 	}
 
+	const removed = options.keepCli ? [] : cliSource;
 	const oldComposeName = composeProjectName(root);
 	const newComposeName = oldComposeName
 		? replaceIdentity(oldComposeName, from, to)
@@ -125,6 +144,9 @@ export function renameProject(root: string, options: Options): string[] {
 	else for (const item of changed) console.log("  " + item.path);
 	if (newComposeName && oldComposeName !== newComposeName) {
 		console.log("  Compose project: " + oldComposeName + " → " + newComposeName);
+	}
+	if (removed.length > 0) {
+		console.log("  Removes " + removed.join(" and ") + ": the project installs " + CLI_PACKAGE + " from npm.");
 	}
 	if (!options.apply) {
 		console.log("Preview only. Add --apply to write these changes.");
@@ -155,10 +177,13 @@ export function renameProject(root: string, options: Options): string[] {
 	const originalConfig = existsSync(configPath) ? readFileSync(configPath) : undefined;
 	try {
 		for (const item of changed) writeFileSync(resolve(root, item.path), item.content);
+		for (const path of removed) rmSync(resolve(root, path), { recursive: true, force: true });
 		if (existsSync(lockPath)) run("bun", ["install", "--lockfile-only", "--no-save"], { cwd: root });
 		writeJson(configPath, config);
 	} catch (error) {
 		for (const item of originalFiles) writeFileSync(item.path, item.content);
+		// The working tree was clean, so Git has what was removed.
+		if (removed.length > 0) git(root, "checkout", "HEAD", "--", ...removed);
 		if (originalLock) writeFileSync(lockPath, originalLock);
 		else rmSync(lockPath, { force: true });
 		if (originalConfig) writeFileSync(configPath, originalConfig);
@@ -166,5 +191,7 @@ export function renameProject(root: string, options: Options): string[] {
 		throw error;
 	}
 	console.log("Renamed project and wrote " + CONFIG_PATH + ".");
+	if (removed.length > 0 && existsSync(resolve(root, "node_modules")))
+		console.log("Run `bun install`: the CLI now comes from npm.");
 	return changed.map((item) => item.path);
 }

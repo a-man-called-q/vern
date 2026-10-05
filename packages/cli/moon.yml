@@ -1,0 +1,18 @@
+# The source of @tsanyqudsi/vern, the commands behind `bun run setup` and the other
+# scripts of the root package.json. Only Vern's own repository holds it: a
+# project installs the package from npm. README.md says how it is released.
+tasks:
+  test:
+    command: bun test
+    description: Test the CLI
+    deps:
+      - 'workspace:install'
+    toolchains: system
+    inputs:
+      - 'src/**/*'
+      - 'package.json'
+      - '/.vern/templates/**/*'
+      - '/deploy/**/*'
+      - '/packages/*/biome.json'
+      - '/Cargo.toml'
+      - '/package.json'

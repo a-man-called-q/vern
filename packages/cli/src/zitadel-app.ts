@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { projectPath } from "./lib/projects";
-import { runCommand } from "./lib/cli";
 import { envFiles, readEffectiveEnv, setEnvValue } from "./lib/env";
 import { ROOT } from "./lib/paths";
 import { buildOidcConfig, provisionApplication } from "./zitadel/oidc";
@@ -116,5 +115,3 @@ export async function main(argv: string[], deps: CliDeps = {}): Promise<number> 
 	}
 	return 0;
 }
-
-if (import.meta.main) runCommand("", () => main(process.argv.slice(2)));

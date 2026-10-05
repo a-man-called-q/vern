@@ -5,7 +5,7 @@
 # `--kubernetes <env>` says which, the first time).
 tasks:
   local:
-    command: bun scripts/setup.ts --env local
+    command: bun run setup -- --env local
     description: Set up the rehearsal of production on this machine, with Docker Compose or on a kind cluster
     toolchains: system
     options:
@@ -13,7 +13,7 @@ tasks:
       runFromWorkspaceRoot: true
 
   staging:
-    command: bun scripts/setup.ts --env staging
+    command: bun run setup -- --env staging
     description: Set up or update the staging environment
     toolchains: system
     options:
@@ -21,7 +21,7 @@ tasks:
       runFromWorkspaceRoot: true
 
   prod:
-    command: bun scripts/setup.ts --env prod
+    command: bun run setup -- --env prod
     description: Set up or update the production environment
     toolchains: system
     options:
